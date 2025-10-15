@@ -1,0 +1,46 @@
+USE wuxi;
+
+DROP TABLE IF EXISTS wuxi.tb_hdb_pphs;
+
+CREATE TABLE wuxi.tb_hdb_pphs (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    batch VARCHAR(6) UNIQUE NOT NULL,
+    json_string LONGTEXT NOT NULL,
+    created_dt BIGINT NOT NULL,
+    created_by VARCHAR(64) NOT NULL
+);
+
+SELECT * FROM wuxi.tb_hdb_pphs;
+
+DROP TABLE IF EXISTS wuxi.tb_hdb_pphs_coordinate;
+
+CREATE TABLE wuxi.tb_hdb_pphs_coordinate (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+	building VARCHAR(1024),
+    formed_url VARCHAR(1024),
+    lat VARCHAR(16),
+    lng VARCHAR(16),
+	created_dt BIGINT NOT NULL,
+    created_by VARCHAR(64) NOT NULL
+);
+
+SELECT * FROM wuxi.tb_hdb_pphs_coordinate;
+
+DROP TABLE IF EXISTS wuxi.tb_aa_user;
+
+CREATE TABLE wuxi.tb_aa_user (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(64) NOT NULL,
+    password VARCHAR(512) NOT NULL,
+	`system` VARCHAR(256) NOT NULL,
+    role VARCHAR(16) NOT NULL,
+    username_system VARCHAR(512) UNIQUE NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    last_logged_in_dt BIGINT,
+    token VARCHAR(512),
+	created_dt BIGINT NOT NULL,
+    created_by VARCHAR(64) NOT NULL
+);
+
+select * from wuxi.tb_aa_user;
+
