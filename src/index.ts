@@ -9,6 +9,7 @@ import createConnectivityController from "./controllers/Connectivity.controller"
 import createHdbController from "./controllers/Hdb.controller";
 import createLtaController from "./controllers/Lta.controller";
 import createAuthController from "./controllers/Auth.controller";
+import createFndController from "./controllers/Fnd.controller";
 
 async function startServer() {
   const app: Application = express();
@@ -40,6 +41,7 @@ async function startServer() {
   app.use("/hdb", [RestRequestLogger], createHdbController(db));
   app.use("/lta", [RestRequestLogger], createLtaController(db));
   app.use("/api/auth", [RestRequestLogger], createAuthController(db));
+  app.use("/api/fnd", [RestRequestLogger], createFndController(db));
 
   // Start server
   app.listen(port, () => {

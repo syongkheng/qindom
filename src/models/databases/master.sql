@@ -35,12 +35,27 @@ CREATE TABLE wuxi.tb_aa_user (
 	`system` VARCHAR(256) NOT NULL,
     role VARCHAR(16) NOT NULL,
     username_system VARCHAR(512) UNIQUE NOT NULL,
-    status VARCHAR(16) NOT NULL,
+    state VARCHAR(16) NOT NULL,
     last_logged_in_dt BIGINT,
     token VARCHAR(512),
 	created_dt BIGINT NOT NULL,
-    created_by VARCHAR(64) NOT NULL
+    created_by VARCHAR(64) NOT NULL,
+    record_status VARCHAR(1) NOT NULL
 );
 
 select * from wuxi.tb_aa_user;
 
+DROP TABLE IF EXISTS wuxi.tb_fnd_notices;
+
+
+CREATE TABLE wuxi.tb_fnd_notices (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    type VARCHAR(16),
+    title VARCHAR(512),
+    content VARCHAR(8192),
+    date BIGINT,
+    classification VARCHAR(16),
+    created_by VARCHAR(64),
+    created_dt BIGINT,
+    record_status VARCHAR(1)
+);

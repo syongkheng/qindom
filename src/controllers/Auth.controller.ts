@@ -104,5 +104,23 @@ export default function createAuthController(db: KnexSqlUtilities) {
     }
   });
 
+  router.post("/verification", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+    try {
+      const { token } = req.body;
+      const result = await authService.authenticateToken(token);
+      return response.ok(result);
+    } catch (error: any) {
+      if (error instanceof BaseExceptions) {
+        return response.result(
+          error.httpStatus,
+          error.message,
+          error.toResponseMessage()
+        );
+      }
+      return response.ko(error.message);
+    }
+  });
+
   return router;
 }

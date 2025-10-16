@@ -1,6 +1,14 @@
+import { UnknownException } from "../exceptions/UnknownException";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import jwt from "jsonwebtoken";
+
+export interface IDecodedTokenUser {
+  username: string;
+  system: string;
+  role: string;
+  lastLoggedInDt: number;
+}
 
 export class TokenService {
   private readonly jwtSecret: string;
@@ -50,6 +58,43 @@ export class TokenService {
         `Something went wrong generating the token: ${error}`
       );
       return "";
+    }
+  }
+
+  async decodeToken(token: string) {
+    LoggingUtilities.service.info(
+      "TokenService.decodeToken",
+      `Decoding: ${token}`
+    );
+    try {
+      const decoded = jwt.verify(token, this.jwtSecret) as IDecodedTokenUser;
+      LoggingUtilities.service.info(
+        "TokenService.decodeToken",
+        `Decoded: ${decoded}`
+      );
+      return decoded;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (error instanceof jwt.TokenExpiredError) {
+          LoggingUtilities.service.error(
+            "TokenService.decodeToken",
+            `Token has expired.`
+          );
+          throw new UnknownException();
+        }
+        if (error instanceof jwt.JsonWebTokenError) {
+          LoggingUtilities.service.error(
+            "TokenService.decodeToken",
+            `Invalid token format.`
+          );
+          throw new UnknownException();
+        }
+      }
+      LoggingUtilities.service.error(
+        "TokenService.decodeToken",
+        `Something went wrong decoding token.`
+      );
+      throw new UnknownException();
     }
   }
 }

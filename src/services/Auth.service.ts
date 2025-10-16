@@ -25,7 +25,7 @@ export class AuthService {
     system,
   }: {
     username: string;
-    system: "fnd";
+    system: string;
   }): Promise<{ exist: boolean; nextStep: "register" | "login" }> {
     LoggingUtilities.service.debug(
       "AuthService.checkIfUsernameExistsWithinSystem",
@@ -60,7 +60,7 @@ export class AuthService {
   }: {
     username: string;
     password: string;
-    system: "fnd";
+    system: string;
     role: string;
   }): Promise<{ token: string }> {
     LoggingUtilities.service.info(
@@ -105,7 +105,7 @@ export class AuthService {
   }: {
     username: string;
     password: string;
-    system: "fnd";
+    system: string;
   }): Promise<{ token: string }> {
     LoggingUtilities.service.info(
       "AuthService.login",
@@ -156,9 +156,30 @@ export class AuthService {
       {
         token: generatedToken,
         last_logged_in_dt: new Date().getTime(),
+        state: "ACTIVE",
       }
     );
 
     return { token: generatedToken };
+  }
+
+  async authenticateToken(
+    token: string
+  ): Promise<{ username: string; role: string; exist: boolean }> {
+    LoggingUtilities.service.info(
+      "AuthService.authenticateToken",
+      "Checking if token has expired / is valid format / if user exists"
+    );
+    const decodedToken = await this.tokenService.decodeToken(token);
+    const { exist } = await this.checkIfUsernameExistsWithinSystem({
+      username: decodedToken.username,
+      system: decodedToken.system,
+    });
+    LoggingUtilities.service.info(
+      "AuthService.authenticateToken",
+      `Does ${decodedToken.username}_${decodedToken.system} exists - ${exist}`
+    );
+
+    return { username: decodedToken.username, role: decodedToken.role, exist };
   }
 }
