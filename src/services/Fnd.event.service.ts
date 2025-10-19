@@ -1,18 +1,19 @@
 import { UnknownException } from "../exceptions/UnknownException";
-import { ITB_FND_NOTICE } from "../models/databases/tb_fnd_notice";
+import { ITB_FND_EVENT } from "../models/databases/tb_fnd_event";
+
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 
-export class FndNoticeService {
+export class FndEventService {
   constructor(private db: KnexSqlUtilities) {}
 
   /**
-   * 🟢 READ: Retrieve all active notices
+   * 🟢 READ: Retrieve all active events
    */
-  async getAllNotice(): Promise<ITB_FND_NOTICE[]> {
+  async getAllEvent(): Promise<ITB_FND_EVENT[]> {
     try {
-      const existingRecords = await this.db.find<ITB_FND_NOTICE>(
-        "tb_fnd_notice",
+      const existingRecords = await this.db.find<ITB_FND_EVENT>(
+        "tb_fnd_event",
         { record_status: "A" },
         { orderBy: "created_dt", orderDirection: "desc" }
       );
@@ -24,27 +25,24 @@ export class FndNoticeService {
   }
 
   /**
-   * 🟡 CREATE: Add a new notice
+   * 🟡 CREATE: Add a new event
    */
-  async createNotice({
-    type,
+  async createEvent({
+    eventDt,
     title,
     content,
-    classification,
     createdBy,
   }: {
-    type: string;
+    eventDt: number;
     title: string;
     content: string;
-    classification: string;
     createdBy: string;
-  }): Promise<ITB_FND_NOTICE> {
+  }): Promise<ITB_FND_EVENT> {
     try {
-      return await this.db.insert<ITB_FND_NOTICE>("tb_fnd_notice", {
-        type: type,
+      return await this.db.insert<ITB_FND_EVENT>("tb_fnd_event", {
+        event_dt: eventDt,
         title: title,
         content: content,
-        classification: classification,
         record_status: "A",
         created_dt: new Date().getTime(),
         created_by: createdBy,
@@ -55,34 +53,31 @@ export class FndNoticeService {
   }
 
   /**
-   * 🟠 UPDATE: Modify an existing notice
+   * 🟠 UPDATE: Modify an existing event
    */
-  async updateNotice({
+  async updateEvent({
     id,
-    type,
+    eventDt,
     title,
     content,
-    classification,
     updatedBy,
   }: {
     id: number;
-    type: string;
+    eventDt: number;
     title: string;
     content: string;
-    classification: string;
     updatedBy: string;
-  }): Promise<ITB_FND_NOTICE[]> {
+  }): Promise<ITB_FND_EVENT[]> {
     try {
       if (!id) throw new UnknownException();
 
-      return await this.db.update<ITB_FND_NOTICE>(
-        "tb_fnd_notice",
+      return await this.db.update<ITB_FND_EVENT>(
+        "tb_fnd_event",
         { id: id },
         {
-          type: type,
+          event_dt: eventDt,
           title: title,
           content: content,
-          classification: classification,
           updated_dt: new Date().getTime(),
           updated_by: updatedBy,
         }
@@ -99,10 +94,10 @@ export class FndNoticeService {
   /**
    * 🔴 DELETE: Soft delete (mark as deleted)
    */
-  async deleteNotice(id: number, updatedBy: string): Promise<void> {
+  async deleteEvent(id: number, updatedBy: string): Promise<void> {
     try {
-      const result = await this.db.update<ITB_FND_NOTICE>(
-        "tb_fnd_notice",
+      const result = await this.db.update<ITB_FND_EVENT>(
+        "tb_fnd_event",
         { id },
         {
           record_status: "D",

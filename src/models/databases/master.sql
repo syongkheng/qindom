@@ -45,17 +45,36 @@ CREATE TABLE wuxi.tb_aa_user (
 
 select * from wuxi.tb_aa_user;
 
-DROP TABLE IF EXISTS wuxi.tb_fnd_notices;
+DROP TABLE IF EXISTS wuxi.tb_fnd_notice;
 
-
-CREATE TABLE wuxi.tb_fnd_notices (
+CREATE TABLE wuxi.tb_fnd_notice (
 	id BIGINT PRIMARY KEY AUTO_INCREMENT,
     type VARCHAR(16),
     title VARCHAR(512),
     content VARCHAR(8192),
-    date BIGINT,
     classification VARCHAR(16),
+    updated_by VARCHAR(64),
+    updated_dt BIGINT,
     created_by VARCHAR(64),
     created_dt BIGINT,
     record_status VARCHAR(1)
 );
+
+SELECT * FROM wuxi.tb_fnd_notice;
+
+
+DROP TABLE IF EXISTS wuxi.tb_fnd_event;
+
+CREATE TABLE wuxi.tb_fnd_event (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    event_dt BIGINT,
+    title VARCHAR(512),
+    content VARCHAR(8192),
+    updated_by VARCHAR(64),
+    updated_dt BIGINT,
+    created_by VARCHAR(64),
+    created_dt BIGINT,
+    record_status VARCHAR(1)
+);
+
+SELECT * FROM wuxi.tb_fnd_event;
