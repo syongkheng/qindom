@@ -3,6 +3,8 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { AuthService } from "../services/Auth.service";
 import { BaseExceptions } from "../exceptions/BaseException";
+import { TokenFilter } from "../middlewares/TokenFilter";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 
 export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();
@@ -121,6 +123,62 @@ export default function createAuthController(db: KnexSqlUtilities) {
       return response.ko(error.message);
     }
   });
+
+  router.post(
+    "/password/validate",
+    [TokenFilter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const response = new ControllerResponse(res);
+      try {
+        const username = req.user?.username ?? "UNKNOWN";
+        const system = req.user?.system ?? "UNKNOWN";
+        const { password } = req.body;
+
+        const result = await authService.validatePassword(
+          `${username}_${system}`,
+          password
+        );
+        return response.ok(result);
+      } catch (error: any) {
+        if (error instanceof BaseExceptions) {
+          return response.result(
+            error.httpStatus,
+            error.message,
+            error.toResponseMessage()
+          );
+        }
+        return response.ko(error.message);
+      }
+    }
+  );
+
+  router.post(
+    "/password/update",
+    [TokenFilter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const response = new ControllerResponse(res);
+      try {
+        const username = req.user?.username ?? "UNKNOWN";
+        const system = req.user?.system ?? "UNKNOWN";
+        const { newPassword } = req.body;
+
+        const result = await authService.updatePassword(
+          `${username}_${system}`,
+          newPassword
+        );
+        return response.ok(result);
+      } catch (error: any) {
+        if (error instanceof BaseExceptions) {
+          return response.result(
+            error.httpStatus,
+            error.message,
+            error.toResponseMessage()
+          );
+        }
+        return response.ko(error.message);
+      }
+    }
+  );
 
   return router;
 }

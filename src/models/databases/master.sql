@@ -33,11 +33,13 @@ CREATE TABLE wuxi.tb_aa_user (
     username VARCHAR(64) NOT NULL,
     password VARCHAR(512) NOT NULL,
 	`system` VARCHAR(256) NOT NULL,
+    country VARCHAR(256),
     role VARCHAR(16) NOT NULL,
     username_system VARCHAR(512) UNIQUE NOT NULL,
     state VARCHAR(16) NOT NULL,
     last_logged_in_dt BIGINT,
     token VARCHAR(512),
+    pfp_picture_blob LONGBLOB,
 	created_dt BIGINT NOT NULL,
     created_by VARCHAR(64) NOT NULL,
     record_status VARCHAR(1) NOT NULL

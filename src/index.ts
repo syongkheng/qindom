@@ -10,13 +10,17 @@ import createHdbController from "./controllers/Hdb.controller";
 import createLtaController from "./controllers/Lta.controller";
 import createAuthController from "./controllers/Auth.controller";
 import createFndController from "./controllers/Fnd.controller";
+import createPfpController from "./controllers/Pfp.controller";
 
 async function startServer() {
   const app: Application = express();
   const port: number = 3000;
 
   // Middleware
-  app.use(express.json());
+  app.use(express.json({ limit: "5mb" }));
+  app.use(
+    express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 })
+  );
 
   // Cors
 
@@ -42,6 +46,7 @@ async function startServer() {
   app.use("/lta", [RestRequestLogger], createLtaController(db));
   app.use("/api/auth", [RestRequestLogger], createAuthController(db));
   app.use("/api/fnd", [RestRequestLogger], createFndController(db));
+  app.use("/api/pfp", [RestRequestLogger], createPfpController(db));
 
   // Start server
   app.listen(port, () => {

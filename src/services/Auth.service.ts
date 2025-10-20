@@ -182,4 +182,68 @@ export class AuthService {
 
     return { username: decodedToken.username, role: decodedToken.role, exist };
   }
+
+  async validatePassword(
+    username_system: string,
+    password: string
+  ): Promise<{ isValid: boolean }> {
+    LoggingUtilities.service.info(
+      "AuthService.validatePassword",
+      `Validating password for ${username_system}`
+    );
+
+    const existingUser = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
+      username_system: username_system,
+      record_status: "A",
+    });
+
+    if (!existingUser) {
+      LoggingUtilities.service.error(
+        "AuthService.validatePassword",
+        `${username_system} could not be found.`
+      );
+      throw new UnknownException();
+    }
+
+    const isValidPassword = await bcrypt.compare(
+      password,
+      existingUser.password
+    );
+
+    LoggingUtilities.service.info(
+      "AuthService.validatePassword",
+      `Password validation result for ${username_system} - ${isValidPassword}`
+    );
+
+    return { isValid: isValidPassword };
+  }
+
+  async updatePassword(
+    username_system: string,
+    newPassword: string
+  ): Promise<void> {
+    LoggingUtilities.service.info(
+      "AuthService.updatePassword",
+      `Updating password for ${username_system}`
+    );
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    await this.db.update<ITB_AA_USER>(
+      "tb_aa_user",
+      {
+        username_system: username_system,
+        record_status: "A",
+      },
+      {
+        password: hashedPassword,
+      }
+    );
+
+    LoggingUtilities.service.info(
+      "AuthService.updatePassword",
+      `Successfully updated password for ${username_system}`
+    );
+  }
 }
