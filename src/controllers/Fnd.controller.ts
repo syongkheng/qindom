@@ -6,17 +6,29 @@ import { FndNoticeService } from "../services/Fnd.notice.service";
 import { TokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { FndEventService } from "../services/Fnd.event.service";
+import { TokenService } from "../services/Token.service";
 
 export default function createFndController(db: KnexSqlUtilities) {
   const noticeService = new FndNoticeService(db);
   const eventService = new FndEventService(db);
+  const tokenService = new TokenService(db);
   const router = Router();
 
   //  ---- Notices ----
   router.get("/notices", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
-      return response.ok(await noticeService.getAllNotice());
+      if (
+        req.headers["authorization"] &&
+        typeof req.headers["authorization"] === "string"
+      ) {
+        const token = req.headers["authorization"].replace("Bearer ", "");
+        const userClassification = (await tokenService.decodeToken(token)).role;
+        return response.ok(
+          await noticeService.getAllNotice(userClassification)
+        );
+      }
+      return response.ok(await noticeService.getAllNotice("OPEN"));
     } catch (error: any) {
       return response.ko(error.message);
     }
@@ -84,6 +96,21 @@ export default function createFndController(db: KnexSqlUtilities) {
     }
   );
 
+  router.post(
+    "/notices/view",
+    [TokenFilter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const response = new ControllerResponse(res);
+      try {
+        const username = req.user?.username ?? "UNKNOWN";
+        const { id } = req.body;
+        return response.ok(await noticeService.viewNotice(id, username));
+      } catch (error: any) {
+        return response.ko(error.message);
+      }
+    }
+  );
+
   // ---- Events ----
   router.get("/events", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
@@ -101,10 +128,10 @@ export default function createFndController(db: KnexSqlUtilities) {
       const response = new ControllerResponse(res);
       try {
         const requestUsername = req.user?.username ?? "UNKNOWN";
-        const { eventDt, title, content } = req.body;
+        const { event_dt, title, content } = req.body;
         return response.ok(
           await eventService.createEvent({
-            eventDt,
+            eventDt: event_dt,
             title,
             content,
             createdBy: requestUsername,
@@ -123,11 +150,11 @@ export default function createFndController(db: KnexSqlUtilities) {
       const response = new ControllerResponse(res);
       try {
         const requestUsername = req.user?.username ?? "UNKNOWN";
-        const { id, eventDt, title, content } = req.body;
+        const { id, event_dt, title, content } = req.body;
         return response.ok(
           await eventService.updateEvent({
             id,
-            eventDt,
+            eventDt: event_dt,
             title,
             content,
             updatedBy: requestUsername,
@@ -148,6 +175,21 @@ export default function createFndController(db: KnexSqlUtilities) {
         const requestUsername = req.user?.username ?? "UNKNOWN";
         const { id } = req.body;
         return response.ok(await eventService.deleteEvent(id, requestUsername));
+      } catch (error: any) {
+        return response.ko(error.message);
+      }
+    }
+  );
+
+  router.post(
+    "/events/view",
+    [TokenFilter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const response = new ControllerResponse(res);
+      try {
+        const username = req.user?.username ?? "UNKNOWN";
+        const { id } = req.body;
+        return response.ok(await eventService.viewEvent(id, username));
       } catch (error: any) {
         return response.ko(error.message);
       }

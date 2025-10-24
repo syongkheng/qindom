@@ -48,7 +48,6 @@ export default function createAuthController(db: KnexSqlUtilities) {
       if (!username || typeof username !== "string") {
         response.badRequest("Invalid field - [username]");
       }
-
       if (!password || typeof password !== "string") {
         response.badRequest("Invalid field - [password]");
       }

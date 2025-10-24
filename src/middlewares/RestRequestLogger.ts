@@ -6,6 +6,14 @@ export const RestRequestLogger = function (
   res: Response,
   next: NextFunction
 ) {
+  const sanitisedMessage = (message: string) => {
+    // Simple sanitization to avoid logging sensitive info like passwords
+    return message.replace(
+      /"password"\s*:\s*".*?"/gi,
+      '"password":"[REDACTED]"'
+    );
+  };
+  
   if (req.method === "GET") {
     LoggingUtilities.controller.start(
       req.method,
@@ -16,7 +24,7 @@ export const RestRequestLogger = function (
     LoggingUtilities.controller.start(
       req.method,
       req.originalUrl,
-      JSON.stringify(req.body)
+      sanitisedMessage(JSON.stringify(req.body))
     );
   }
 

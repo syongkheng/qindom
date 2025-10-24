@@ -65,6 +65,17 @@ CREATE TABLE wuxi.tb_fnd_notice (
 SELECT * FROM wuxi.tb_fnd_notice;
 
 
+DROP TABLE IF EXISTS wuxi.tb_fnd_notice_view;
+CREATE TABLE wuxi.tb_fnd_notice_view (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    notice_id BIGINT,
+    username VARCHAR(64),
+    created_dt BIGINT
+);
+
+SELECT * FROM wuxi.tb_fnd_notice_view;
+
+
 DROP TABLE IF EXISTS wuxi.tb_fnd_event;
 
 CREATE TABLE wuxi.tb_fnd_event (
@@ -80,3 +91,15 @@ CREATE TABLE wuxi.tb_fnd_event (
 );
 
 SELECT * FROM wuxi.tb_fnd_event;
+SELECT * from wuxi.tb_fnd_event where record_status = 'A' and event_dt >= 1761060196104 order by created_dt desc;
+
+DROP TABLE IF EXISTS wuxi.tb_fnd_event_view;
+
+CREATE TABLE wuxi.tb_fnd_event_view (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    event_id BIGINT,
+    username VARCHAR(64),
+    created_dt BIGINT
+);
+
+SELECT * FROM wuxi.tb_fnd_event_view;

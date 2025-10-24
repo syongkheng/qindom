@@ -70,7 +70,7 @@ export class TokenService {
       const decoded = jwt.verify(token, this.jwtSecret) as IDecodedTokenUser;
       LoggingUtilities.service.info(
         "TokenService.decodeToken",
-        `Decoded: ${decoded}`
+        `Decoded: ${JSON.stringify({ ...decoded })}`
       );
       return decoded;
     } catch (error: unknown) {
