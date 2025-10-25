@@ -3,7 +3,7 @@ import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { PfpService } from "../services/Pfp.service";
-import { TokenFilter } from "../middlewares/TokenFilter";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 
 export default function createPfpController(db: KnexSqlUtilities) {
@@ -12,7 +12,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
 
   router.get(
     "/user/country",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
 
@@ -30,7 +30,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
 
   router.post(
     "/user/country",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (_req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
 
@@ -50,7 +50,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
 
   router.get(
     "/user/photo",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -69,7 +69,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
 
   router.post(
     "/user/photo",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {

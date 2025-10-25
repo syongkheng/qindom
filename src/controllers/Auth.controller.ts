@@ -3,7 +3,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { AuthService } from "../services/Auth.service";
 import { BaseExceptions } from "../exceptions/BaseException";
-import { TokenFilter } from "../middlewares/TokenFilter";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 
 export default function createAuthController(db: KnexSqlUtilities) {
@@ -125,7 +125,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   router.post(
     "/password/validate",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -153,7 +153,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   router.post(
     "/password/update",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {

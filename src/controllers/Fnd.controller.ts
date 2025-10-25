@@ -3,7 +3,7 @@ import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { FndNoticeService } from "../services/Fnd.notice.service";
-import { TokenFilter } from "../middlewares/TokenFilter";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { FndEventService } from "../services/Fnd.event.service";
 import { TokenService } from "../services/Token.service";
@@ -36,7 +36,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/notices/create",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -59,7 +59,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/notices/update",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -83,7 +83,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/notices/delete",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -98,7 +98,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/notices/view",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -123,7 +123,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/events/create",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -145,7 +145,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/events/update",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -168,7 +168,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/events/delete",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {
@@ -183,7 +183,7 @@ export default function createFndController(db: KnexSqlUtilities) {
 
   router.post(
     "/events/view",
-    [TokenFilter],
+    [MandatoryTokenFilter],
     async (req: RequestWithUserInfo, res: Response) => {
       const response = new ControllerResponse(res);
       try {

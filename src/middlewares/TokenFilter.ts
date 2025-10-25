@@ -3,9 +3,10 @@ import jwt from "jsonwebtoken";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { IDecodedTokenUser } from "../services/Token.service";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 
-export const TokenFilter = function (
-  req: Request,
+export const MandatoryTokenFilter = function (
+  req: RequestWithUserInfo,
   res: Response,
   next: NextFunction
 ) {

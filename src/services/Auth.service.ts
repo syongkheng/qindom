@@ -4,6 +4,7 @@ import { LoggingUtilities } from "../utils/LoggingUtilities";
 import bcrypt from "bcrypt";
 import { TokenService } from "./Token.service";
 import { UnknownException } from "../exceptions/UnknownException";
+import { InvalidLoginCredentialsException } from "../exceptions/InvalidLoginCredentialsException";
 
 /**
  * Service to handle Authentications.
@@ -121,7 +122,7 @@ export class AuthService {
         "AuthService.login",
         `${username}_${system} could not be found.`
       );
-      throw new UnknownException();
+      throw new InvalidLoginCredentialsException();
     }
 
     const isValidPassword = await bcrypt.compare(
