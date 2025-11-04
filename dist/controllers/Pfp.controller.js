@@ -18,7 +18,7 @@ const TokenFilter_1 = require("../middlewares/TokenFilter");
 function createPfpController(db) {
     const router = (0, express_1.Router)();
     const pfpService = new Pfp_service_1.PfpService(db);
-    router.get("/user/country", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.get("/user/country", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -30,7 +30,7 @@ function createPfpController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/user/country", [TokenFilter_1.TokenFilter], (_req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/user/country", [TokenFilter_1.MandatoryTokenFilter], (_req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -43,7 +43,7 @@ function createPfpController(db) {
             return response.ko(error.message);
         }
     }));
-    router.get("/user/photo", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.get("/user/photo", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -56,7 +56,7 @@ function createPfpController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/user/photo", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/user/photo", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {

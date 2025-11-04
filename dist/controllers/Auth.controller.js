@@ -112,7 +112,7 @@ function createAuthController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/password/validate", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/password/validate", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -129,7 +129,7 @@ function createAuthController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/password/update", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/password/update", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {

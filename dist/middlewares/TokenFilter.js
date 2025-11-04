@@ -3,11 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TokenFilter = void 0;
+exports.MandatoryTokenFilter = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 const ControllerResponse_1 = require("../models/responses/ControllerResponse");
-const TokenFilter = function (req, res, next) {
+const MandatoryTokenFilter = function (req, res, next) {
     const response = new ControllerResponse_1.ControllerResponse(res);
     const jwtSecret = process.env.JWT_SECRET;
     try {
@@ -34,4 +34,4 @@ const TokenFilter = function (req, res, next) {
         return res.status(401).json({ message: "Invalid or expired token" });
     }
 };
-exports.TokenFilter = TokenFilter;
+exports.MandatoryTokenFilter = MandatoryTokenFilter;

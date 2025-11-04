@@ -13,7 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TokenService = void 0;
-const UnknownException_1 = require("../exceptions/UnknownException");
+const AppExceptions_1 = require("../exceptions/AppExceptions");
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 class TokenService {
@@ -52,15 +52,15 @@ class TokenService {
                 if (error instanceof Error) {
                     if (error instanceof jsonwebtoken_1.default.TokenExpiredError) {
                         LoggingUtilities_1.LoggingUtilities.service.error("TokenService.decodeToken", `Token has expired.`);
-                        throw new UnknownException_1.UnknownException();
+                        throw new AppExceptions_1.Exceptions.TokenExpired();
                     }
                     if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
                         LoggingUtilities_1.LoggingUtilities.service.error("TokenService.decodeToken", `Invalid token format.`);
-                        throw new UnknownException_1.UnknownException();
+                        throw new AppExceptions_1.Exceptions.TokenFormat();
                     }
                 }
                 LoggingUtilities_1.LoggingUtilities.service.error("TokenService.decodeToken", `Something went wrong decoding token.`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.Unknown();
             }
         });
     }

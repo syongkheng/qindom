@@ -21,7 +21,7 @@ function createLtaController(db) {
      * Gets bus arrival timings for a specific bus stop code.
      * @route GET /lta/timing?busStopCode={busStopCode}
      * @param {string} busStopCode.query.required - The bus stop code to retrieve timings for
-     * @returns {ControllerResponse} 200 - An array of bus arrival timings
+     * @returns {ControllerResponse} 200 - An array of bus arrival timingso
      * @returns {ControllerResponse} 400 - Bad request, missing or invalid parameters
      * @returns {ControllerResponse} 500 - Internal server error
      */
@@ -39,5 +39,31 @@ function createLtaController(db) {
             return response.ko(error.message);
         }
     }));
+    router.post("/bus/services", (req, res) => __awaiter(this, void 0, void 0, function* () {
+        const response = new ControllerResponse_1.ControllerResponse(res);
+        try {
+            const { busStopCode } = req.body;
+            return response.ok(yield ltaService.retrieveBusServicesByBusStopCode(busStopCode));
+        }
+        catch (error) {
+            return response.ko(error.message);
+        }
+    }));
+    // router.get("/busstops", async (req: Request, res: Response) => {
+    //   const response = new ControllerResponse(res);
+    //   try {
+    //     return response.ok(await ltaService._retrieveAllBusstops());
+    //   } catch (error: any) {
+    //     return response.ko(error.message);
+    //   }
+    // });
+    // router.get("/bus-routes", async (req: Request, res: Response) => {
+    //   const response = new ControllerResponse(res);
+    //   try {
+    //     return response.ok(await ltaService._retrieveAllBusInformation());
+    //   } catch (error: any) {
+    //     return response.ko(error.message);
+    //   }
+    // });
     return router;
 }

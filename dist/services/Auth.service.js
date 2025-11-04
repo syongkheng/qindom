@@ -16,7 +16,7 @@ exports.AuthService = void 0;
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const Token_service_1 = require("./Token.service");
-const UnknownException_1 = require("../exceptions/UnknownException");
+const AppExceptions_1 = require("../exceptions/AppExceptions");
 /**
  * Service to handle Authentications.
  */
@@ -65,7 +65,7 @@ class AuthService {
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("AuthService.createNewUser", `Something went wrong registering ${username} - ${error}`);
-                return { token: "" };
+                throw new AppExceptions_1.Exceptions.RegistrationException();
             }
         });
     }
@@ -77,12 +77,12 @@ class AuthService {
             });
             if (!existingUser) {
                 LoggingUtilities_1.LoggingUtilities.service.error("AuthService.login", `${username}_${system} could not be found.`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.InvalidLoginCredentials();
             }
             const isValidPassword = yield bcrypt_1.default.compare(password, existingUser.password);
             LoggingUtilities_1.LoggingUtilities.service.error("AuthService.login", `Password comparison result: ${isValidPassword}`);
             if (!isValidPassword) {
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.InvalidLoginCredentials();
             }
             const generatedToken = yield this.tokenService.generateToken({
                 username: existingUser.username,
@@ -122,7 +122,7 @@ class AuthService {
             });
             if (!existingUser) {
                 LoggingUtilities_1.LoggingUtilities.service.error("AuthService.validatePassword", `${username_system} could not be found.`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.InvalidLoginCredentials;
             }
             const isValidPassword = yield bcrypt_1.default.compare(password, existingUser.password);
             LoggingUtilities_1.LoggingUtilities.service.info("AuthService.validatePassword", `Password validation result for ${username_system} - ${isValidPassword}`);

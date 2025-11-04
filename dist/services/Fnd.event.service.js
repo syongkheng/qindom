@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FndEventService = void 0;
-const UnknownException_1 = require("../exceptions/UnknownException");
+const AppExceptions_1 = require("../exceptions/AppExceptions");
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 class FndEventService {
     constructor(db) {
@@ -39,7 +39,7 @@ class FndEventService {
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("FndEventService.getAllEvent", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.Unknown();
             }
         });
     }
@@ -59,7 +59,7 @@ class FndEventService {
                 });
             }
             catch (error) {
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.EntityCreation("ITB_FND_EVENT");
             }
         });
     }
@@ -69,8 +69,11 @@ class FndEventService {
     updateEvent(_a) {
         return __awaiter(this, arguments, void 0, function* ({ id, eventDt, title, content, updatedBy, }) {
             try {
-                if (!id)
-                    throw new UnknownException_1.UnknownException();
+                LoggingUtilities_1.LoggingUtilities.service.info("FndEventService.updateEvent", `Updating event with ID: ${id}`);
+                if (!id) {
+                    LoggingUtilities_1.LoggingUtilities.service.error("FndEventService.updateEvent", `Invalid ID provided for update: ${id}`);
+                    throw new AppExceptions_1.Exceptions.InvalidRequest("id");
+                }
                 return yield this.db.update("tb_fnd_event", { id: id }, {
                     event_dt: eventDt,
                     title: title,
@@ -80,8 +83,8 @@ class FndEventService {
                 });
             }
             catch (error) {
-                LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.updateNotice", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                LoggingUtilities_1.LoggingUtilities.service.error("FndEventService.updateEvent", `Something went wrong: ${error}`);
+                throw new AppExceptions_1.Exceptions.EntityUpdate("ITB_FND_EVENT");
             }
         });
     }
@@ -97,11 +100,13 @@ class FndEventService {
                     updated_by: updatedBy !== null && updatedBy !== void 0 ? updatedBy : "UNKNOWN",
                 });
                 if (result.length === 0) {
-                    throw new UnknownException_1.UnknownException();
+                    LoggingUtilities_1.LoggingUtilities.service.error("FndEventService.deleteEvent", `No event found with ID: ${id} to delete`);
+                    throw new AppExceptions_1.Exceptions.EntityUpdate("ITB_FND_EVENT");
                 }
             }
             catch (error) {
-                throw new UnknownException_1.UnknownException();
+                LoggingUtilities_1.LoggingUtilities.service.error("FndEventService.deleteEvent", `Something went wrong: ${error}`);
+                throw new AppExceptions_1.Exceptions.EntityUpdate("ITB_FND_EVENT");
             }
         });
     }
@@ -113,8 +118,10 @@ class FndEventService {
                     username: username,
                 });
                 if (isViewed) {
+                    LoggingUtilities_1.LoggingUtilities.service.info("FndEventService.viewEvent", `Event ID: ${id} already viewed by user: ${username}`);
                     return isViewed;
                 }
+                LoggingUtilities_1.LoggingUtilities.service.info("FndEventService.viewEvent", `Recording view for event ID: ${id} by user: ${username}`);
                 return yield this.db.insert("tb_fnd_event_view", {
                     event_id: id,
                     username: username,
@@ -122,20 +129,23 @@ class FndEventService {
                 });
             }
             catch (error) {
-                throw new UnknownException_1.UnknownException();
+                LoggingUtilities_1.LoggingUtilities.service.error("FndEventService.viewEvent", `Something went wrong: ${error}`);
+                throw new AppExceptions_1.Exceptions.EntityCreation("ITB_FND_EVENT_VIEW");
             }
         });
     }
     getEventViews(eventId) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
+                LoggingUtilities_1.LoggingUtilities.service.info("FndEventService.getEventViews", `Fetching view count for event ID: ${eventId}`);
                 const res = yield this.db.find("tb_fnd_event_view", {
                     event_id: eventId,
                 });
                 return { count: res.length };
             }
             catch (error) {
-                throw new UnknownException_1.UnknownException();
+                LoggingUtilities_1.LoggingUtilities.service.error("FndEventService.getEventViews", `Something went wrong: ${error}`);
+                throw new AppExceptions_1.Exceptions.EntityRetrieval();
             }
         });
     }

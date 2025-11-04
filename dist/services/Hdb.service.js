@@ -17,14 +17,20 @@ const axios_1 = __importDefault(require("axios"));
 const node_html_parser_1 = require("node-html-parser");
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 const Coordinate_service_1 = require("./Coordinate.service");
+const InvalidRequestException_1 = require("../exceptions/InvalidRequestException");
+const UnknownException_1 = require("../exceptions/UnknownException");
 class HdbService {
     constructor(db) {
         this.db = db;
         this.coordinateService = new Coordinate_service_1.CoordinateService(db);
     }
-    retrieveListOfPphs() {
+    retrieveListOfPphs(batch) {
         return __awaiter(this, void 0, void 0, function* () {
-            const currentBatch = this.generateBatch();
+            const currentBatch = batch || this.generateBatch();
+            if (typeof currentBatch !== "string" || !/^\d{6}$/.test(currentBatch)) {
+                LoggingUtilities_1.LoggingUtilities.service.error("HdbService.statistics", `Invalid batch format: ${currentBatch}`);
+                throw new InvalidRequestException_1.InvalidRequestException("Invalid batch format. Expected 'YYYYMM'.");
+            }
             // Check if we already have data for the current batch
             const existingRecords = yield this.db.find("tb_hdb_pphs", { batch: currentBatch }, {
                 limit: 1,
@@ -79,9 +85,9 @@ class HdbService {
             };
         });
     }
-    retrieveListOfPphsWithCoordinates() {
+    retrieveListOfPphsWithCoordinates(batch) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { records, source } = yield this.retrieveListOfPphs();
+            const { records, source } = yield this.retrieveListOfPphs(batch);
             const recordsWithCoordinates = yield Promise.all(records.map((record) => __awaiter(this, void 0, void 0, function* () {
                 LoggingUtilities_1.LoggingUtilities.service.info("HdbService.retrieveListOfPphsWithCoordinates", `Fetching coordinates for address: ${record.address}`);
                 const { source, formed_url, lat, lng } = yield this.coordinateService.getCoordinatesOfAddress(record.address);
@@ -91,6 +97,16 @@ class HdbService {
                 records: recordsWithCoordinates,
                 source,
             };
+        });
+    }
+    retrieveBusstopWithinRadiusOfLatLng(lat, lng, radius) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                return yield this.db.pphs.findBusStopsWithinRadiusOfLatLng(lat, lng, radius);
+            }
+            catch (error) {
+                throw new UnknownException_1.UnknownException();
+            }
         });
     }
     parseTable(table) {

@@ -44,8 +44,8 @@ function startServer() {
         // Inject db into controllers
         // Use custom middlewares in each controllers
         app.use("/connectivity", [RestRequestLogger_1.RestRequestLogger], (0, Connectivity_controller_1.default)(db));
-        app.use("/hdb", [RestRequestLogger_1.RestRequestLogger], (0, Hdb_controller_1.default)(db));
-        app.use("/lta", [RestRequestLogger_1.RestRequestLogger], (0, Lta_controller_1.default)(db));
+        app.use("/api/hdb", [RestRequestLogger_1.RestRequestLogger], (0, Hdb_controller_1.default)(db));
+        app.use("/api/lta", [RestRequestLogger_1.RestRequestLogger], (0, Lta_controller_1.default)(db));
         app.use("/api/auth", [RestRequestLogger_1.RestRequestLogger], (0, Auth_controller_1.default)(db));
         app.use("/api/fnd", [RestRequestLogger_1.RestRequestLogger], (0, Fnd_controller_1.default)(db));
         app.use("/api/pfp", [RestRequestLogger_1.RestRequestLogger], (0, Pfp_controller_1.default)(db));

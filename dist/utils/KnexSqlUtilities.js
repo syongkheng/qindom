@@ -13,6 +13,12 @@ const LoggingUtilities_1 = require("./LoggingUtilities");
 class KnexSqlUtilities {
     constructor(knex) {
         this.knex = knex;
+        this.pphs = {
+            findBusStopsWithinRadiusOfLatLng: this._findBusStopsWithinRadiusOfLatLng.bind(this),
+        };
+        this.lta = {
+            findBusServicesByBusStopCode: this._findBusServicesByBusStopCode.bind(this),
+        };
     }
     // CREATE
     insert(table, data) {
@@ -133,6 +139,89 @@ class KnexSqlUtilities {
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("KnexSqlUtilities.count", `Count error: ${error.message}`);
                 throw new Error(`Count failed: ${error.message}`);
+            }
+        });
+    }
+    transaction(callback) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                LoggingUtilities_1.LoggingUtilities.service.debug("KnexSqlUtilities.transaction", `Starting transaction`);
+                const result = yield this.knex.transaction((trx) => __awaiter(this, void 0, void 0, function* () {
+                    const output = yield callback(trx);
+                    return output;
+                }));
+                LoggingUtilities_1.LoggingUtilities.service.debug("KnexSqlUtilities.transaction", `Transaction committed successfully`);
+                return result;
+            }
+            catch (error) {
+                LoggingUtilities_1.LoggingUtilities.service.error("KnexSqlUtilities.transaction", `Transaction failed: ${error.message}`);
+                throw new Error(`Transaction failed: ${error.message}`);
+            }
+        });
+    }
+    _findBusStopsWithinRadiusOfLatLng(pphsLat, pphsLng, radiusInMeters) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const sql = `
+      SELECT 
+        b.busstop_code,
+        b.road_name,
+        b.desc,
+        b.lat,
+        b.lng,
+        ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) AS distance_m
+      FROM tb_lta_busstop b
+      WHERE ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) <= ?
+      ORDER BY distance_m ASC
+    `;
+                const bindings = [pphsLng, pphsLat, pphsLng, pphsLat, radiusInMeters];
+                const query = this.knex.raw(sql, bindings);
+                LoggingUtilities_1.LoggingUtilities.service.debug("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Executing raw query - [ ${query.toQuery()} ]`);
+                const [rows] = yield query;
+                // ✅ Normalize and count
+                const allRows = rows;
+                const count = allRows.length;
+                const resultRows = allRows.slice(0, 10);
+                return { rows: resultRows, count };
+            }
+            catch (error) {
+                LoggingUtilities_1.LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${error.message}`);
+                throw new Error(`Failed to find nearby bus stops: ${error.message}`);
+            }
+        });
+    }
+    _findBusServicesByBusStopCode(busstopCode) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const sql = `
+      SELECT 
+        service_no,
+        operator,
+        direction,
+        stop_sequence,
+        distance,
+        wd_first_bus,
+        wd_last_bus,
+        sat_first_bus,
+        sat_last_bus,
+        sun_first_bus,
+        sun_last_bus
+      FROM tb_lta_bus_info
+      WHERE busstop_code = ?
+      ORDER BY CAST(service_no AS UNSIGNED), service_no
+    `;
+                const bindings = [busstopCode];
+                const query = this.knex.raw(sql, bindings);
+                LoggingUtilities_1.LoggingUtilities.service.debug("KnexSqlUtilities.lta.findBusServicesByBusStopCode", `Executing raw query - [ ${query.toQuery()} ]`);
+                const [rows] = yield query;
+                const allRows = rows;
+                const count = allRows.length;
+                const resultRows = allRows;
+                return { rows: resultRows, count };
+            }
+            catch (error) {
+                LoggingUtilities_1.LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusServicesByBusStopCode", `Query error: ${error.message}`);
+                throw new Error(`Failed to find bus services: ${error.message}`);
             }
         });
     }

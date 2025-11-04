@@ -23,11 +23,22 @@ function createHdbController(db) {
      * @returns {ControllerResponse} 200 - An array of PPHS with coordinates
      * @returns {ControllerResponse} 500 - Internal server error
      */
-    router.get("/", (_req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/pphs", (req, res) => __awaiter(this, void 0, void 0, function* () {
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
-            const result = yield hdbService.retrieveListOfPphsWithCoordinates();
+            const { batch } = req.body;
+            const result = yield hdbService.retrieveListOfPphsWithCoordinates(batch);
             return response.ok(result);
+        }
+        catch (error) {
+            return response.ko(error.message);
+        }
+    }));
+    router.post("/pphs/busstops", (req, res) => __awaiter(this, void 0, void 0, function* () {
+        const response = new ControllerResponse_1.ControllerResponse(res);
+        try {
+            const { lat, lng, radius } = req.body;
+            return response.ok(yield hdbService.retrieveBusstopWithinRadiusOfLatLng(lat, lng, radius));
         }
         catch (error) {
             return response.ko(error.message);

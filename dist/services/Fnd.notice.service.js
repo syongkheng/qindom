@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FndNoticeService = void 0;
-const UnknownException_1 = require("../exceptions/UnknownException");
+const AppExceptions_1 = require("../exceptions/AppExceptions");
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 class FndNoticeService {
     constructor(db) {
@@ -51,7 +51,7 @@ class FndNoticeService {
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.getAllNotice", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.Unknown();
             }
         });
     }
@@ -74,7 +74,7 @@ class FndNoticeService {
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.createNotice", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.EntityCreation("ITB_FND_NOTICE");
             }
         });
     }
@@ -87,7 +87,7 @@ class FndNoticeService {
                 LoggingUtilities_1.LoggingUtilities.service.info("FndNoticeService.updateNotice", `Updating notice with ID: ${id}`);
                 if (!id) {
                     LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.updateNotice", `Invalid ID provided: ${id}`);
-                    throw new UnknownException_1.UnknownException();
+                    throw new AppExceptions_1.Exceptions.InvalidRequest("id");
                 }
                 return yield this.db.update("tb_fnd_notice", { id: id }, {
                     type: type,
@@ -100,7 +100,7 @@ class FndNoticeService {
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.updateNotice", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.EntityUpdate("ITB_FND_NOTICE");
             }
         });
     }
@@ -118,12 +118,12 @@ class FndNoticeService {
                 });
                 if (result.length === 0) {
                     LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.deleteNotice", `No notice found with ID: ${id} to delete`);
-                    throw new UnknownException_1.UnknownException();
+                    throw new AppExceptions_1.Exceptions.EntityUpdate("ITB_FND_NOTICE");
                 }
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.deleteNotice", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.EntityUpdate("ITB_FND_NOTICE");
             }
         });
     }
@@ -147,7 +147,7 @@ class FndNoticeService {
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.viewNotice", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.EntityCreation("ITB_FND_NOTICE_VIEW");
             }
         });
     }
@@ -160,7 +160,7 @@ class FndNoticeService {
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("FndNoticeService.getNoticeViews", `Something went wrong: ${error}`);
-                throw new UnknownException_1.UnknownException();
+                throw new AppExceptions_1.Exceptions.EntityRetrieval();
             }
         });
     }

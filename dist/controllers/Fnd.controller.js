@@ -38,7 +38,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/notices/create", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/notices/create", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -56,7 +56,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/notices/update", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/notices/update", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -75,7 +75,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/notices/delete", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/notices/delete", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -87,7 +87,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/notices/view", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/notices/view", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -109,7 +109,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/events/create", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/events/create", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -126,7 +126,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/events/update", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/events/update", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -144,7 +144,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/events/delete", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/events/delete", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {
@@ -156,7 +156,7 @@ function createFndController(db) {
             return response.ko(error.message);
         }
     }));
-    router.post("/events/view", [TokenFilter_1.TokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
+    router.post("/events/view", [TokenFilter_1.MandatoryTokenFilter], (req, res) => __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         const response = new ControllerResponse_1.ControllerResponse(res);
         try {

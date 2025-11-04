@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LtaService = void 0;
+const UnknownException_1 = require("../exceptions/UnknownException");
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 const dotenv_1 = __importDefault(require("dotenv"));
 // Load environment variables from .env file
@@ -30,11 +31,11 @@ class LtaService {
         return __awaiter(this, void 0, void 0, function* () {
             const apiKey = process.env.LTA_DATAMALL_API_KEY;
             if (!apiKey) {
-                LoggingUtilities_1.LoggingUtilities.service.error("lta_service", "LTA_DATAMALL_API_KEY is not set in environment variables");
+                LoggingUtilities_1.LoggingUtilities.service.error("LtaService.statistics", "LTA_DATAMALL_API_KEY is not set in environment variables");
                 throw new Error("LTA API key not configured");
             }
             try {
-                LoggingUtilities_1.LoggingUtilities.service.debug("lta_service", `busStopCode: ${busStopCode}`);
+                LoggingUtilities_1.LoggingUtilities.service.debug("LtaService.statistics", `busStopCode: ${busStopCode}`);
                 const response = yield fetch(`https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=${busStopCode}`, {
                     method: "GET",
                     headers: {
@@ -43,7 +44,7 @@ class LtaService {
                     },
                 });
                 if (!response.ok) {
-                    LoggingUtilities_1.LoggingUtilities.service.error("lta_service", `LTA API request failed with status ${response.status}`);
+                    LoggingUtilities_1.LoggingUtilities.service.error("LtaService.statistics", `LTA API request failed with status ${response.status}`);
                     throw new Error(`LTA API request failed with status ${response.status}`);
                 }
                 const data = yield response.json();
@@ -53,9 +54,19 @@ class LtaService {
                 };
             }
             catch (error) {
-                LoggingUtilities_1.LoggingUtilities.service.error("lta_service", `Error fetching LTA data: ${error.message}`);
+                LoggingUtilities_1.LoggingUtilities.service.error("LtaService.statistics", `Error fetching LTA data: ${error.message}`);
             }
             throw new Error("Failed to fetch LTA data");
+        });
+    }
+    retrieveBusServicesByBusStopCode(busStopCode) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                return yield this.db.lta.findBusServicesByBusStopCode(busStopCode);
+            }
+            catch (error) {
+                throw new UnknownException_1.UnknownException();
+            }
         });
     }
 }
