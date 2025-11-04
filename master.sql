@@ -103,3 +103,57 @@ CREATE TABLE wuxi.tb_fnd_event_view (
 );
 
 SELECT * FROM wuxi.tb_fnd_event_view;
+
+
+DROP TABLE IF EXISTS wuxi.tb_lta_busstop;
+
+CREATE TABLE wuxi.tb_lta_busstop (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    busstop_code VARCHAR(8),
+    road_name VARCHAR (128),
+    `desc` VARCHAR(512),
+    lat VARCHAR(32),
+    lng VARCHAR(32),
+	created_dt BIGINT NOT NULL,
+    created_by VARCHAR(64) NOT NULL
+);
+
+SELECT * FROM wuxi.tb_lta_busstop WHERE busstop_code = '76241';
+
+SELECT *
+FROM wuxi.tb_lta_busstop b
+WHERE ST_Distance_Sphere(
+    point(b.lng, b.lat),
+    point(103.8802579, 1.3849414)
+) <= 200;
+
+SELECT VERSION();
+
+SELECT
+    COUNT(*)
+FROM tb_lta_busstop b
+WHERE ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(103.8499767, 1.4284349)) <= 2000;
+
+
+DROP TABLE IF EXISTS wuxi.tb_lta_bus_info;
+
+CREATE TABLE wuxi.tb_lta_bus_info (
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    service_no VARCHAR(16),
+    operator VARCHAR (128),
+    direction VARCHAR(8),
+    stop_sequence VARCHAR(32),
+    busstop_code VARCHAR(32),
+    distance VARCHAR(8),
+    wd_first_bus VARCHAR(4),
+    wd_last_bus VARCHAR(4),
+    sat_first_bus VARCHAR(4),
+    sat_last_bus VARCHAR(4),
+    sun_first_bus VARCHAR(4),
+    sun_last_bus VARCHAR(4),
+	created_dt BIGINT NOT NULL,
+    created_by VARCHAR(64) NOT NULL,
+    INDEX idx_busstop_code (busstop_code)
+);
+
+SELECT * FROM wuxi.tb_lta_bus_info;
