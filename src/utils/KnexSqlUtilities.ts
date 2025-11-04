@@ -1,8 +1,14 @@
 import { Knex } from "knex";
 import { LoggingUtilities } from "./LoggingUtilities";
+import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop";
 
 class KnexSqlUtilities {
-  constructor(private knex: Knex) {}
+  constructor(private knex: Knex) {
+    this.pphs = {
+      findBusStopsWithinRadiusOfLatLng:
+        this._findBusStopsWithinRadiusOfLatLng.bind(this),
+    };
+  }
 
   // CREATE
   async insert<T = any, R = T>(table: string, data: Partial<T>): Promise<R> {
@@ -178,6 +184,78 @@ class KnexSqlUtilities {
         `Count error: ${error.message}`
       );
       throw new Error(`Count failed: ${error.message}`);
+    }
+  }
+
+  async transaction<T>(
+    callback: (trx: Knex.Transaction) => Promise<T>
+  ): Promise<T> {
+    try {
+      LoggingUtilities.service.debug(
+        "KnexSqlUtilities.transaction",
+        `Starting transaction`
+      );
+
+      const result = await this.knex.transaction(async (trx) => {
+        const output = await callback(trx);
+        return output;
+      });
+
+      LoggingUtilities.service.debug(
+        "KnexSqlUtilities.transaction",
+        `Transaction committed successfully`
+      );
+
+      return result;
+    } catch (error: any) {
+      LoggingUtilities.service.error(
+        "KnexSqlUtilities.transaction",
+        `Transaction failed: ${error.message}`
+      );
+      throw new Error(`Transaction failed: ${error.message}`);
+    }
+  }
+
+  pphs: {
+    findBusStopsWithinRadiusOfLatLng: (
+      pphsLat: string,
+      pphsLng: string,
+      radiusInMeters: number
+    ) => Promise<any[]>;
+  };
+
+  private async _findBusStopsWithinRadiusOfLatLng(
+    pphsLat: string,
+    pphsLng: string,
+    radiusInMeters: number
+  ): Promise<(ITB_LTA_BUSSTOP & { distance_m: number })[]> {
+    try {
+      const sql = `
+        SELECT 
+          b.busstop_code,
+          b.road_name,
+          b.desc,
+          ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) AS distance_m
+        FROM tb_lta_busstop b
+        WHERE ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) <= ?
+        ORDER BY distance_m ASC
+      `;
+      const bindings = [pphsLng, pphsLat, pphsLng, pphsLat, radiusInMeters];
+      const query = this.knex.raw(sql, bindings);
+
+      LoggingUtilities.service.debug(
+        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
+        `Executing raw query - [ ${query.toQuery()} ]`
+      );
+
+      const [rows] = await query;
+      return rows;
+    } catch (error: any) {
+      LoggingUtilities.service.error(
+        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
+        `Query error: ${error.message}`
+      );
+      throw new Error(`Failed to find nearby bus stops: ${error.message}`);
     }
   }
 }

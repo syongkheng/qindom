@@ -1,7 +1,6 @@
-import { UnknownException } from "../exceptions/UnknownException";
+import { Exceptions } from "../exceptions/AppExceptions";
 import { ITB_FND_EVENT } from "../models/databases/tb_fnd_event";
 import { ITB_FND_EVENT_VIEW } from "../models/databases/tb_fnd_event_view";
-
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 
@@ -49,7 +48,7 @@ export class FndEventService {
         "FndEventService.getAllEvent",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 
@@ -77,7 +76,7 @@ export class FndEventService {
         created_by: createdBy,
       });
     } catch (error: any) {
-      throw new UnknownException();
+      throw new Exceptions.EntityCreation("ITB_FND_EVENT");
     }
   }
 
@@ -98,7 +97,17 @@ export class FndEventService {
     updatedBy: string;
   }): Promise<ITB_FND_EVENT[]> {
     try {
-      if (!id) throw new UnknownException();
+      LoggingUtilities.service.info(
+        "FndEventService.updateEvent",
+        `Updating event with ID: ${id}`
+      );
+      if (!id) {
+        LoggingUtilities.service.error(
+          "FndEventService.updateEvent",
+          `Invalid ID provided for update: ${id}`
+        );
+        throw new Exceptions.InvalidRequest("id");
+      }
 
       return await this.db.update<ITB_FND_EVENT>(
         "tb_fnd_event",
@@ -113,10 +122,10 @@ export class FndEventService {
       );
     } catch (error: any) {
       LoggingUtilities.service.error(
-        "FndNoticeService.updateNotice",
+        "FndEventService.updateEvent",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.EntityUpdate("ITB_FND_EVENT");
     }
   }
 
@@ -136,10 +145,18 @@ export class FndEventService {
       );
 
       if (result.length === 0) {
-        throw new UnknownException();
+        LoggingUtilities.service.error(
+          "FndEventService.deleteEvent",
+          `No event found with ID: ${id} to delete`
+        );
+        throw new Exceptions.EntityUpdate("ITB_FND_EVENT");
       }
     } catch (error: any) {
-      throw new UnknownException();
+      LoggingUtilities.service.error(
+        "FndEventService.deleteEvent",
+        `Something went wrong: ${error}`
+      );
+      throw new Exceptions.EntityUpdate("ITB_FND_EVENT");
     }
   }
 
@@ -154,28 +171,48 @@ export class FndEventService {
       );
 
       if (isViewed) {
+        LoggingUtilities.service.info(
+          "FndEventService.viewEvent",
+          `Event ID: ${id} already viewed by user: ${username}`
+        );
         return isViewed;
       }
 
+      LoggingUtilities.service.info(
+        "FndEventService.viewEvent",
+        `Recording view for event ID: ${id} by user: ${username}`
+      );
       return await this.db.insert<ITB_FND_EVENT_VIEW>("tb_fnd_event_view", {
         event_id: id,
         username: username,
         created_dt: new Date().getTime(),
       });
     } catch (error: any) {
-      throw new UnknownException();
+      LoggingUtilities.service.error(
+        "FndEventService.viewEvent",
+        `Something went wrong: ${error}`
+      );
+      throw new Exceptions.EntityCreation("ITB_FND_EVENT_VIEW");
     }
   }
 
   private async getEventViews(eventId: number): Promise<{ count: number }> {
     try {
+      LoggingUtilities.service.info(
+        "FndEventService.getEventViews",
+        `Fetching view count for event ID: ${eventId}`
+      );
       const res = await this.db.find<ITB_FND_EVENT_VIEW>("tb_fnd_event_view", {
         event_id: eventId,
       });
 
       return { count: res.length };
     } catch (error: any) {
-      throw new UnknownException();
+      LoggingUtilities.service.error(
+        "FndEventService.getEventViews",
+        `Something went wrong: ${error}`
+      );
+      throw new Exceptions.EntityRetrieval();
     }
   }
 }

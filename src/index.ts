@@ -42,8 +42,8 @@ async function startServer() {
     [RestRequestLogger],
     createConnectivityController(db)
   );
-  app.use("/hdb", [RestRequestLogger], createHdbController(db));
-  app.use("/lta", [RestRequestLogger], createLtaController(db));
+  app.use("/api/hdb", [RestRequestLogger], createHdbController(db));
+  app.use("/api/lta", [RestRequestLogger], createLtaController(db));
   app.use("/api/auth", [RestRequestLogger], createAuthController(db));
   app.use("/api/fnd", [RestRequestLogger], createFndController(db));
   app.use("/api/pfp", [RestRequestLogger], createPfpController(db));

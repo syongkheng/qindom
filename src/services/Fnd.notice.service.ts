@@ -1,4 +1,4 @@
-import { UnknownException } from "../exceptions/UnknownException";
+import { Exceptions } from "../exceptions/AppExceptions";
 import { ITB_FND_NOTICE } from "../models/databases/tb_fnd_notice";
 import { ITB_FND_NOTICE_VIEW } from "../models/databases/tb_fnd_notice_view";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
@@ -63,7 +63,7 @@ export class FndNoticeService {
         "FndNoticeService.getAllNotice",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 
@@ -102,7 +102,7 @@ export class FndNoticeService {
         "FndNoticeService.createNotice",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.EntityCreation("ITB_FND_NOTICE");
     }
   }
 
@@ -134,7 +134,7 @@ export class FndNoticeService {
           "FndNoticeService.updateNotice",
           `Invalid ID provided: ${id}`
         );
-        throw new UnknownException();
+        throw new Exceptions.InvalidRequest("id");
       }
 
       return await this.db.update<ITB_FND_NOTICE>(
@@ -154,7 +154,7 @@ export class FndNoticeService {
         "FndNoticeService.updateNotice",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.EntityUpdate("ITB_FND_NOTICE");
     }
   }
 
@@ -182,14 +182,14 @@ export class FndNoticeService {
           "FndNoticeService.deleteNotice",
           `No notice found with ID: ${id} to delete`
         );
-        throw new UnknownException();
+        throw new Exceptions.EntityUpdate("ITB_FND_NOTICE");
       }
     } catch (error: any) {
       LoggingUtilities.service.error(
         "FndNoticeService.deleteNotice",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.EntityUpdate("ITB_FND_NOTICE");
     }
   }
 
@@ -225,7 +225,7 @@ export class FndNoticeService {
         "FndNoticeService.viewNotice",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.EntityCreation("ITB_FND_NOTICE_VIEW");
     }
   }
 
@@ -246,7 +246,7 @@ export class FndNoticeService {
         "FndNoticeService.getNoticeViews",
         `Something went wrong: ${error}`
       );
-      throw new UnknownException();
+      throw new Exceptions.EntityRetrieval();
     }
   }
 }

@@ -1,4 +1,4 @@
-import { UnknownException } from "../exceptions/UnknownException";
+import { Exceptions } from "../exceptions/AppExceptions";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import jwt from "jsonwebtoken";
@@ -80,21 +80,21 @@ export class TokenService {
             "TokenService.decodeToken",
             `Token has expired.`
           );
-          throw new UnknownException();
+          throw new Exceptions.TokenExpired();
         }
         if (error instanceof jwt.JsonWebTokenError) {
           LoggingUtilities.service.error(
             "TokenService.decodeToken",
             `Invalid token format.`
           );
-          throw new UnknownException();
+          throw new Exceptions.TokenFormat();
         }
       }
       LoggingUtilities.service.error(
         "TokenService.decodeToken",
         `Something went wrong decoding token.`
       );
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 }

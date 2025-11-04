@@ -33,5 +33,15 @@ export default function createLtaController(db: KnexSqlUtilities) {
     }
   });
 
+  // router.get("/busstops", async (req: Request, res: Response) => {
+  //   const response = new ControllerResponse(res);
+
+  //   try {
+  //     return response.ok(await ltaService._retrieveAllBusstops());
+  //   } catch (error: any) {
+  //     return response.ko(error.message);
+  //   }
+  // });
+
   return router;
 }

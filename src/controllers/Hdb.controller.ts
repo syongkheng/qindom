@@ -14,12 +14,30 @@ export default function createHdbController(db: KnexSqlUtilities) {
    * @returns {ControllerResponse} 200 - An array of PPHS with coordinates
    * @returns {ControllerResponse} 500 - Internal server error
    */
-  router.get("/", async (_req: Request, res: Response) => {
+  router.post("/pphs", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
 
     try {
-      const result = await hdbService.retrieveListOfPphsWithCoordinates();
+      const { batch } = req.body as { batch: string };
+      const result = await hdbService.retrieveListOfPphsWithCoordinates(batch);
       return response.ok(result);
+    } catch (error: any) {
+      return response.ko(error.message);
+    }
+  });
+
+  router.post("/pphs/busstops", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+
+    try {
+      const { lat, lng, radius } = req.body as {
+        lat: string;
+        lng: string;
+        radius: number;
+      };
+      return response.ok(
+        await hdbService.retrieveBusstopWithinRadiusOfLatLng(lat, lng, radius)
+      );
     } catch (error: any) {
       return response.ko(error.message);
     }

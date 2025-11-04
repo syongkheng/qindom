@@ -4,6 +4,8 @@ import { LoggingUtilities } from "../utils/LoggingUtilities";
 import { CoordinateService } from "./Coordinate.service";
 import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
+import { InvalidRequestException } from "../exceptions/InvalidRequestException";
+import { UnknownException } from "../exceptions/UnknownException";
 
 interface FlatRecord {
   town: string;
@@ -21,11 +23,21 @@ export class HdbService {
   constructor(private db: KnexSqlUtilities) {
     this.coordinateService = new CoordinateService(db);
   }
-  async retrieveListOfPphs(): Promise<{
+  async retrieveListOfPphs(batch: string | undefined): Promise<{
     records: FlatRecord[];
     source: "database" | "website" | "error";
   }> {
-    const currentBatch = this.generateBatch();
+    const currentBatch = batch || this.generateBatch();
+
+    if (typeof currentBatch !== "string" || !/^\d{6}$/.test(currentBatch)) {
+      LoggingUtilities.service.error(
+        "HdbService.statistics",
+        `Invalid batch format: ${currentBatch}`
+      );
+      throw new InvalidRequestException(
+        "Invalid batch format. Expected 'YYYYMM'."
+      );
+    }
 
     // Check if we already have data for the current batch
     const existingRecords = await this.db.find<ITB_HDB_PPHS>(
@@ -111,11 +123,11 @@ export class HdbService {
     };
   }
 
-  async retrieveListOfPphsWithCoordinates(): Promise<{
+  async retrieveListOfPphsWithCoordinates(batch: string | undefined): Promise<{
     records: (FlatRecord & { formedUrl: string; lat: string; lng: string })[];
     source: "database" | "website" | "error";
   }> {
-    const { records, source } = await this.retrieveListOfPphs();
+    const { records, source } = await this.retrieveListOfPphs(batch);
 
     const recordsWithCoordinates = await Promise.all(
       records.map(async (record) => {
@@ -140,6 +152,22 @@ export class HdbService {
       records: recordsWithCoordinates,
       source,
     };
+  }
+
+  async retrieveBusstopWithinRadiusOfLatLng(
+    lat: string,
+    lng: string,
+    radius: number
+  ) {
+    try {
+      return await this.db.pphs.findBusStopsWithinRadiusOfLatLng(
+        lat,
+        lng,
+        radius
+      );
+    } catch (error) {
+      throw new UnknownException();
+    }
   }
 
   private parseTable(table: HTMLElement): FlatRecord[] {

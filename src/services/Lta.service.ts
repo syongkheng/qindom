@@ -26,6 +26,14 @@ interface NextBusRecord {
   Type: string;
 }
 
+interface LtaBusstopRecord {
+  BusStopCode: string;
+  RoadName: string;
+  Description: string;
+  Latitude: string;
+  Longitude: string;
+}
+
 export class LtaService {
   constructor(private db: KnexSqlUtilities) {}
 
@@ -87,4 +95,89 @@ export class LtaService {
     }
     throw new Error("Failed to fetch LTA data");
   }
+
+  // async _retrieveAllBusstops(): Promise<{ totalCount: number }> {
+  //   const apiKey = process.env.LTA_DATAMALL_API_KEY;
+
+  //   if (!apiKey) {
+  //     LoggingUtilities.service.error(
+  //       "lta_service",
+  //       "LTA_DATAMALL_API_KEY is not set in environment variables"
+  //     );
+  //     throw new Error("LTA API key not configured");
+  //   }
+
+  //   const baseUrl = "https://datamall2.mytransport.sg/ltaodataservice/BusStops";
+
+  //   const headers = {
+  //     AccountKey: apiKey,
+  //     Accept: "application/json",
+  //   };
+
+  //   let skip = 0;
+  //   let totalCount = 0;
+  //   const pageSize = 500;
+
+  //   while (true) {
+  //     const url = `${baseUrl}?$skip=${skip}`;
+  //     LoggingUtilities.service.debug("lta_service", `Fetching: ${url}`);
+
+  //     const response = await fetch(url, { headers });
+
+  //     if (!response.ok) {
+  //       throw new Error(
+  //         `Failed to fetch data: ${response.status} ${response.statusText}`
+  //       );
+  //     }
+
+  //     const data = await response.json();
+
+  //     if (!data.value || data.value.length === 0) {
+  //       LoggingUtilities.service.info(
+  //         "lta_service",
+  //         "No more bus stops to fetch"
+  //       );
+  //       break; // Stop when no more results
+  //     }
+
+  //     // Optional: batch insert using transaction for better performance
+  //     try {
+  //       await this.db.transaction(async (trx) => {
+  //         for (const busStop of data.value as LtaBusstopRecord[]) {
+  //           await this.db.insert.call({ knex: trx }, "tb_lta_busstop", {
+  //             busstop_code: busStop.BusStopCode,
+  //             road_name: busStop.RoadName,
+  //             desc: busStop.Description,
+  //             lat: busStop.Latitude,
+  //             lng: busStop.Longitude,
+  //             created_dt: new Date().getTime(),
+  //             created_by: "SYSTEM",
+  //           });
+  //         }
+  //       });
+  //     } catch (err: any) {
+  //       LoggingUtilities.service.error(
+  //         "lta_service",
+  //         `Insert batch failed at skip=${skip}: ${err.message}`
+  //       );
+  //     }
+
+  //     totalCount += data.value.length;
+  //     LoggingUtilities.service.info(
+  //       "lta_service",
+  //       `Inserted ${data.value.length} bus stops (total so far: ${totalCount})`
+  //     );
+
+  //     skip += pageSize; // Move to the next batch
+  //   }
+
+  //   LoggingUtilities.service.info(
+  //     "lta_service",
+  //     `Completed fetching all bus stops. Total: ${totalCount}`
+  //   );
+
+  //   return {
+  //     totalCount,
+  //   };
+  // }
 }

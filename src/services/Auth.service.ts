@@ -3,8 +3,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import bcrypt from "bcrypt";
 import { TokenService } from "./Token.service";
-import { UnknownException } from "../exceptions/UnknownException";
-import { InvalidLoginCredentialsException } from "../exceptions/InvalidLoginCredentialsException";
+import { Exceptions } from "../exceptions/AppExceptions";
 
 /**
  * Service to handle Authentications.
@@ -95,7 +94,7 @@ export class AuthService {
         "AuthService.createNewUser",
         `Something went wrong registering ${username} - ${error}`
       );
-      return { token: "" };
+      throw new Exceptions.RegistrationException();
     }
   }
 
@@ -122,7 +121,7 @@ export class AuthService {
         "AuthService.login",
         `${username}_${system} could not be found.`
       );
-      throw new InvalidLoginCredentialsException();
+      throw new Exceptions.InvalidLoginCredentials();
     }
 
     const isValidPassword = await bcrypt.compare(
@@ -134,7 +133,7 @@ export class AuthService {
       `Password comparison result: ${isValidPassword}`
     );
     if (!isValidPassword) {
-      throw new UnknownException();
+      throw new Exceptions.InvalidLoginCredentials();
     }
 
     const generatedToken = await this.tokenService.generateToken({
@@ -203,7 +202,7 @@ export class AuthService {
         "AuthService.validatePassword",
         `${username_system} could not be found.`
       );
-      throw new UnknownException();
+      throw new Exceptions.InvalidLoginCredentials;
     }
 
     const isValidPassword = await bcrypt.compare(

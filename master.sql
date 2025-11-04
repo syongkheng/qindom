@@ -103,17 +103,3 @@ CREATE TABLE wuxi.tb_fnd_event_view (
 );
 
 SELECT * FROM wuxi.tb_fnd_event_view;
-
-
-DROP TABLE IF EXISTS wuxi.tb_lta_busstop;
-
-CREATE TABLE wuxi.tb_lta_busstop (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    bustop_code VARCHAR(8),
-    road_name VARCHAR (128),
-    `desc` VARCHAR(512),
-    lat VARCHAR(16),
-    lng VARCHAR(16),
-	created_dt BIGINT NOT NULL,
-    created_by VARCHAR(64) NOT NULL
-);
