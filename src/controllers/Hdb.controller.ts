@@ -43,5 +43,21 @@ export default function createHdbController(db: KnexSqlUtilities) {
     }
   });
 
+  router.post("/pphs/mrt", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+    try {
+      const { lat, lng, limit } = req.body as {
+        lat: string;
+        lng: string;
+        limit?: number;
+      };
+      return response.ok(
+        await hdbService.retrieveNearestMrtStationsOfLatLng(lat, lng)
+      );
+    } catch (error: any) {
+      return response.ko(error.message);
+    }
+  });
+
   return router;
 }

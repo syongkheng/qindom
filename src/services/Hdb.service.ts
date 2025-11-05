@@ -170,6 +170,22 @@ export class HdbService {
     }
   }
 
+  async retrieveNearestMrtStationsOfLatLng(
+    lat: string,
+    lng: string,
+    limit?: number
+  ) {
+    try {
+      return await this.db.pphs.findMrtStationsWithinRadiusOfLatLng(
+        lat,
+        lng,
+        3
+      );
+    } catch (error) {
+      throw new UnknownException();
+    }
+  }
+
   private parseTable(table: HTMLElement): FlatRecord[] {
     const allRows = table.querySelectorAll("tbody > tr");
     const rows = allRows.slice(2);

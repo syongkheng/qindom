@@ -2,12 +2,15 @@ import { Knex } from "knex";
 import { LoggingUtilities } from "./LoggingUtilities";
 import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop";
 import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info";
+import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station";
 
 class KnexSqlUtilities {
   constructor(private knex: Knex) {
     this.pphs = {
       findBusStopsWithinRadiusOfLatLng:
         this._findBusStopsWithinRadiusOfLatLng.bind(this),
+      findMrtStationsWithinRadiusOfLatLng:
+        this._findMrtStationsWithinRadiusOfLatLng.bind(this),
     };
     this.lta = {
       findBusServicesByBusStopCode:
@@ -230,6 +233,14 @@ class KnexSqlUtilities {
       rows: (ITB_LTA_BUSSTOP & { distance_m: number })[];
       count: number;
     }>;
+    findMrtStationsWithinRadiusOfLatLng: (
+      pphsLat: string,
+      pphsLng: string,
+      numberOfStations: number
+    ) => Promise<{
+      rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
+      count: number;
+    }>;
   };
 
   private async _findBusStopsWithinRadiusOfLatLng(
@@ -271,6 +282,50 @@ class KnexSqlUtilities {
       const resultRows = allRows.slice(0, 10);
 
       return { rows: resultRows, count };
+    } catch (error: any) {
+      LoggingUtilities.service.error(
+        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
+        `Query error: ${error.message}`
+      );
+      throw new Error(`Failed to find nearby bus stops: ${error.message}`);
+    }
+  }
+
+  private async _findMrtStationsWithinRadiusOfLatLng(
+    pphsLat: string,
+    pphsLng: string,
+    numberOfStations: number
+  ): Promise<{
+    rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
+    count: number;
+  }> {
+    try {
+      const sql = `
+        SELECT 
+            e.station,
+            e.type,
+            MIN(ST_Distance_Sphere(POINT(e.lat, e.lng), POINT(?, ?))) AS distance_m
+        FROM tb_lrt_mrt_station e
+        GROUP BY e.station, e.type
+        ORDER BY distance_m ASC
+        LIMIT ?;
+    `;
+
+      const bindings = [pphsLng, pphsLat, numberOfStations ?? 3];
+      const query = this.knex.raw(sql, bindings);
+
+      LoggingUtilities.service.debug(
+        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
+        `Executing raw query - [ ${query.toQuery()} ]`
+      );
+
+      const [rows] = await query;
+
+      // ✅ Normalize and count
+      const allRows = rows as (ITB_LTA_MRT_STATION & { distance_m: number })[];
+      const count = allRows.length;
+
+      return { rows: allRows, count };
     } catch (error: any) {
       LoggingUtilities.service.error(
         "KnexSqlUtilities.lta.findBusStopsWithinRadius",
