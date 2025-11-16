@@ -1,4 +1,3 @@
-import axios from "axios";
 import { parse, HTMLElement } from "node-html-parser";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import { CoordinateService } from "./Coordinate.service";
@@ -23,6 +22,7 @@ export class HdbService {
   constructor(private db: KnexSqlUtilities) {
     this.coordinateService = new CoordinateService(db);
   }
+
   async retrieveListOfPphs(batch: string | undefined): Promise<{
     records: FlatRecord[];
     source: "database" | "website" | "error";
@@ -39,7 +39,7 @@ export class HdbService {
       );
     }
 
-    // Check if we already have data for the current batch
+    // 1️⃣ Check if data exists in DB
     const existingRecords = await this.db.find<ITB_HDB_PPHS>(
       "tb_hdb_pphs",
       { batch: currentBatch },
@@ -60,10 +60,7 @@ export class HdbService {
         const records = JSON.parse(
           existingRecords[0].json_string
         ) as FlatRecord[];
-        return {
-          records,
-          source: "database",
-        };
+        return { records, source: "database" };
       } catch (parseError) {
         LoggingUtilities.service.error(
           "HdbService.statistics",
@@ -77,28 +74,48 @@ export class HdbService {
       `No existing records found for batch ${currentBatch}, fetching from HDB website...`
     );
 
-    // Fetch from HDB website
+    // 2️⃣ Fetch from HDB website using fetch()
     const url =
       "https://www.hdb.gov.sg/residential/renting-a-flat/renting-from-hdb/parenthood-provisional-housing-schemepphs/application-procedure/flats-available-for-application-";
 
-    const response = await axios.get(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
-      },
-    });
+    let html: string;
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+        },
+      });
 
-    const root = parse(response.data);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+      }
+
+      html = await response.text();
+    } catch (error: any) {
+      LoggingUtilities.service.error(
+        "HdbService.statistics",
+        `Failed to fetch from HDB website: ${error.message}`
+      );
+      return { records: [], source: "error" };
+    }
+
+    // 3️⃣ Parse HTML response
+    const root = parse(html);
     const tables = root.querySelectorAll("table");
 
     if (tables.length === 0) {
-      throw new Error("No tables found on the page.");
+      LoggingUtilities.service.error(
+        "HdbService.statistics",
+        "No tables found on the HDB page."
+      );
+      throw new UnknownException();
     }
 
     const pphsTable = tables[0];
     const records = this.parseTable(pphsTable);
 
-    // Store the new records in database
+    // 4️⃣ Store records into DB
     try {
       await this.db.insert<ITB_HDB_PPHS>("tb_hdb_pphs", {
         batch: currentBatch,
@@ -110,17 +127,14 @@ export class HdbService {
         "HdbService.statistics",
         `Successfully stored ${records.length} records for batch ${currentBatch} in database`
       );
-    } catch (error) {
+    } catch (error: any) {
       LoggingUtilities.service.error(
         "HdbService.statistics",
-        "Failed to insert records into database"
+        `Failed to insert records into database: ${error.message}`
       );
     }
 
-    return {
-      records,
-      source: "website",
-    };
+    return { records, source: "website" };
   }
 
   async retrieveListOfPphsWithCoordinates(batch: string | undefined): Promise<{
@@ -135,23 +149,20 @@ export class HdbService {
           "HdbService.retrieveListOfPphsWithCoordinates",
           `Fetching coordinates for address: ${record.address}`
         );
-        const { source, formed_url, lat, lng } =
+        const { formed_url, lat, lng, source } =
           await this.coordinateService.getCoordinatesOfAddress(record.address);
 
         return {
           ...record,
           formedUrl: formed_url,
-          lat: lat,
-          lng: lng,
-          source: source,
+          lat,
+          lng,
+          source,
         };
       })
     );
 
-    return {
-      records: recordsWithCoordinates,
-      source,
-    };
+    return { records: recordsWithCoordinates, source };
   }
 
   async retrieveBusstopWithinRadiusOfLatLng(
@@ -179,7 +190,7 @@ export class HdbService {
       return await this.db.pphs.findMrtStationsWithinRadiusOfLatLng(
         lat,
         lng,
-        3
+        limit ?? 3
       );
     } catch (error) {
       throw new UnknownException();
@@ -195,10 +206,7 @@ export class HdbService {
 
     for (const row of rows) {
       const cells = row.querySelectorAll("td");
-
-      if (cells.length < 5) {
-        continue; // skip malformed rows
-      }
+      if (cells.length < 5) continue; // Skip malformed rows
 
       let addressCell: HTMLElement;
       let twoCell: HTMLElement;
@@ -207,11 +215,8 @@ export class HdbService {
       let expiryCell: HTMLElement;
 
       if (cells.length === 6) {
-        // Town is included in this row
         const townText = cells[0].textContent?.trim();
-        if (townText) {
-          currentTown = townText;
-        }
+        if (townText) currentTown = townText;
 
         addressCell = cells[1];
         twoCell = cells[2];
@@ -219,7 +224,6 @@ export class HdbService {
         fourCell = cells[4];
         expiryCell = cells[5];
       } else {
-        // Town is from previous row
         addressCell = cells[0];
         twoCell = cells[1];
         threeCell = cells[2];
@@ -238,15 +242,9 @@ export class HdbService {
       const t3 = threeCell.textContent?.trim();
       const t4 = fourCell.textContent?.trim();
 
-      if (t2 && t2 !== "-") {
-        record.flatTypes["2-room"] = t2;
-      }
-      if (t3 && t3 !== "-") {
-        record.flatTypes["3-room"] = t3;
-      }
-      if (t4 && t4 !== "-") {
-        record.flatTypes["4-room"] = t4;
-      }
+      if (t2 && t2 !== "-") record.flatTypes["2-room"] = t2;
+      if (t3 && t3 !== "-") record.flatTypes["3-room"] = t3;
+      if (t4 && t4 !== "-") record.flatTypes["4-room"] = t4;
 
       results.push(record);
     }
@@ -258,11 +256,9 @@ export class HdbService {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
-
     return `${year}${month}`;
   }
 
-  // Optional: Method to get historical batches
   async getAvailableBatches(): Promise<string[]> {
     try {
       const batches = await this.db.find<ITB_HDB_PPHS>(

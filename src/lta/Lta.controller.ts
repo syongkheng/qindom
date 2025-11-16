@@ -2,7 +2,7 @@
 import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LtaService } from "../services/Lta.service";
+import { LtaService } from "./Lta.service";
 
 export default function createLtaController(db: KnexSqlUtilities) {
   const router = Router();

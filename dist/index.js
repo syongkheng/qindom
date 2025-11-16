@@ -18,12 +18,11 @@ const LoggingUtilities_1 = require("./utils/LoggingUtilities");
 const mysql_1 = require("./config/db/mysql");
 const RestRequestLogger_1 = require("./middlewares/RestRequestLogger");
 // Controllers
-const Connectivity_controller_1 = __importDefault(require("./controllers/Connectivity.controller"));
-const Hdb_controller_1 = __importDefault(require("./controllers/Hdb.controller"));
-const Lta_controller_1 = __importDefault(require("./controllers/Lta.controller"));
-const Auth_controller_1 = __importDefault(require("./controllers/Auth.controller"));
-const Fnd_controller_1 = __importDefault(require("./controllers/Fnd.controller"));
-const Pfp_controller_1 = __importDefault(require("./controllers/Pfp.controller"));
+const Connectivity_controller_1 = __importDefault(require("./connectivity/Connectivity.controller"));
+const Hdb_controller_1 = __importDefault(require("./hdb/Hdb.controller"));
+const Lta_controller_1 = __importDefault(require("./lta/Lta.controller"));
+const Auth_controller_1 = __importDefault(require("./auth/Auth.controller"));
+const Pfp_controller_1 = __importDefault(require("./profile/Pfp.controller"));
 function startServer() {
     return __awaiter(this, void 0, void 0, function* () {
         const app = (0, express_1.default)();
@@ -47,7 +46,7 @@ function startServer() {
         app.use("/api/hdb", [RestRequestLogger_1.RestRequestLogger], (0, Hdb_controller_1.default)(db));
         app.use("/api/lta", [RestRequestLogger_1.RestRequestLogger], (0, Lta_controller_1.default)(db));
         app.use("/api/auth", [RestRequestLogger_1.RestRequestLogger], (0, Auth_controller_1.default)(db));
-        app.use("/api/fnd", [RestRequestLogger_1.RestRequestLogger], (0, Fnd_controller_1.default)(db));
+        // app.use("/api/fnd", [RestRequestLogger], createFndController(db));
         app.use("/api/pfp", [RestRequestLogger_1.RestRequestLogger], (0, Pfp_controller_1.default)(db));
         // Start server
         app.listen(port, () => {

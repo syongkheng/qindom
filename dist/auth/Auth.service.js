@@ -15,7 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const LoggingUtilities_1 = require("../utils/LoggingUtilities");
 const bcrypt_1 = __importDefault(require("bcrypt"));
-const Token_service_1 = require("./Token.service");
+const Token_service_1 = require("../token/Token.service");
 const AppExceptions_1 = require("../exceptions/AppExceptions");
 /**
  * Service to handle Authentications.

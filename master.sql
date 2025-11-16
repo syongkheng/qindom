@@ -157,3 +157,33 @@ CREATE TABLE wuxi.tb_lta_bus_info (
 );
 
 SELECT * FROM wuxi.tb_lta_bus_info;
+
+SELECT DISTINCT service_no
+FROM tb_lta_bus_info
+WHERE busstop_code = '76241'
+ORDER BY
+  CAST(service_no AS UNSIGNED),   
+  service_no;  
+  
+  
+DROP TABLE IF EXISTS wuxi.tb_lrt_mrt_station;
+CREATE TABLE wuxi.tb_lrt_mrt_station(
+	id BIGINT PRIMARY KEY AUTO_INCREMENT,
+	station VARCHAR(128),
+	`exit` VARCHAR (16),
+	lat VARCHAR(32),
+	lng VARCHAR(32),
+    `type` VARCHAR(8),
+	created_dt BIGINT NOT NULL,
+	created_by VARCHAR(64) NOT NULL
+);
+SELECT * FROM wuxi.tb_lrt_mrt_station;
+
+SELECT 
+    e.station,
+    e.type,
+    MIN(ST_Distance_Sphere(POINT(e.lat, e.lng), POINT(103.833021, 1.2861643))) AS distance_m
+FROM tb_lrt_mrt_station e
+GROUP BY e.station, e.type
+ORDER BY distance_m ASC
+LIMIT 3;

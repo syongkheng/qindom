@@ -2,7 +2,7 @@
 import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { HdbService } from "../services/Hdb.service";
+import { HdbService } from "./Hdb.service";
 
 export default function createHdbController(db: KnexSqlUtilities) {
   const router = Router();

@@ -13,7 +13,7 @@ exports.default = createHdbController;
 // src/controllers/Hdb.controller.ts
 const express_1 = require("express");
 const ControllerResponse_1 = require("../models/responses/ControllerResponse");
-const Hdb_service_1 = require("../services/Hdb.service");
+const Hdb_service_1 = require("./Hdb.service");
 function createHdbController(db) {
     const router = (0, express_1.Router)();
     const hdbService = new Hdb_service_1.HdbService(db);

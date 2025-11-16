@@ -2,6 +2,7 @@ import { EntityCreationException } from "./EntityCreationException";
 import { EntityNotFoundException } from "./EntityNotFoundException";
 import { EntityRetrievalException } from "./EntityRetrievalException";
 import { EntityUpdateException } from "./EntityUpdateException";
+import { ExternalRequestException } from "./ExternalRequestException";
 import { InvalidLoginCredentialsException } from "./InvalidLoginCredentialsException";
 import { InvalidRequestException } from "./InvalidRequestException";
 import { RegistrationException } from "./RegistrationException";
@@ -13,6 +14,7 @@ export const Exceptions = {
   InvalidLoginCredentials: InvalidLoginCredentialsException,
   InvalidRequest: InvalidRequestException,
   RegistrationException: RegistrationException,
+  ExternalRequest: ExternalRequestException,
   EntityCreation: EntityCreationException,
   EntityRetrieval: EntityRetrievalException,
   EntityUpdate: EntityUpdateException,

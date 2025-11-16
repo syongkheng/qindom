@@ -1,15 +1,15 @@
-import axios from "axios";
 import { parse } from "node-html-parser";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import { ITB_HDB_PPHS_COORDINATE } from "../models/databases/tb_hdb_pphs_coordinate";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
+import { Exceptions } from "../exceptions/AppExceptions";
 
 export class CoordinateService {
   constructor(private db: KnexSqlUtilities) {}
 
   /**
    * Makes a call to Google Maps to retrieve coordinates for a given address based on the redirection url.
-   * @param address 
+   * @param address
    * @returns formed_url, lat, lng, and source of data
    */
   async getCoordinatesOfAddress(address: string): Promise<{
@@ -20,7 +20,7 @@ export class CoordinateService {
   }> {
     const transformedAddress = address.replace(/ /g, "+");
 
-    // Check if we already have coordinates for this address in the database
+    // 1️⃣ Check if already cached in DB
     const existingRecords = await this.db.find<ITB_HDB_PPHS_COORDINATE>(
       "tb_hdb_pphs_coordinate",
       { building: transformedAddress },
@@ -45,55 +45,60 @@ export class CoordinateService {
       };
     }
 
-    this.sleep(1000); // Sleep for 1 second to avoid rapid requests
+    await this.sleep(1000); // Respect rate limiting
 
     const requestUrl = `https://www.google.com/maps/search/${transformedAddress}`;
-
     LoggingUtilities.service.info(
       "CoordinateService.getCoordinatesOfAddress",
       `[EXT-GET] ${requestUrl}`
     );
 
-    // Make GET request to Google to retrieve redirect URL
-    const response = await axios
-      .get(requestUrl, {
+    // 2️⃣ Fetch from Google Maps
+    let htmlData = "";
+    try {
+      const response = await fetch(requestUrl, {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
         },
-      })
-      .catch((error) => {
-        LoggingUtilities.service.error(
-          "CoordinateService.getCoordinatesOfAddress",
-          `Failed to fetch from Google for address: ${address} - ${error.message}`
-        );
-        return { data: "" }; // Return empty data on error
+      }).then((res) => {
+        return res;
       });
 
-    const root = parse(response.data);
-    const scripts = root.querySelectorAll("script");
+      if (!response.ok) {
+        throw new Exceptions.ExternalRequest("Google Maps");
+      }
 
+      htmlData = await response.text();
+    } catch (error: any) {
+      LoggingUtilities.service.error(
+        "CoordinateService.getCoordinatesOfAddress",
+        `Failed to fetch from Google for address: ${address} - ${error.message}`
+      );
+      return { formed_url: "", lat: "", lng: "", source: "error" };
+    }
+
+    // 3️⃣ Parse HTML response for coordinate URL
+    const root = parse(htmlData);
+    const scripts = root.querySelectorAll("script");
     const urlRegex =
       /https?:\/\/www\.google\.com\/maps\/preview\/place\/[^"'\s\\]+/g;
 
     for (const script of scripts) {
-      const scriptContent = script.text;
-
-      const matches = scriptContent.match(urlRegex);
+      const matches = script.text.match(urlRegex);
       if (matches && matches.length > 0) {
         const url = matches[0].replace(/\\u003d/g, "=");
-
         LoggingUtilities.service.debug(
           "CoordinateService.getCoordinatesOfAddress",
-          `Formed: ${url}`
+          `Formed URL: ${url}`
         );
+
         const parts = url.split("/@")[1]?.split(",");
         const retrievedLat = parts ? parts[0] : "";
         const retrievedLng = parts ? parts[1] : "";
 
+        // 4️⃣ Store in database for caching
         try {
-          // Insert DB for future retrieval
-
           await this.db.insert<ITB_HDB_PPHS_COORDINATE>(
             "tb_hdb_pphs_coordinate",
             {
@@ -107,12 +112,12 @@ export class CoordinateService {
           );
           LoggingUtilities.service.info(
             "CoordinateService.getCoordinatesOfAddress",
-            `Sucessfully stored coordinates for ${address} in database`
+            `Successfully stored coordinates for ${address} in database`
           );
-        } catch (error) {
+        } catch (error: any) {
           LoggingUtilities.service.error(
             "CoordinateService.getCoordinatesOfAddress",
-            `Failed to store coordinates for ${address} in database`
+            `Failed to store coordinates for ${address} in database: ${error.message}`
           );
         }
 
@@ -125,8 +130,12 @@ export class CoordinateService {
       }
     }
 
-    // Fallback response
-    return { source: "error", formed_url: "", lat: "", lng: "" };
+    // 5️⃣ Fallback
+    LoggingUtilities.service.warn(
+      "CoordinateService.getCoordinatesOfAddress",
+      `No coordinates found for ${address}`
+    );
+    return { formed_url: "", lat: "", lng: "", source: "error" };
   }
 
   private async sleep(ms: number): Promise<void> {

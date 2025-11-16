@@ -15,6 +15,7 @@ class KnexSqlUtilities {
         this.knex = knex;
         this.pphs = {
             findBusStopsWithinRadiusOfLatLng: this._findBusStopsWithinRadiusOfLatLng.bind(this),
+            findMrtStationsWithinRadiusOfLatLng: this._findMrtStationsWithinRadiusOfLatLng.bind(this),
         };
         this.lta = {
             findBusServicesByBusStopCode: this._findBusServicesByBusStopCode.bind(this),
@@ -183,6 +184,34 @@ class KnexSqlUtilities {
                 const count = allRows.length;
                 const resultRows = allRows.slice(0, 10);
                 return { rows: resultRows, count };
+            }
+            catch (error) {
+                LoggingUtilities_1.LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${error.message}`);
+                throw new Error(`Failed to find nearby bus stops: ${error.message}`);
+            }
+        });
+    }
+    _findMrtStationsWithinRadiusOfLatLng(pphsLat, pphsLng, numberOfStations) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const sql = `
+        SELECT 
+            e.station,
+            e.type,
+            MIN(ST_Distance_Sphere(POINT(e.lat, e.lng), POINT(?, ?))) AS distance_m
+        FROM tb_lrt_mrt_station e
+        GROUP BY e.station, e.type
+        ORDER BY distance_m ASC
+        LIMIT ?;
+    `;
+                const bindings = [pphsLng, pphsLat, numberOfStations !== null && numberOfStations !== void 0 ? numberOfStations : 3];
+                const query = this.knex.raw(sql, bindings);
+                LoggingUtilities_1.LoggingUtilities.service.debug("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Executing raw query - [ ${query.toQuery()} ]`);
+                const [rows] = yield query;
+                // ✅ Normalize and count
+                const allRows = rows;
+                const count = allRows.length;
+                return { rows: allRows, count };
             }
             catch (error) {
                 LoggingUtilities_1.LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${error.message}`);

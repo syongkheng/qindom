@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { IDecodedTokenUser } from "../services/Token.service";
+import { IDecodedTokenUser } from "../token/Token.service";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 
 export const MandatoryTokenFilter = function (

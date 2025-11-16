@@ -1,6 +1,5 @@
+import { Exceptions } from "../exceptions/AppExceptions";
 import { UnknownException } from "../exceptions/UnknownException";
-import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info";
-import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import dotenv from "dotenv";
@@ -29,22 +28,22 @@ interface NextBusRecord {
   Type: string;
 }
 
-interface LtaBusstopRecord {
-  ServiceNo: string;
-  Operator: string;
-  Direction: string;
-  StopSequence: string;
-  BusStopCode: string;
-  Distance: string;
-  WD_FirstBus: string;
-  WD_LastBus: string;
-  SAT_FirstBus: string;
-  SAT_LastBus: string;
-  SUN_FirstBus: string;
-  SUN_LastBus: string;
-}
+// interface LtaBusstopRecord {
+//   ServiceNo: string;
+//   Operator: string;
+//   Direction: string;
+//   StopSequence: string;
+//   BusStopCode: string;
+//   Distance: string;
+//   WD_FirstBus: string;
+//   WD_LastBus: string;
+//   SAT_FirstBus: string;
+//   SAT_LastBus: string;
+//   SUN_FirstBus: string;
+//   SUN_LastBus: string;
+// }
 
-interface LtaBusInfoRecord {}
+// interface LtaBusInfoRecord {}
 
 export class LtaService {
   constructor(private db: KnexSqlUtilities) {}
@@ -88,9 +87,7 @@ export class LtaService {
           "LtaService.statistics",
           `LTA API request failed with status ${response.status}`
         );
-        throw new Error(
-          `LTA API request failed with status ${response.status}`
-        );
+        throw new Exceptions.ExternalRequest("LTA Datamall");
       }
 
       const data = await response.json();
@@ -105,7 +102,7 @@ export class LtaService {
         `Error fetching LTA data: ${error.message}`
       );
     }
-    throw new Error("Failed to fetch LTA data");
+    throw new Exceptions.Unknown();
   }
 
   async retrieveBusServicesByBusStopCode(busStopCode: string) {

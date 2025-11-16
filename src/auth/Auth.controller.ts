@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { AuthService } from "../services/Auth.service";
+import { AuthService } from "./Auth.service";
 import { BaseExceptions } from "../exceptions/BaseException";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";

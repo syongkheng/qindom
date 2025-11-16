@@ -5,12 +5,11 @@ import { initializeDatabase } from "./config/db/mysql";
 import { RestRequestLogger } from "./middlewares/RestRequestLogger";
 
 // Controllers
-import createConnectivityController from "./controllers/Connectivity.controller";
-import createHdbController from "./controllers/Hdb.controller";
-import createLtaController from "./controllers/Lta.controller";
-import createAuthController from "./controllers/Auth.controller";
-import createFndController from "./controllers/Fnd.controller";
-import createPfpController from "./controllers/Pfp.controller";
+import createConnectivityController from "./connectivity/Connectivity.controller";
+import createHdbController from "./hdb/Hdb.controller";
+import createLtaController from "./lta/Lta.controller";
+import createAuthController from "./auth/Auth.controller";
+import createPfpController from "./profile/Pfp.controller";
 
 async function startServer() {
   const app: Application = express();
@@ -45,7 +44,7 @@ async function startServer() {
   app.use("/api/hdb", [RestRequestLogger], createHdbController(db));
   app.use("/api/lta", [RestRequestLogger], createLtaController(db));
   app.use("/api/auth", [RestRequestLogger], createAuthController(db));
-  app.use("/api/fnd", [RestRequestLogger], createFndController(db));
+  // app.use("/api/fnd", [RestRequestLogger], createFndController(db));
   app.use("/api/pfp", [RestRequestLogger], createPfpController(db));
 
   // Start server

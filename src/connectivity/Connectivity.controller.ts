@@ -2,7 +2,7 @@
 import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { ConnectivityService } from "../services/Connectivity.service";
+import { ConnectivityService } from "./Connectivity.service";
 
 export default function createConnectivityController(db: KnexSqlUtilities) {
   const router = Router();

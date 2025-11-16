@@ -2,7 +2,7 @@ import { ITB_AA_USER } from "../models/databases/tb_aa_user";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import bcrypt from "bcrypt";
-import { TokenService } from "./Token.service";
+import { TokenService } from "../token/Token.service";
 import { Exceptions } from "../exceptions/AppExceptions";
 
 /**
@@ -52,6 +52,11 @@ export class AuthService {
     return { exist: false, nextStep: "register" };
   }
 
+  /**
+   *
+   * @param param0
+   * @returns
+   */
   async createNewUser({
     username,
     password,
@@ -128,7 +133,7 @@ export class AuthService {
       password,
       existingUser.password
     );
-    LoggingUtilities.service.error(
+    LoggingUtilities.service.debug(
       "AuthService.login",
       `Password comparison result: ${isValidPassword}`
     );
@@ -145,7 +150,9 @@ export class AuthService {
 
     LoggingUtilities.service.info(
       "AuthService.login",
-      `Success login for ${username}_${system} with token: ${generatedToken}`
+      `Success login for ${username}_${system} with token: ${
+        generatedToken.substring(0, 10) + "..."
+      }`
     );
 
     await this.db.update<ITB_AA_USER>(
@@ -202,7 +209,7 @@ export class AuthService {
         "AuthService.validatePassword",
         `${username_system} could not be found.`
       );
-      throw new Exceptions.InvalidLoginCredentials;
+      throw new Exceptions.InvalidLoginCredentials();
     }
 
     const isValidPassword = await bcrypt.compare(
