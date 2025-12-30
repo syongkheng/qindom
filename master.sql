@@ -160,7 +160,7 @@ SELECT * FROM wuxi.tb_lta_bus_info;
 
 SELECT DISTINCT service_no
 FROM tb_lta_bus_info
-WHERE busstop_code = '76241'
+WHERE busstop_code = '58521'
 ORDER BY
   CAST(service_no AS UNSIGNED),   
   service_no;  
@@ -187,3 +187,14 @@ FROM tb_lrt_mrt_station e
 GROUP BY e.station, e.type
 ORDER BY distance_m ASC
 LIMIT 3;
+
+CREATE TABLE tb_analytic_user_activity (
+  session_id VARCHAR(64) PRIMARY KEY,
+  user_id VARCHAR(64) NULL,
+  last_seen_at BIGINT NOT NULL,
+  ip_address VARCHAR(45),
+  user_agent TEXT
+);
+
+SELECT * FROM tb_analytic_user_activity;
+
