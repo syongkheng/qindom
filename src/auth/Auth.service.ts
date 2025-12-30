@@ -88,10 +88,7 @@ export class AuthService {
         created_by: "SYSTEM",
         record_status: "A",
       });
-      LoggingUtilities.service.info(
-        "AuthService.createNewUser",
-        `Sucessfully created ${username}_${system}`
-      );
+      LoggingUtilities.service.info("AuthService.createNewUser", `Sucessfully created ${username}_${system}`);
 
       return this.login({ username, password, system });
     } catch (error: any) {
@@ -112,31 +109,19 @@ export class AuthService {
     password: string;
     system: string;
   }): Promise<{ token: string }> {
-    LoggingUtilities.service.info(
-      "AuthService.login",
-      `Attempting to login for ${username}_${system}`
-    );
+    LoggingUtilities.service.info("AuthService.login", `Attempting to login for ${username}_${system}`);
 
     const existingUser = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
       username_system: `${username}_${system}`,
     });
 
     if (!existingUser) {
-      LoggingUtilities.service.error(
-        "AuthService.login",
-        `${username}_${system} could not be found.`
-      );
+      LoggingUtilities.service.error("AuthService.login", `${username}_${system} could not be found.`);
       throw new Exceptions.InvalidLoginCredentials();
     }
 
-    const isValidPassword = await bcrypt.compare(
-      password,
-      existingUser.password
-    );
-    LoggingUtilities.service.debug(
-      "AuthService.login",
-      `Password comparison result: ${isValidPassword}`
-    );
+    const isValidPassword = await bcrypt.compare(password, existingUser.password);
+    LoggingUtilities.service.debug("AuthService.login", `Password comparison result: ${isValidPassword}`);
     if (!isValidPassword) {
       throw new Exceptions.InvalidLoginCredentials();
     }
@@ -150,9 +135,7 @@ export class AuthService {
 
     LoggingUtilities.service.info(
       "AuthService.login",
-      `Success login for ${username}_${system} with token: ${
-        generatedToken.substring(0, 10) + "..."
-      }`
+      `Success login for ${username}_${system} with token: ${generatedToken.substring(0, 10) + "..."}`
     );
 
     await this.db.update<ITB_AA_USER>(
@@ -170,9 +153,7 @@ export class AuthService {
     return { token: generatedToken };
   }
 
-  async authenticateToken(
-    token: string
-  ): Promise<{ username: string; role: string; exist: boolean }> {
+  async authenticateToken(token: string): Promise<{ username: string; role: string; exist: boolean }> {
     LoggingUtilities.service.info(
       "AuthService.authenticateToken",
       "Checking if token has expired / is valid format / if user exists"
@@ -190,14 +171,8 @@ export class AuthService {
     return { username: decodedToken.username, role: decodedToken.role, exist };
   }
 
-  async validatePassword(
-    username_system: string,
-    password: string
-  ): Promise<{ isValid: boolean }> {
-    LoggingUtilities.service.info(
-      "AuthService.validatePassword",
-      `Validating password for ${username_system}`
-    );
+  async validatePassword(username_system: string, password: string): Promise<{ isValid: boolean }> {
+    LoggingUtilities.service.info("AuthService.validatePassword", `Validating password for ${username_system}`);
 
     const existingUser = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
       username_system: username_system,
@@ -205,52 +180,38 @@ export class AuthService {
     });
 
     if (!existingUser) {
-      LoggingUtilities.service.error(
-        "AuthService.validatePassword",
-        `${username_system} could not be found.`
-      );
+      LoggingUtilities.service.error("AuthService.validatePassword", `${username_system} could not be found.`);
       throw new Exceptions.InvalidLoginCredentials();
     }
 
-    const isValidPassword = await bcrypt.compare(
-      password,
-      existingUser.password
-    );
+    const isValidPassword = await bcrypt.compare(password, existingUser.password);
 
-    LoggingUtilities.service.info(
-      "AuthService.validatePassword",
-      `Password validation result for ${username_system} - ${isValidPassword}`
-    );
+    LoggingUtilities.service.info("AuthService.validatePassword", `Result for ${username_system} - ${isValidPassword}`);
 
     return { isValid: isValidPassword };
   }
 
-  async updatePassword(
-    username_system: string,
-    newPassword: string
-  ): Promise<void> {
-    LoggingUtilities.service.info(
-      "AuthService.updatePassword",
-      `Updating password for ${username_system}`
-    );
+  async updatePassword(username_system: string, newPassword: string): Promise<void> {
+    LoggingUtilities.service.info("AuthService.updatePassword", `Updating password for ${username_system}`);
 
     const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    try {
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    await this.db.update<ITB_AA_USER>(
-      "tb_aa_user",
-      {
-        username_system: username_system,
-        record_status: "A",
-      },
-      {
-        password: hashedPassword,
-      }
-    );
-
-    LoggingUtilities.service.info(
-      "AuthService.updatePassword",
-      `Successfully updated password for ${username_system}`
-    );
+      await this.db.update<ITB_AA_USER>(
+        "tb_aa_user",
+        {
+          username_system: username_system,
+          record_status: "A",
+        },
+        {
+          password: hashedPassword,
+        }
+      );
+      LoggingUtilities.service.info("AuthService.updatePassword", `Successful for ${username_system}`);
+    } catch (error: any) {
+      LoggingUtilities.service.error("AuthService.updatePassword", `Error for ${username_system} - ${error}`);
+      throw new Exceptions.EntityUpdate("Password");
+    }
   }
 }

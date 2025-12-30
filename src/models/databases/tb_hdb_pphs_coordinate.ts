@@ -6,4 +6,6 @@ export interface ITB_HDB_PPHS_COORDINATE {
   lng: string;
   created_dt: number;
   created_by: string;
+  modified_dt?: number;
+  modified_by?: string;
 }

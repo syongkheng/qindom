@@ -30,13 +30,8 @@ export class HdbService {
     const currentBatch = batch || this.generateBatch();
 
     if (typeof currentBatch !== "string" || !/^\d{6}$/.test(currentBatch)) {
-      LoggingUtilities.service.error(
-        "HdbService.statistics",
-        `Invalid batch format: ${currentBatch}`
-      );
-      throw new InvalidRequestException(
-        "Invalid batch format. Expected 'YYYYMM'."
-      );
+      LoggingUtilities.service.error("HdbService.statistics", `Invalid batch format: ${currentBatch}`);
+      throw new InvalidRequestException("Invalid batch format. Expected 'YYYYMM'.");
     }
 
     // 1️⃣ Check if data exists in DB
@@ -57,15 +52,10 @@ export class HdbService {
         `Found existing records for batch ${currentBatch} in database`
       );
       try {
-        const records = JSON.parse(
-          existingRecords[0].json_string
-        ) as FlatRecord[];
+        const records = JSON.parse(existingRecords[0].json_string) as FlatRecord[];
         return { records, source: "database" };
       } catch (parseError) {
-        LoggingUtilities.service.error(
-          "HdbService.statistics",
-          "Failed to parse JSON from database"
-        );
+        LoggingUtilities.service.error("HdbService.statistics", "Failed to parse JSON from database");
       }
     }
 
@@ -93,10 +83,7 @@ export class HdbService {
 
       html = await response.text();
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "HdbService.statistics",
-        `Failed to fetch from HDB website: ${error.message}`
-      );
+      LoggingUtilities.service.error("HdbService.statistics", `Failed to fetch from HDB website: ${error.message}`);
       return { records: [], source: "error" };
     }
 
@@ -105,15 +92,12 @@ export class HdbService {
     const tables = root.querySelectorAll("table");
 
     if (tables.length === 0) {
-      LoggingUtilities.service.error(
-        "HdbService.statistics",
-        "No tables found on the HDB page."
-      );
+      LoggingUtilities.service.error("HdbService.statistics", "No tables found on the HDB page.");
       throw new UnknownException();
     }
 
     const pphsTable = tables[0];
-    const records = this.parseTable(pphsTable);
+    const records: FlatRecord[] = this.parseTable(pphsTable);
 
     // 4️⃣ Store records into DB
     try {
@@ -143,55 +127,51 @@ export class HdbService {
   }> {
     const { records, source } = await this.retrieveListOfPphs(batch);
 
-    const recordsWithCoordinates = await Promise.all(
-      records.map(async (record) => {
-        LoggingUtilities.service.info(
-          "HdbService.retrieveListOfPphsWithCoordinates",
-          `Fetching coordinates for address: ${record.address}`
-        );
-        const { formed_url, lat, lng, source } =
-          await this.coordinateService.getCoordinatesOfAddress(record.address);
+    const recordsWithCoordinates = (
+      await Promise.all(
+        records.flatMap((record) => {
+          const expandedAddresses = [record.address];
 
-        return {
-          ...record,
-          formedUrl: formed_url,
-          lat,
-          lng,
-          source,
-        };
-      })
-    );
+          return expandedAddresses
+            .map(async (address) => {
+              LoggingUtilities.service.info(
+                "HdbService.retrieveListOfPphsWithCoordinates",
+                `Fetching coordinates for address: ${address}`
+              );
+
+              const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
+
+              const { formed_url, lat, lng, source } = await this.coordinateService.getCoordinatesOfAddress(
+                transformedAddress
+              );
+
+              return {
+                ...record,
+                address, // keep expanded address
+                formedUrl: formed_url,
+                lat,
+                lng,
+                source,
+              };
+            });
+        })
+      )
+    ).flat();
 
     return { records: recordsWithCoordinates, source };
   }
 
-  async retrieveBusstopWithinRadiusOfLatLng(
-    lat: string,
-    lng: string,
-    radius: number
-  ) {
+  async retrieveBusstopWithinRadiusOfLatLng(lat: string, lng: string, radius: number) {
     try {
-      return await this.db.pphs.findBusStopsWithinRadiusOfLatLng(
-        lat,
-        lng,
-        radius
-      );
+      return await this.db.pphs.findBusStopsWithinRadiusOfLatLng(lat, lng, radius);
     } catch (error) {
       throw new UnknownException();
     }
   }
 
-  async retrieveNearestMrtStationsOfLatLng(
-    lat: string,
-    lng: string,
-    limit?: number
-  ) {
+  async retrieveNearestMrtStationsOfLatLng(lat: string, lng: string, limit?: number) {
     try {
-      return await this.db.pphs.findMrtStationsWithinRadiusOfLatLng(
-        lat,
-        lng,
-        limit ?? 3
-      );
+      return await this.db.pphs.findMrtStationsWithinRadiusOfLatLng(lat, lng, limit ?? 3);
     } catch (error) {
       throw new UnknownException();
     }

@@ -10,6 +10,7 @@ import createHdbController from "./hdb/Hdb.controller";
 import createLtaController from "./lta/Lta.controller";
 import createAuthController from "./auth/Auth.controller";
 import createPfpController from "./profile/Pfp.controller";
+import createHeartbeatController from "./analytics/Heartbeat.controller";
 
 async function startServer() {
   const app: Application = express();
@@ -46,6 +47,7 @@ async function startServer() {
   app.use("/api/auth", [RestRequestLogger], createAuthController(db));
   // app.use("/api/fnd", [RestRequestLogger], createFndController(db));
   app.use("/api/pfp", [RestRequestLogger], createPfpController(db));
+  app.use("/api/analytics", [RestRequestLogger], createHeartbeatController(db));
 
   // Start server
   app.listen(port, () => {

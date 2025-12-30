@@ -1,5 +1,20 @@
 export class LoggingUtilities {
-  constructor() {}
+  private static readonly appEnv: string = process.env.ENV ?? "unknown";
+
+  constructor() {
+    if (!LoggingUtilities.appEnv || LoggingUtilities.appEnv === "unknown") {
+      LoggingUtilities.service.error(
+        "LoggingUtilities",
+        "App environment is not set in environment variables"
+      );
+      throw new Error("App environment is not set in environment variables");
+    }
+  }
+
+  private static shouldLog(): boolean {
+    // Only log in prod
+    return LoggingUtilities.appEnv === "prod";
+  }
 
   public static formatDate(date: Date): string {
     const year = date.getFullYear();
@@ -11,8 +26,13 @@ export class LoggingUtilities {
     return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
   }
 
+  // ======================
+  // Controller logs
+  // ======================
   static controller = class {
     static start(verb: string, path: string, message: string): void {
+      if (!LoggingUtilities.shouldLog()) return;
+
       console.log(
         `[${LoggingUtilities.formatDate(
           new Date()
@@ -21,6 +41,8 @@ export class LoggingUtilities {
     }
 
     static end(verb: string, path: string, message: string): void {
+      if (!LoggingUtilities.shouldLog()) return;
+
       console.log(
         `[${LoggingUtilities.formatDate(
           new Date()
@@ -29,8 +51,13 @@ export class LoggingUtilities {
     }
   };
 
+  // ======================
+  // Service logs
+  // ======================
   static service = class {
     static info(serviceName: string, message: string): void {
+      if (!LoggingUtilities.shouldLog()) return;
+
       console.log(
         `[${LoggingUtilities.formatDate(
           new Date()
@@ -39,6 +66,8 @@ export class LoggingUtilities {
     }
 
     static warn(serviceName: string, message: string): void {
+      if (!LoggingUtilities.shouldLog()) return;
+
       console.log(
         `[${LoggingUtilities.formatDate(
           new Date()
@@ -47,6 +76,8 @@ export class LoggingUtilities {
     }
 
     static debug(serviceName: string, message: string): void {
+      if (!LoggingUtilities.shouldLog()) return;
+
       console.log(
         `[${LoggingUtilities.formatDate(
           new Date()
@@ -55,6 +86,8 @@ export class LoggingUtilities {
     }
 
     static error(serviceName: string, message: string): void {
+      if (!LoggingUtilities.shouldLog()) return;
+
       console.log(
         `[${LoggingUtilities.formatDate(
           new Date()
