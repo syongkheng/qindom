@@ -14,11 +14,7 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
     const response = new ControllerResponse(res);
     try {
       const userAgent = req.headers["user-agent"] || "Unknown";
-      const ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "Unknown";
-
-      console.log("x-forwarded-for:", req.headers["x-forwarded-for"]);
-      console.log("x-real-ip:", req.headers["x-real-ip"]);
-      console.log("socket remoteAddress:", req.socket.remoteAddress);
+      const ipAddress = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
 
       // Use token-derived username if available, else fallback to client-provided username
       const tokenUsername = req.user?.username;
