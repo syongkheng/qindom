@@ -1,0 +1,260 @@
+import { parse, HTMLElement } from "node-html-parser";
+import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { CoordinateService } from "./Coordinate.service";
+import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities";
+import { InvalidRequestException } from "../exceptions/InvalidRequestException";
+import { UnknownException } from "../exceptions/UnknownException";
+
+interface FlatRecord {
+  town: string;
+  address: string;
+  flatTypes: {
+    "2-room"?: string;
+    "3-room"?: string;
+    "4-room"?: string;
+  };
+  siteExpiry: string;
+}
+
+export class HdbService {
+  private coordinateService: CoordinateService;
+  constructor(private db: KnexSqlUtilities) {
+    this.coordinateService = new CoordinateService(db);
+  }
+
+  async retrieveListOfPphs(batch: string | undefined): Promise<{
+    records: FlatRecord[];
+    source: "database" | "website" | "error";
+  }> {
+    const currentBatch = batch || this.generateBatch();
+
+    if (typeof currentBatch !== "string" || !/^\d{6}$/.test(currentBatch)) {
+      LoggingUtilities.service.error("HdbService.statistics", `Invalid batch format: ${currentBatch}`);
+      throw new InvalidRequestException("Invalid batch format. Expected 'YYYYMM'.");
+    }
+
+    // 1️⃣ Check if data exists in DB
+    const existingRecords = await this.db.find<ITB_HDB_PPHS>(
+      "tb_hdb_pphs",
+      { batch: currentBatch },
+      {
+        limit: 1,
+        orderBy: "created_dt",
+        orderDirection: "desc",
+        columns: ["json_string", "batch", "created_dt"],
+      }
+    );
+
+    if (existingRecords.length > 0) {
+      LoggingUtilities.service.info(
+        "HdbService.statistics",
+        `Found existing records for batch ${currentBatch} in database`
+      );
+      try {
+        const records = JSON.parse(existingRecords[0].json_string) as FlatRecord[];
+        return { records, source: "database" };
+      } catch (parseError) {
+        LoggingUtilities.service.error("HdbService.statistics", "Failed to parse JSON from database");
+      }
+    }
+
+    LoggingUtilities.service.info(
+      "HdbService.statistics",
+      `No existing records found for batch ${currentBatch}, fetching from HDB website...`
+    );
+
+    // 2️⃣ Fetch from HDB website using fetch()
+    const url =
+      "https://www.hdb.gov.sg/residential/renting-a-flat/renting-from-hdb/parenthood-provisional-housing-schemepphs/application-procedure/flats-available-for-application-";
+
+    let html: string;
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+      }
+
+      html = await response.text();
+    } catch (error: any) {
+      LoggingUtilities.service.error("HdbService.statistics", `Failed to fetch from HDB website: ${error.message}`);
+      return { records: [], source: "error" };
+    }
+
+    // 3️⃣ Parse HTML response
+    const root = parse(html);
+    const tables = root.querySelectorAll("table");
+
+    if (tables.length === 0) {
+      LoggingUtilities.service.error("HdbService.statistics", "No tables found on the HDB page.");
+      throw new UnknownException();
+    }
+
+    const pphsTable = tables[0];
+    const records: FlatRecord[] = this.parseTable(pphsTable);
+
+    // 4️⃣ Store records into DB
+    try {
+      await this.db.insert<ITB_HDB_PPHS>("tb_hdb_pphs", {
+        batch: currentBatch,
+        json_string: JSON.stringify(records),
+        created_dt: new Date().getTime(),
+        created_by: "SYSTEM",
+      });
+      LoggingUtilities.service.info(
+        "HdbService.statistics",
+        `Successfully stored ${records.length} records for batch ${currentBatch} in database`
+      );
+    } catch (error: any) {
+      LoggingUtilities.service.error(
+        "HdbService.statistics",
+        `Failed to insert records into database: ${error.message}`
+      );
+    }
+
+    return { records, source: "website" };
+  }
+
+  async retrieveListOfPphsWithCoordinates(batch: string | undefined): Promise<{
+    records: (FlatRecord & { formedUrl: string; lat: string; lng: string })[];
+    source: "database" | "website" | "error";
+  }> {
+    const { records, source } = await this.retrieveListOfPphs(batch);
+
+    const recordsWithCoordinates = (
+      await Promise.all(
+        records.flatMap((record) => {
+          const expandedAddresses = [record.address];
+
+          return expandedAddresses
+            .map(async (address) => {
+              LoggingUtilities.service.info(
+                "HdbService.retrieveListOfPphsWithCoordinates",
+                `Fetching coordinates for address: ${address}`
+              );
+
+              const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
+
+              const { formed_url, lat, lng, source } = await this.coordinateService.getCoordinatesOfAddress(
+                transformedAddress
+              );
+
+              return {
+                ...record,
+                address, // keep expanded address
+                formedUrl: formed_url,
+                lat,
+                lng,
+                source,
+              };
+            });
+        })
+      )
+    ).flat();
+
+    return { records: recordsWithCoordinates, source };
+  }
+
+  async retrieveBusstopWithinRadiusOfLatLng(lat: string, lng: string, radius: number) {
+    try {
+      return await this.db.pphs.findBusStopsWithinRadiusOfLatLng(lat, lng, radius);
+    } catch (error) {
+      throw new UnknownException();
+    }
+  }
+
+  async retrieveNearestMrtStationsOfLatLng(lat: string, lng: string, limit?: number) {
+    try {
+      return await this.db.pphs.findMrtStationsWithinRadiusOfLatLng(lat, lng, limit ?? 3);
+    } catch (error) {
+      throw new UnknownException();
+    }
+  }
+
+  private parseTable(table: HTMLElement): FlatRecord[] {
+    const allRows = table.querySelectorAll("tbody > tr");
+    const rows = allRows.slice(2);
+    const results: FlatRecord[] = [];
+
+    let currentTown = "";
+
+    for (const row of rows) {
+      const cells = row.querySelectorAll("td");
+      if (cells.length < 5) continue; // Skip malformed rows
+
+      let addressCell: HTMLElement;
+      let twoCell: HTMLElement;
+      let threeCell: HTMLElement;
+      let fourCell: HTMLElement;
+      let expiryCell: HTMLElement;
+
+      if (cells.length === 6) {
+        const townText = cells[0].textContent?.trim();
+        if (townText) currentTown = townText;
+
+        addressCell = cells[1];
+        twoCell = cells[2];
+        threeCell = cells[3];
+        fourCell = cells[4];
+        expiryCell = cells[5];
+      } else {
+        addressCell = cells[0];
+        twoCell = cells[1];
+        threeCell = cells[2];
+        fourCell = cells[3];
+        expiryCell = cells[4];
+      }
+
+      const record: FlatRecord = {
+        town: currentTown,
+        address: addressCell.textContent?.trim() || "",
+        flatTypes: {},
+        siteExpiry: expiryCell.textContent?.trim() || "",
+      };
+
+      const t2 = twoCell.textContent?.trim();
+      const t3 = threeCell.textContent?.trim();
+      const t4 = fourCell.textContent?.trim();
+
+      if (t2 && t2 !== "-") record.flatTypes["2-room"] = t2;
+      if (t3 && t3 !== "-") record.flatTypes["3-room"] = t3;
+      if (t4 && t4 !== "-") record.flatTypes["4-room"] = t4;
+
+      results.push(record);
+    }
+
+    return results;
+  }
+
+  private generateBatch(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    return `${year}${month}`;
+  }
+
+  async getAvailableBatches(): Promise<string[]> {
+    try {
+      const batches = await this.db.find<ITB_HDB_PPHS>(
+        "tb_hdb_pphs",
+        {},
+        {
+          columns: ["batch"],
+          orderBy: "batch",
+          orderDirection: "desc",
+        }
+      );
+
+      return [...new Set(batches.map((b) => b.batch))];
+    } catch (error) {
+      console.error("Error fetching available batches:", error);
+      return [];
+    }
+  }
+}

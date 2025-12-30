@@ -2,9 +2,6 @@
 
 - Kingshot
 
-- Finish up LTA API
-- Wedding features:
--- Webcam
--- Kahoot alternative
+-- Convert PPHS for BTO launches
 
 - Exceptions

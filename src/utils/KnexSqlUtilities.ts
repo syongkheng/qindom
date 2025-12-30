@@ -7,14 +7,11 @@ import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station";
 class KnexSqlUtilities {
   constructor(private knex: Knex) {
     this.pphs = {
-      findBusStopsWithinRadiusOfLatLng:
-        this._findBusStopsWithinRadiusOfLatLng.bind(this),
-      findMrtStationsWithinRadiusOfLatLng:
-        this._findMrtStationsWithinRadiusOfLatLng.bind(this),
+      findBusStopsWithinRadiusOfLatLng: this._findBusStopsWithinRadiusOfLatLng.bind(this),
+      findMrtStationsWithinRadiusOfLatLng: this._findMrtStationsWithinRadiusOfLatLng.bind(this),
     };
     this.lta = {
-      findBusServicesByBusStopCode:
-        this._findBusServicesByBusStopCode.bind(this),
+      findBusServicesByBusStopCode: this._findBusServicesByBusStopCode.bind(this),
     };
   }
 
@@ -24,17 +21,11 @@ class KnexSqlUtilities {
       const query = this.knex(table).insert(data);
       const [id] = await query;
       // Fetch the inserted row manually if needed
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.find",
-        `Executing query - [ ${query.toQuery()} ]`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
       const [row] = await this.knex(table).where({ id }).select("*");
       return row as R;
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.insert",
-        `Insert error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.insert", `Insert error: ${error.message}`);
       throw new Error(`Insert failed: ${error.message}`);
     }
   }
@@ -47,16 +38,10 @@ class KnexSqlUtilities {
   ): Promise<T | undefined> {
     try {
       const query = this.knex(table).select(columns).where(whereClause).first();
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.findOne",
-        `Executing query - [ ${query.toQuery()} ]`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.findOne", `Executing query - [ ${query.toQuery()} ]`);
       return (await query) as T | undefined;
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.findOne",
-        `Find one error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.findOne", `Find one error: ${error.message}`);
       throw new Error(`Find one failed: ${error.message}`);
     }
   }
@@ -84,70 +69,42 @@ class KnexSqlUtilities {
 
       if (options.limit) query = query.limit(options.limit);
       if (options.offset) query = query.offset(options.offset);
-      if (options.orderBy)
-        query = query.orderBy(options.orderBy, options.orderDirection || "asc");
+      if (options.orderBy) query = query.orderBy(options.orderBy, options.orderDirection || "asc");
 
-      query = options.columns
-        ? query.select(options.columns)
-        : query.select("*");
+      query = options.columns ? query.select(options.columns) : query.select("*");
 
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.find",
-        `Executing query - [ ${query.toQuery()} ]`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
 
       return (await query) as T[];
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.find",
-        `Find error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.find", `Find error: ${error.message}`);
       throw new Error(`Find failed: ${error.message}`);
     }
   }
 
   // UPDATE
-  async update<T = any, R = T>(
-    table: string,
-    whereClause: Partial<T>,
-    data: Partial<T>
-  ): Promise<R[]> {
+  async update<T = any, R = T>(table: string, whereClause: Partial<T>, data: Partial<T>): Promise<R[]> {
     try {
       const query = this.knex(table).where(whereClause).update(data);
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.update",
-        `Executing query - [ ${query.toQuery()} ]`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.update", `Executing query - [ ${query.toQuery()} ]`);
       await query;
       const rows = await this.knex(table).where(whereClause).select("*");
       return rows as R[];
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.update",
-        `Update error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.update", `Update error: ${error.message}`);
       throw new Error(`Update failed: ${error.message}`);
     }
   }
 
   // DELETE
-  async delete<T = any>(
-    table: string,
-    whereClause: Partial<T>
-  ): Promise<number> {
+  async delete<T = any>(table: string, whereClause: Partial<T>): Promise<number> {
     try {
       const query = this.knex(table).where(whereClause).delete();
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.delete",
-        `Executing query - [ ${query.toQuery()} ]`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.delete", `Executing query - [ ${query.toQuery()} ]`);
       const result = await query;
       return result; // returns number of deleted rows
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.delete",
-        `Delete error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.delete", `Delete error: ${error.message}`);
       throw new Error(`Delete failed: ${error.message}`);
     }
   }
@@ -156,70 +113,42 @@ class KnexSqlUtilities {
   async raw<T = any>(sql: string, bindings: any[] = []): Promise<T> {
     try {
       const query = this.knex.raw(sql, bindings);
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.raw",
-        `Executing raw query - [ ${query.toQuery()} ]`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.raw", `Executing raw query - [ ${query.toQuery()} ]`);
       const [rows] = await query;
       return rows as T;
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.raw",
-        `Raw query error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.raw", `Raw query error: ${error.message}`);
       throw new Error(`Raw query failed: ${error.message}`);
     }
   }
 
   // COUNT
-  async count<T = any>(
-    table: string,
-    whereClause: Partial<T> = {}
-  ): Promise<number> {
+  async count<T = any>(table: string, whereClause: Partial<T> = {}): Promise<number> {
     try {
-      const query = this.knex(table)
-        .where(whereClause)
-        .count<{ count: number }[]>({ count: "*" });
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.count",
-        `Executing query - [ ${query.toQuery()} ]`
-      );
+      const query = this.knex(table).where(whereClause).count<{ count: number }[]>({ count: "*" });
+      LoggingUtilities.service.debug("KnexSqlUtilities.count", `Executing query - [ ${query.toQuery()} ]`);
       const result = await query;
       return Number(result[0]?.count || 0);
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.count",
-        `Count error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.count", `Count error: ${error.message}`);
       throw new Error(`Count failed: ${error.message}`);
     }
   }
 
-  async transaction<T>(
-    callback: (trx: Knex.Transaction) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(callback: (trx: Knex.Transaction) => Promise<T>): Promise<T> {
     try {
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.transaction",
-        `Starting transaction`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.transaction", `Starting transaction`);
 
       const result = await this.knex.transaction(async (trx) => {
         const output = await callback(trx);
         return output;
       });
 
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.transaction",
-        `Transaction committed successfully`
-      );
+      LoggingUtilities.service.debug("KnexSqlUtilities.transaction", `Transaction committed successfully`);
 
       return result;
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.transaction",
-        `Transaction failed: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.transaction", `Transaction failed: ${error.message}`);
       throw new Error(`Transaction failed: ${error.message}`);
     }
   }
@@ -283,10 +212,7 @@ class KnexSqlUtilities {
 
       return { rows: resultRows, count };
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Query error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${error.message}`);
       throw new Error(`Failed to find nearby bus stops: ${error.message}`);
     }
   }
@@ -327,10 +253,7 @@ class KnexSqlUtilities {
 
       return { rows: allRows, count };
     } catch (error: any) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Query error: ${error.message}`
-      );
+      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${error.message}`);
       throw new Error(`Failed to find nearby bus stops: ${error.message}`);
     }
   }
@@ -387,6 +310,22 @@ class KnexSqlUtilities {
         `Query error: ${error.message}`
       );
       throw new Error(`Failed to find bus services: ${error.message}`);
+    }
+  }
+
+  async upsert<T = any>(table: string, data: Partial<T>, conflictKey: string, updateData?: Partial<T>): Promise<void> {
+    try {
+      const query = this.knex(table)
+        .insert(data)
+        .onConflict(conflictKey)
+        .merge(updateData ?? data);
+
+      LoggingUtilities.service.debug("KnexSqlUtilities.upsert", `Executing query - [ ${query.toQuery()} ]`);
+
+      await query;
+    } catch (error: any) {
+      LoggingUtilities.service.error("KnexSqlUtilities.upsert", `Upsert error: ${error.message}`);
+      throw new Error(`Upsert failed: ${error.message}`);
     }
   }
 }

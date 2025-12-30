@@ -24,7 +24,12 @@ CREATE TABLE wuxi.tb_hdb_pphs_coordinate (
     created_by VARCHAR(64) NOT NULL
 );
 
+ALTER TABLE wuxi.tb_hdb_pphs_coordinate 
+	ADD COLUMN modified_dt BIGINT,
+    ADD COLUMN modified_by VARCHAR(64);
+
 SELECT * FROM wuxi.tb_hdb_pphs_coordinate;
+SELECT * FROM wuxi.tb_hdb_pphs_coordinate where id = 315;
 
 DROP TABLE IF EXISTS wuxi.tb_aa_user;
 
@@ -177,12 +182,13 @@ CREATE TABLE wuxi.tb_lrt_mrt_station(
 	created_dt BIGINT NOT NULL,
 	created_by VARCHAR(64) NOT NULL
 );
-SELECT * FROM wuxi.tb_mrt_station;
+SELECT * FROM wuxi.tb_lrt_mrt_station;
 
 SELECT 
     e.station,
+    e.type,
     MIN(ST_Distance_Sphere(POINT(e.lat, e.lng), POINT(103.833021, 1.2861643))) AS distance_m
-FROM tb_mrt_station e
-GROUP BY e.station
+FROM tb_lrt_mrt_station e
+GROUP BY e.station, e.type
 ORDER BY distance_m ASC
 LIMIT 3;

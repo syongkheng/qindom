@@ -1,5 +1,5 @@
 import "express";
-import { IDecodedTokenUser } from "../../services/Token.service";
+import { IDecodedTokenUser } from "../../token/Token.service";
 
 declare global {
   namespace Express {
