@@ -6,5 +6,6 @@ dist/
 
 dist*
 
+deploy.sh
 
 serviceAccountKey.json
