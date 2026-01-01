@@ -21,6 +21,8 @@ export async function startDiscordBot() {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   });
 
+  LoggingUtilities.service.info(`Fndiscord.Bot`, `Starting Discord bot...`);
+  
   // Load commands dynamically
   const commands = new Map<string, Command>();
   const commandsPath = path.join(__dirname, "commands");
