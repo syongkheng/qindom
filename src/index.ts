@@ -18,9 +18,7 @@ async function startServer() {
 
   // Middleware
   app.use(express.json({ limit: "5mb" }));
-  app.use(
-    express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 })
-  );
+  app.use(express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 }));
 
   // Cors
 
@@ -37,11 +35,7 @@ async function startServer() {
 
   // Inject db into controllers
   // Use custom middlewares in each controllers
-  app.use(
-    "/connectivity",
-    [RestRequestLogger],
-    createConnectivityController(db)
-  );
+  app.use("/connectivity", [RestRequestLogger], createConnectivityController(db));
   app.use("/api/hdb", [RestRequestLogger], createHdbController(db));
   app.use("/api/lta", [RestRequestLogger], createLtaController(db));
   app.use("/api/auth", [RestRequestLogger], createAuthController(db));
@@ -57,3 +51,7 @@ async function startServer() {
 
 // Start the application
 startServer();
+
+// Start Discord Bot
+import { startDiscordBot } from "./fnd/discord/Fnd.bot";
+startDiscordBot();

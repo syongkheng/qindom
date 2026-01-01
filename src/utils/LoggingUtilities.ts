@@ -1,8 +1,12 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 export class LoggingUtilities {
   private static readonly appEnv: string = process.env.ENV ?? "unknown";
 
   constructor() {
     if (!LoggingUtilities.appEnv || LoggingUtilities.appEnv === "unknown") {
+      console.log(`Current Environment: ${LoggingUtilities.appEnv}`);
       LoggingUtilities.service.error(
         "LoggingUtilities",
         "App environment is not set in environment variables"
@@ -91,7 +95,7 @@ export class LoggingUtilities {
       console.log(
         `[${LoggingUtilities.formatDate(
           new Date()
-        )}] [E] [${serviceName}] - ${message}`
+        )}] [E] [${serviceName}] - ${message} \n===== END ======`
       );
     }
   };
