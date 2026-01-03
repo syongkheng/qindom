@@ -1,3 +1,13 @@
+// Environment File
+
+import dotenv from "dotenv";
+
+const envFile = process.env.NODE_ENV === "prd" ? ".env" : ".env.dev";
+
+console.log("Using environment file: ", process.env.NODE_ENV);
+
+dotenv.config({ path: envFile });
+
 import express, { Application } from "express";
 import cors from "cors";
 import { LoggingUtilities } from "./utils/LoggingUtilities";
@@ -11,6 +21,8 @@ import createLtaController from "./lta/Lta.controller";
 import createAuthController from "./auth/Auth.controller";
 import createPfpController from "./profile/Pfp.controller";
 import createHeartbeatController from "./analytics/Heartbeat.controller";
+
+
 
 async function startServer() {
   const app: Application = express();
@@ -46,6 +58,7 @@ async function startServer() {
   // Start server
   app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
+    LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
   });
 }
 

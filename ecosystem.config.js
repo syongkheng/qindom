@@ -1,20 +1,29 @@
 module.exports = {
   apps: [
     {
-      name: "base-expressts",
-      script: "dist/src/index.js",          // Run the built JS file
-      instances: 1,                     // You can increase this for clustering
+      name: "qindom",
+      script: "src/index.js",
+
+      // Restart on crash
       autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
+
+      // Prevent infinite restart loops
+      max_restarts: 10,
+      min_uptime: "10s",
+
+      // Logs
+      out_file: "/home/ubuntu/.pm2/logs/qindom.out.log",
+      error_file: "/home/ubuntu/.pm2/logs/qindom.err.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+
+      // Default (fallback)
       env: {
-        NODE_ENV: "PRD",
-        DB_URL: "127.0.0.1",
-        DB_USER: "root",
-        DB_PW: "P@ssw0rd1234",
-        DB_NAME: "wuxi",
-        LTA_DATAMALL_API_KEY: "KfyQf89WR8K1OPGjrwJpCA==",
-        JWT_SECRET: "c2hlcm9uZ3FpbmppYW5neWFuamlzaWppYXhpbmppYXBvd3V4aWppYW5nc3V6aG9uZ2d1bw=="
+        NODE_ENV: "dev"
+      },
+
+      // Production
+      env_prd: {
+        NODE_ENV: "prd"
       }
     }
   ]

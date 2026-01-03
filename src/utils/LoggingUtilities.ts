@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export class LoggingUtilities {
-  private static readonly appEnv: string = process.env.ENV ?? "unknown";
+  private static readonly appEnv: string = process.env.NODE_ENV ?? "unknown";
 
   constructor() {
     if (!LoggingUtilities.appEnv || LoggingUtilities.appEnv === "unknown") {
@@ -16,8 +16,8 @@ export class LoggingUtilities {
   }
 
   private static shouldLog(): boolean {
-    // Only log in prod
-    return LoggingUtilities.appEnv === "prod";
+    // Only log in prd
+    return LoggingUtilities.appEnv === "prd" || LoggingUtilities.appEnv === "dev_log";
   }
 
   public static formatDate(date: Date): string {

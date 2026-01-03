@@ -4,30 +4,31 @@ import { firestoreDB as db } from "../../../config/db/firebase";
 import { signPayload } from "./Register.command";
 import { LoggingUtilities } from "../../../utils/LoggingUtilities";
 
-const ALLOWED_REDEEMER_IDS = [
-  "340529865952460800",
-  // add more IDs here if needed
-];
+/**
+ * Configuration
+ */
+const ALLOWED_REDEEMER_IDS = ["340529865952460800"];
+const EMBED_BATCH_SIZE = 10;
+const MIN_DELAY_MS = 800;
+const MAX_DELAY_MS = 1200;
 
 /**
- * Helper: sleep for given milliseconds
+ * Utilities
  */
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const randomDelay = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 /**
- * Helper: get a random integer between min and max (inclusive)
+ * HTTP helper
  */
-function randomDelay(minMs: number, maxMs: number) {
-  return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
-}
-
 async function postForm(url: string, payload: Record<string, any>) {
   const sign = signPayload(payload);
   return axios.post(url, new URLSearchParams({ ...payload, sign }), { timeout: 10_000 });
 }
 
+/**
+ * Redeem logic for a single governor
+ */
 async function redeemForGovernor(
   giftCode: string,
   docRef: FirebaseFirestore.DocumentReference,
@@ -39,12 +40,13 @@ async function redeemForGovernor(
 
   try {
     const time = Date.now();
-    LoggingUtilities.service.info(
-      "Fndiscord.Bot.RedeemCommand",
-      `Redeeming gift code ${giftCode} for ${nickname} (FID: ${fid})`
-    );
 
+    LoggingUtilities.service.info("Fndiscord.Bot.RedeemCommand", `Redeeming ${giftCode} for ${nickname} (FID: ${fid})`);
+
+    // Refresh player
     await postForm("https://kingshot-giftcode.centurygame.com/api/player", { fid, time });
+
+    // Redeem
     const redeemRes = await postForm("https://kingshot-giftcode.centurygame.com/api/gift_code", {
       fid,
       cdk: giftCode,
@@ -60,118 +62,122 @@ async function redeemForGovernor(
       formData: { fid, cdk: giftCode, captcha_code: "", time },
     });
 
-    if (redeemRes?.data?.code === 0) return `✅ **${nickname}**: Redeemed`;
+    if (redeemRes?.data?.code === 0) {
+      LoggingUtilities.service.info("Fndiscord.Bot.RedeemCommand", `Success for ${nickname} (${fid})`);
+      return `✅ **${nickname}**: Redeemed`;
+    }
+
+    LoggingUtilities.service.warn("Fndiscord.Bot.RedeemCommand", `Failed for ${nickname}: ${redeemRes?.data?.msg}`);
     return `⚠️ **${nickname}**: ${redeemRes?.data?.msg ?? "Failed"}`;
   } catch (err: any) {
-    console.error("Redeem error:", err?.response?.data || err);
+    LoggingUtilities.service.error(
+      "Fndiscord.Bot.RedeemCommand",
+      `Error redeeming ${giftCode} for ${nickname}: ${err?.message || err}`
+    );
+
     await redemptionRef.set({
       giftCode,
       redeemedAt: new Date(),
       responseCode: -1,
       responseMsg: "Request failed",
     });
+
     return `❌ **${nickname}**: Request failed`;
   }
 }
 
-function chunkArray<T>(arr: T[], chunkSize: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += chunkSize) {
-    chunks.push(arr.slice(i, i + chunkSize));
-  }
-  return chunks;
+/**
+ * Send embed batch
+ */
+async function sendBatchEmbed(message: Message, giftCode: string, batch: string[], processed: number, total: number) {
+  const embed = new EmbedBuilder()
+    .setTitle(`🎁 Gift Code Redemption`)
+    .setColor(0x00ff99)
+    .setDescription(`**${giftCode}**\nProgress: ${processed}/${total}`)
+    .addFields({ name: "Results", value: batch.join("\n").slice(0, 1024) })
+    .setFooter({ text: `Requested by ${message.author.username}` })
+    .setTimestamp();
+
+  if (message.channel.type === ChannelType.GuildText) await message.channel.send({ embeds: [embed] });
 }
 
+/**
+ * Command
+ */
 export const redeemCommand = {
   name: "redeem",
-  description: "Redeem a gift code for all registered governors",
+  description: "Redeem a gift code for all registered governors only for Awense.",
 
   execute: async (message: Message, args: string[]) => {
     if (!message.channel.isTextBased() || message.channel.type !== ChannelType.GuildText) return;
 
     LoggingUtilities.service.info(
       "Fndiscord.Bot.RedeemCommand",
-      `Executing redeem command for ${message.author.tag} in channel ${message.channel.id}`
+      `Command invoked by ${message.author.tag} in ${message.channel.id}`
     );
 
     if (!ALLOWED_REDEEMER_IDS.includes(message.author.id)) {
-      LoggingUtilities.service.error(
-        "Fndiscord.Bot.RedeemCommand",
-        `Unauthorized redeem attempt by ${message.author.tag} (${message.author.id})`
-      );
+      LoggingUtilities.service.warn("Fndiscord.Bot.RedeemCommand", `Unauthorized user ${message.author.tag}`);
       await message.channel.send("⛔ You are not authorized to use this command.");
       return;
     }
 
     const giftCode = args[0];
     if (!giftCode) {
-      LoggingUtilities.service.error("Fndiscord.Bot.RedeemCommand", `No gift code provided by ${message.author.tag}`);
       await message.channel.send("❌ Usage: `!redeem <giftcode>`");
       return;
     }
 
-    LoggingUtilities.service.info(
-      "Fndiscord.Bot.RedeemCommand",
-      `Starting redemption for gift code ${giftCode} as requested by ${message.author.tag}`
-    );
-    await message.channel.send(
-      `🔄 Starting redemption for gift code: **${giftCode}**. Processing all governors, please wait...`
-    );
+    await message.channel.send(`🔄 Starting redemption for **${giftCode}**. This may take a while...`);
 
-    const results: string[] = [];
     const collections = await db.listCollections();
-    let processedCount = 0;
+
+    let totalGovernors = 0;
+    collections.forEach((c) => (totalGovernors += c.id ? 1 : 0));
+
+    let processed = 0;
+    let batchResults: string[] = [];
 
     for (const collection of collections) {
       const snapshot = await collection.get();
 
       for (const doc of snapshot.docs) {
-        const redemptions = await doc.ref.collection("redemptions").doc(giftCode.replace(/\//g, "_")).get();
+        processed++;
+
+        const redemptionDoc = await doc.ref.collection("redemptions").doc(giftCode.replace(/\//g, "_")).get();
 
         const data = doc.data();
-        const lastAttempt = redemptions.exists ? redemptions.data() : null;
-        if (lastAttempt && (lastAttempt.responseCode === 0 || lastAttempt.responseMsg === "RECEIVED.")) {
-          LoggingUtilities.service.info(
-            "Fndiscord.Bot.RedeemCommand",
-            `Skipping ${data.nickname} - already redeemed ${giftCode} successfully`
-          );
-          results.push(`⏭️ **${data.nickname ?? "Unknown"}**: Already redeemed`);
-          continue;
+        const lastAttempt = redemptionDoc.exists ? redemptionDoc.data() : null;
+
+        if (lastAttempt && lastAttempt.responseCode === 0) {
+          LoggingUtilities.service.info("Fndiscord.Bot.RedeemCommand", `Skipping ${data.nickname} - already redeemed`);
+          batchResults.push(`⏭️ **${data.nickname ?? "Unknown"}**: Already redeemed`);
+        } else {
+          const result = await redeemForGovernor(giftCode, doc.ref, data);
+          batchResults.push(result);
         }
 
-        LoggingUtilities.service.info(
-          "Fndiscord.Bot.RedeemCommand",
-          `Redeeming ${giftCode} for governor ${data.nickname} (FID: ${data.fid})`
-        );
+        // ⏱ Rate-limit protection
+        const delay = randomDelay(MIN_DELAY_MS, MAX_DELAY_MS);
+        LoggingUtilities.service.debug("Fndiscord.Bot.RedeemCommand", `Sleeping ${delay}ms`);
+        await sleep(delay);
 
-        const result = await redeemForGovernor(giftCode, doc.ref, data);
-        results.push(result);
-
-        // ⏱ Add random delay between 0.5s - 1s
-        const delayMs = randomDelay(500, 1000);
-        LoggingUtilities.service.debug("Fndiscord.Bot.RedeemCommand", `Waiting ${delayMs}ms before next redemption...`);
-        await sleep(delayMs);
+        // 🚀 Send embed every batch
+        if (batchResults.length >= EMBED_BATCH_SIZE) {
+          await sendBatchEmbed(message, giftCode, batchResults, processed, totalGovernors);
+          batchResults = [];
+        }
       }
     }
 
-    // Send results in chunks of 10 per embed
-    const chunks = chunkArray(results, 10);
-    for (const chunk of chunks) {
-      const embed = new EmbedBuilder()
-        .setTitle("🎁 Gift Code Redemption")
-        .setColor(0x00ff99)
-        .addFields({
-          name: "Results",
-          value: chunk.join("\n") || "No registered governors",
-        })
-        .setFooter({ text: `Requested by ${message.author.username}` })
-        .setTimestamp();
-      await message.channel.send({ embeds: [embed] });
+    // Final remainder
+    if (batchResults.length > 0) {
+      await sendBatchEmbed(message, giftCode, batchResults, processed, totalGovernors);
     }
 
     LoggingUtilities.service.info(
       "Fndiscord.Bot.RedeemCommand",
-      `Finished redemption for gift code ${giftCode}. Total governors processed: ${processedCount}`
+      `Redemption completed for ${giftCode}. Processed ${processed} governors`
     );
   },
 };
