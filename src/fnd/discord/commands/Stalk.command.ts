@@ -1,37 +1,51 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
 import { LoggingUtilities } from "../../../utils/LoggingUtilities";
 import { firestoreDB } from "../../../config/db/firebase";
-import { currentTimestampMs, signPayload } from "./Register.command";
+import { currentTimestampMs, mapStoveLevel, signPayload } from "./Register.command";
 
-export async function getStalkStats(governorId: string) {
+export async function getStalkSummary(governorId: string) {
   const governorRef = firestoreDB.collection("stalk").doc(governorId);
 
-  // List all timestamp subcollections
+  // 1️⃣ Each subcollection represents ONE stalk attempt
   const timestampCollections = await governorRef.listCollections();
+  const stalkCount = timestampCollections.length;
 
-  let totalAttempts = 0;
-  const uniqueUsers = new Set<string>();
+  // 2️⃣ Deduplicate by username, keeping latest
+  const latestByUsername = new Map<
+    string,
+    {
+      timestamp: number;
+      username: string;
+      kid: number;
+      stove_lv: number;
+    }
+  >();
 
   for (const timestampCollection of timestampCollections) {
-    const resultDoc = await timestampCollection.doc("result").get();
+    const snapshot = await timestampCollection.doc("result").get();
+    if (!snapshot.exists) continue;
 
-    if (!resultDoc.exists) continue;
+    const data = snapshot.data();
+    const playerData = data?.response?.data;
+    if (!playerData?.nickname) continue;
 
-    totalAttempts += 1;
+    const timestamp = Number(timestampCollection.id);
+    const username = playerData.nickname;
 
-    const data = resultDoc.data();
-
-    console.log(">>> Stalk data:", data);
-
-    if (data?.response.data.nickname) {
-      uniqueUsers.add(data?.response.data.nickname);
+    const existing = latestByUsername.get(username);
+    if (!existing || timestamp > existing.timestamp) {
+      latestByUsername.set(username, {
+        timestamp,
+        username,
+        kid: playerData.kid,
+        stove_lv: playerData.stove_lv,
+      });
     }
   }
 
   return {
-    totalAttempts,
-    uniqueUserCount: uniqueUsers.size,
-    uniqueUsers: [...uniqueUsers], // optional
+    stalkCount,
+    latestPerUser: Array.from(latestByUsername.values()).sort((a, b) => b.timestamp - a.timestamp),
   };
 }
 
@@ -95,7 +109,7 @@ export const stalkCommand = {
 
       LoggingUtilities.service.info("Fndiscord.Bot.StalkCommand", `Stalk result stored for governor ${governorId}`);
 
-      const stats = await getStalkStats(governorId);
+      const stats = await getStalkSummary(governorId);
 
       /** Step 4: Send embed response */
       const embed = new EmbedBuilder()
@@ -105,15 +119,21 @@ export const stalkCommand = {
         .addFields(
           { name: "Status", value: serverResponse?.code === 0 ? "✅ Success" : "❌ Failed", inline: true },
           { name: "Message", value: serverResponse?.msg ?? "No message", inline: true },
-          { name: "Stalk count", value: stats.totalAttempts.toString(), inline: true }
+          { name: "Stalk count", value: stats.stalkCount.toString(), inline: true }
         )
-        .addFields({
-          name: "Recorded names:",
-          value: stats.uniqueUsers.length > 0 ? stats.uniqueUsers.join(", ") : "None",
-          inline: false,
-        })
         .setFooter({ text: `Requested by ${message.author.username}` })
         .setTimestamp();
+
+      if (stats.latestPerUser.length > 0) {
+        for (let i = 0; i < stats.latestPerUser.length; i++) {
+          const latest = stats.latestPerUser[i];
+          embed.addFields({
+            name: new Date(latest.timestamp).toLocaleString(),
+            value: `${latest.username} TC: (${mapStoveLevel(latest.stove_lv)}) Server: ${latest.kid}`,
+            inline: false,
+          });
+        }
+      }
 
       await message.channel.send({ embeds: [embed] });
     } catch (error) {
