@@ -4,8 +4,6 @@ import dotenv from "dotenv";
 
 const envFile = process.env.NODE_ENV === "prd" ? ".env" : ".env.dev";
 
-console.log("Using environment file: ", process.env.NODE_ENV);
-
 dotenv.config({ path: envFile });
 
 import express, { Application } from "express";
@@ -21,8 +19,6 @@ import createLtaController from "./lta/Lta.controller";
 import createAuthController from "./auth/Auth.controller";
 import createPfpController from "./profile/Pfp.controller";
 import createHeartbeatController from "./analytics/Heartbeat.controller";
-
-
 
 async function startServer() {
   const app: Application = express();
