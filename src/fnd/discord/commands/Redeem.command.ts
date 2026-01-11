@@ -282,9 +282,7 @@ export const redeemCommand = {
 
     // Calculate total governors for progress tracking
     let totalGovernors = collectionsThatStartsWithNumeric.length;
-    collectionsThatStartsWithNumeric.forEach((c) => {
-      if (c.id) totalGovernors += 1;
-    });
+
 
     // Step 5: Process each governor
     let processed = 0;
