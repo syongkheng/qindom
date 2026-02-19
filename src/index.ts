@@ -19,6 +19,7 @@ import createLtaController from "./lta/Lta.controller";
 import createAuthController from "./auth/Auth.controller";
 import createPfpController from "./profile/Pfp.controller";
 import createHeartbeatController from "./analytics/Heartbeat.controller";
+import createFndController from "./fnd/Fnd.controller";
 
 async function startServer() {
   const app: Application = express();
@@ -43,13 +44,13 @@ async function startServer() {
 
   // Inject db into controllers
   // Use custom middlewares in each controllers
-  app.use("/connectivity", [RestRequestLogger], createConnectivityController(db));
-  app.use("/api/hdb", [RestRequestLogger], createHdbController(db));
-  app.use("/api/lta", [RestRequestLogger], createLtaController(db));
-  app.use("/api/auth", [RestRequestLogger], createAuthController(db));
-  // app.use("/api/fnd", [RestRequestLogger], createFndController(db));
-  app.use("/api/pfp", [RestRequestLogger], createPfpController(db));
-  app.use("/api/analytics", [RestRequestLogger], createHeartbeatController(db));
+  app.use("/connectivity", [RestRequestLogger, RequestHeaderFilter], createConnectivityController(db));
+  app.use("/api/hdb", [RestRequestLogger, RequestHeaderFilter], createHdbController(db));
+  app.use("/api/lta", [RestRequestLogger, RequestHeaderFilter], createLtaController(db));
+  app.use("/api/auth", [RestRequestLogger, RequestHeaderFilter], createAuthController(db));
+  app.use("/api/fnd", [RestRequestLogger], createFndController(db));
+  app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
+  app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
 
   // Start server
   app.listen(port, () => {
@@ -63,4 +64,5 @@ startServer();
 
 // Start Discord Bot
 import { startDiscordBot } from "./fnd/discord/Fnd.bot";
+import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter";
 startDiscordBot();

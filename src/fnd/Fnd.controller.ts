@@ -1,200 +1,141 @@
-// // src/controllers/Fnd.controller.ts
-// import { Router, Request, Response } from "express";
-// import { ControllerResponse } from "../models/responses/ControllerResponse";
-// import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-// import { FndNoticeService } from "./Fnd.notice.service";
-// import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
-// import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-// import { FndEventService } from "./Fnd.event.service";
-// import { TokenService } from "../token/Token.service";
+// src/controllers/Fnd.controller.ts
+import { Router, Request, Response } from "express";
+import { ControllerResponse } from "../models/responses/ControllerResponse";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities";
+import crypto from "crypto";
+import { google } from "googleapis";
+import path from "path";
 
-// export default function createFndController(db: KnexSqlUtilities) {
-//   const noticeService = new FndNoticeService(db);
-//   const eventService = new FndEventService(db);
-//   const tokenService = new TokenService(db);
-//   const router = Router();
+// Path to your service account key JSON
+const serviceAccountPath = path.join(__dirname, "../config/db/serviceAccountKey.json");
 
-//   //  ---- Notices ----
-//   router.get("/notices", async (req: Request, res: Response) => {
-//     const response = new ControllerResponse(res);
-//     try {
-//       if (
-//         req.headers["authorization"] &&
-//         typeof req.headers["authorization"] === "string"
-//       ) {
-//         const token = req.headers["authorization"].replace("Bearer ", "");
-//         const userClassification = (await tokenService.decodeToken(token)).role;
-//         return response.ok(
-//           await noticeService.getAllNotice(userClassification)
-//         );
-//       }
-//       return response.ok(await noticeService.getAllNotice("OPEN"));
-//     } catch (error: any) {
-//       return response.ko(error.message);
-//     }
-//   });
+const auth = new google.auth.GoogleAuth({
+  keyFile: serviceAccountPath,
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+});
 
-//   router.post(
-//     "/notices/create",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const requestUsername = req.user?.username ?? "UNKNOWN";
-//         const { type, title, content, classification } = req.body;
-//         return response.ok(
-//           await noticeService.createNotice({
-//             type,
-//             title,
-//             content,
-//             classification,
-//             createdBy: requestUsername,
-//           })
-//         );
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+// Create Google Sheets client
+const sheets = google.sheets({ version: "v4", auth });
 
-//   router.post(
-//     "/notices/update",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const requestUsername = req.user?.username ?? "UNKNOWN";
-//         const { id, type, title, content, classification } = req.body;
-//         return response.ok(
-//           await noticeService.updateNotice({
-//             id,
-//             type,
-//             title,
-//             content,
-//             classification,
-//             updatedBy: requestUsername,
-//           })
-//         );
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+// Replace with your actual Sheet ID
+const SPREADSHEET_ID = "1NFMWxbwj5REfT9EOTL3CXErvEyrqnLIpuAiDW9d4urg";
 
-//   router.post(
-//     "/notices/delete",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const username = req.user?.username ?? "UNKNOWN";
-//         const { id } = req.body;
-//         return response.ok(await noticeService.deleteNotice(id, username));
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+export default function createFndController(db: KnexSqlUtilities) {
+  const router = Router();
+  const SECRET = process.env.KS_CLIENT_SECRET_PUB;
 
-//   router.post(
-//     "/notices/view",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const username = req.user?.username ?? "UNKNOWN";
-//         const { id } = req.body;
-//         return response.ok(await noticeService.viewNotice(id, username));
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+  router.get("/", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+    try {
+      return response.ok("Ok");
+    } catch (error: any) {
+      return response.ko(error.message);
+    }
+  });
 
-//   // ---- Events ----
-//   router.get("/events", async (req: Request, res: Response) => {
-//     const response = new ControllerResponse(res);
-//     try {
-//       return response.ok(await eventService.getAllEvent());
-//     } catch (error: any) {
-//       return response.ko(error.message);
-//     }
-//   });
+  router.post("/identity", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+    try {
+      const { identity } = req.body;
 
-//   router.post(
-//     "/events/create",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const requestUsername = req.user?.username ?? "UNKNOWN";
-//         const { event_dt, title, content } = req.body;
-//         return response.ok(
-//           await eventService.createEvent({
-//             eventDt: event_dt,
-//             title,
-//             content,
-//             createdBy: requestUsername,
-//           })
-//         );
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+      if (!identity) return response.ko("Invalid Identity");
 
-//   router.post(
-//     "/events/update",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const requestUsername = req.user?.username ?? "UNKNOWN";
-//         const { id, event_dt, title, content } = req.body;
-//         return response.ok(
-//           await eventService.updateEvent({
-//             id,
-//             eventDt: event_dt,
-//             title,
-//             content,
-//             updatedBy: requestUsername,
-//           })
-//         );
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+      const payload: Record<string, any> = {
+        fid: Number(identity),
+        time: Date.now(),
+      };
 
-//   router.post(
-//     "/events/delete",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const requestUsername = req.user?.username ?? "UNKNOWN";
-//         const { id } = req.body;
-//         return response.ok(await eventService.deleteEvent(id, requestUsername));
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+      payload.sign = signPayload(payload);
 
-//   router.post(
-//     "/events/view",
-//     [MandatoryTokenFilter],
-//     async (req: RequestWithUserInfo, res: Response) => {
-//       const response = new ControllerResponse(res);
-//       try {
-//         const username = req.user?.username ?? "UNKNOWN";
-//         const { id } = req.body;
-//         return response.ok(await eventService.viewEvent(id, username));
-//       } catch (error: any) {
-//         return response.ko(error.message);
-//       }
-//     }
-//   );
+      const formData = new URLSearchParams();
+      formData.append("fid", payload.fid.toString());
+      formData.append("time", payload.time.toString());
+      formData.append("sign", payload.sign);
 
-//   return router;
-// }
+      const ksResponse = await fetch("https://kingshot-giftcode.centurygame.com/api/player", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString(),
+      });
+
+      const serverResponse = await ksResponse.json();
+
+      if (serverResponse.code !== 0 || !serverResponse.data) {
+        return response.ko(`Invalid KS Response: code: ${serverResponse.code}, data: ${serverResponse.data}`);
+      }
+
+      if (JSON.stringify(serverResponse.data.kid) !== "236") {
+        return response.ko("Invalid Server");
+      }
+
+      const governorName = JSON.stringify(serverResponse.data.nickname.replace(/"/g, "")) || "N/A";
+      return response.ok(governorName);
+    } catch (error: any) {
+      return response.ko(error.message);
+    }
+  });
+
+  router.post("/appt", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+    try {
+      const { alliance, appointment, appointmentTiming, governorId, governorName } = req.body;
+
+      if (!governorId || !governorName || !alliance) {
+        return response.ko("Missing required fields");
+      }
+
+      // Insert into database
+      const record = await db.insert("tb_fnd_kop_appt", {
+        governor_id: governorId,
+        governor_name: governorName,
+        alliance,
+        identity: governorId,
+        appointments: JSON.stringify(appointment),
+        appointment_timings: JSON.stringify(appointmentTiming),
+        status: "PENDING",
+        record_status: "A",
+        updated_by: "system",
+      });
+
+      // Append row to Google Sheet
+      const row = [
+        governorId,
+        governorName,
+        alliance,
+        JSON.stringify(appointment),
+        JSON.stringify(appointmentTiming),
+        "PENDING",
+        new Date().toISOString(),
+      ];
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: "KOP_Appt!A:G", // adjust sheet name if needed
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [row],
+        },
+      });
+
+      return response.ok(record);
+    } catch (error: any) {
+      return response.ko(error.message);
+    }
+  });
+
+  function signPayload(payload: Record<string, any>): string {
+    const keys = Object.keys(payload).sort();
+    const parts: string[] = [];
+
+    for (const key of keys) {
+      let value = payload[key];
+      if (typeof value === "object") value = JSON.stringify(value);
+      parts.push(`${key}=${value}`);
+    }
+
+    const baseString = parts.join("&") + SECRET;
+    return crypto.createHash("md5").update(baseString, "utf8").digest("hex");
+  }
+
+  return router;
+}
