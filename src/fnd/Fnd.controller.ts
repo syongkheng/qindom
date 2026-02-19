@@ -78,7 +78,7 @@ export default function createFndController(db: KnexSqlUtilities) {
   router.post("/appt", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
-      const { alliance, appointment, appointmentTiming, governorId, governorName } = req.body;
+      const { alliance, appointment, appointmentTiming, governorId, governorName, remarks } = req.body;
 
       if (!governorId || !governorName || !alliance) {
         return response.ko("Missing required fields");
@@ -95,6 +95,7 @@ export default function createFndController(db: KnexSqlUtilities) {
         status: "PENDING",
         record_status: "A",
         updated_by: "system",
+        remarks: remarks
       });
 
       // Append row to Google Sheet
@@ -104,13 +105,14 @@ export default function createFndController(db: KnexSqlUtilities) {
         alliance,
         JSON.stringify(appointment),
         JSON.stringify(appointmentTiming),
+        JSON.stringify(remarks),
         "PENDING",
         new Date().toISOString(),
       ];
 
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: "KOP_Appt!A:G", // adjust sheet name if needed
+        range: "KOP_Appt!A:H", // adjust sheet name if needed
         valueInputOption: "RAW",
         requestBody: {
           values: [row],
