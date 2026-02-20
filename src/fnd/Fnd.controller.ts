@@ -20,7 +20,7 @@ const sheets = google.sheets({ version: "v4", auth });
 // Replace with your actual Sheet ID
 const SPREADSHEET_ID = "1NFMWxbwj5REfT9EOTL3CXErvEyrqnLIpuAiDW9d4urg";
 
-export default function createFndController(db: KnexSqlUtilities) {
+export default function createFndController() {
   const router = Router();
   const SECRET = process.env.KS_CLIENT_SECRET_PUB;
 
@@ -85,18 +85,18 @@ export default function createFndController(db: KnexSqlUtilities) {
       }
 
       // Insert into database
-      const record = await db.insert("tb_fnd_kop_appt", {
-        governor_id: governorId,
-        governor_name: governorName,
-        alliance,
-        identity: governorId,
-        appointments: JSON.stringify(appointment),
-        appointment_timings: JSON.stringify(appointmentTiming),
-        status: "PENDING",
-        record_status: "A",
-        updated_by: "system",
-        remarks: remarks
-      });
+      // const record = await db.insert("tb_fnd_kop_appt", {
+      //   governor_id: governorId,
+      //   governor_name: governorName,
+      //   alliance,
+      //   identity: governorId,
+      //   appointments: JSON.stringify(appointment),
+      //   appointment_timings: JSON.stringify(appointmentTiming),
+      //   status: "PENDING",
+      //   record_status: "A",
+      //   updated_by: "system",
+      //   remarks: remarks
+      // });
 
       // Append row to Google Sheet
       const row = [
@@ -119,7 +119,7 @@ export default function createFndController(db: KnexSqlUtilities) {
         },
       });
 
-      return response.ok(record);
+      return response.ok("Appointment recorded successfully");
     } catch (error: any) {
       return response.ko(error.message);
     }

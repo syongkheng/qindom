@@ -40,17 +40,17 @@ async function startServer() {
   app.use(cors(corsOptions));
 
   // Initialize database
-  const db = await initializeDatabase();
+  // const db = await initializeDatabase();
 
   // Inject db into controllers
   // Use custom middlewares in each controllers
-  app.use("/connectivity", [RestRequestLogger, RequestHeaderFilter], createConnectivityController(db));
-  app.use("/api/hdb", [RestRequestLogger, RequestHeaderFilter], createHdbController(db));
-  app.use("/api/lta", [RestRequestLogger, RequestHeaderFilter], createLtaController(db));
-  app.use("/api/auth", [RestRequestLogger, RequestHeaderFilter], createAuthController(db));
-  app.use("/api/fnd", [RestRequestLogger], createFndController(db));
-  app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
-  app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
+  app.use("/connectivity", [RestRequestLogger, RequestHeaderFilter], createConnectivityController());
+  // app.use("/api/hdb", [RestRequestLogger, RequestHeaderFilter], createHdbController(db));
+  // app.use("/api/lta", [RestRequestLogger, RequestHeaderFilter], createLtaController(db));
+  // app.use("/api/auth", [RestRequestLogger, RequestHeaderFilter], createAuthController(db));
+  app.use("/api/fnd", [RestRequestLogger], createFndController());
+  // app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
+  // app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
 
   // Start server
   app.listen(port, () => {
