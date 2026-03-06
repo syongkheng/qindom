@@ -4,6 +4,8 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import crypto from "crypto";
 import { ITB_ITINERARY } from "../models/databases/tb_itinerary";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 
 const TABLE_ITINERARY = "tb_travel_itinerary";
 const TABLE_AGENDA_ITEM = "tb_travel_agenda_item";
@@ -20,13 +22,13 @@ function generateShortCode(): string {
 export default function createItineraryController(db: KnexSqlUtilities) {
   const router = Router();
 
-  // GET / — list all itineraries
-  router.get("/", async (req: Request, res: Response) => {
+  // GET / — list itineraries owned by the authenticated user
+  router.get("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const response = new ControllerResponse(res);
     try {
       const trips = await db.find<ITB_ITINERARY>(
         TABLE_ITINERARY,
-        { record_status: "A" },
+        { record_status: "A", created_by: req.user!.username },
         {
           orderBy: "created_dt",
           orderDirection: "desc",
@@ -52,13 +54,15 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   // POST /delete/:sessionId — soft-delete a trip
-  router.post("/delete/:sessionId", async (req: Request, res: Response) => {
+  router.post("/delete/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const response = new ControllerResponse(res);
     try {
       const { sessionId } = req.params;
 
       const itinerary = await db.findOne<ITB_ITINERARY>(TABLE_ITINERARY, { session_id: sessionId, record_status: "A" }) as ITB_ITINERARY | undefined;
       if (!itinerary) return response.badRequest("Itinerary not found");
+
+      if (itinerary.created_by !== req.user!.username) return response.result(403, "Forbidden", "You do not have permission to delete this itinerary");
 
       await db.update<ITB_ITINERARY>(TABLE_ITINERARY, { session_id: sessionId }, { record_status: "D" });
 
@@ -102,7 +106,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   // POST / — create itinerary
-  router.post("/", async (req: Request, res: Response) => {
+  router.post("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const response = new ControllerResponse(res);
     try {
       const {
@@ -156,7 +160,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
         duration_in_days: durationInDays || 1,
         challenge: challenge || undefined,
         created_dt: now,
-        created_by: "anonymous",
+        created_by: req.user!.username,
         record_status: "A",
       });
 
@@ -222,7 +226,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   // GET /:sessionId — planner load (file metadata only, no blobs)
-  router.get("/:sessionId", async (req: Request, res: Response) => {
+  router.get("/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const response = new ControllerResponse(res);
     try {
       const { sessionId } = req.params;
@@ -248,7 +252,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   // POST /edit/:sessionId — update itinerary
-  router.post("/edit/:sessionId", async (req: Request, res: Response) => {
+  router.post("/edit/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const response = new ControllerResponse(res);
     try {
       const { sessionId } = req.params;
@@ -271,6 +275,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       const itinerary = await db.findOne<ITB_ITINERARY>(TABLE_ITINERARY, { session_id: sessionId, record_status: "A" }) as ITB_ITINERARY | undefined;
       if (!itinerary) return response.badRequest("Itinerary not found");
+
+      if (itinerary.created_by !== req.user!.username) return response.result(403, "Forbidden", "You do not have permission to edit this itinerary");
 
       const now = Date.now();
 
