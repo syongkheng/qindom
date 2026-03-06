@@ -19,6 +19,20 @@ function generateShortCode(): string {
   return crypto.randomBytes(4).toString("hex"); // 8-char hex
 }
 
+function timeToMinutes(time: string | undefined): number | undefined {
+  if (!time) return undefined;
+  const [h, m] = time.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return undefined;
+  return h * 60 + m;
+}
+
+function minutesToTime(minutes: number | undefined | null): string | undefined {
+  if (minutes == null) return undefined;
+  const h = Math.floor(minutes / 60).toString().padStart(2, "0");
+  const m = (minutes % 60).toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 export default function createItineraryController(db: KnexSqlUtilities) {
   const router = Router();
 
@@ -174,8 +188,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
           desc: item.desc || undefined,
           city: item.city || undefined,
           city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
-          start_time: item.startTime || undefined,
-          end_time: item.endTime || undefined,
+          start_time: timeToMinutes(item.startTime),
+          end_time: timeToMinutes(item.endTime),
           duration_in_hours: item.durationInHours || undefined,
           unknown_time: item.unknownTime ? 1 : 0,
           budget: item.budget || undefined,
@@ -316,8 +330,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
             desc: item.desc || undefined,
             city: item.city || undefined,
             city_raw: cityRaw?.length ? JSON.stringify(cityRaw) : undefined,
-            start_time: startTime || undefined,
-            end_time: endTime || undefined,
+            start_time: timeToMinutes(startTime),
+            end_time: timeToMinutes(endTime),
             duration_in_hours: durationInHours || undefined,
             unknown_time: unknownTime ? 1 : 0,
             budget: item.budget || undefined,
@@ -337,8 +351,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
             desc: item.desc || undefined,
             city: item.city || undefined,
             city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
-            start_time: item.startTime || undefined,
-            end_time: item.endTime || undefined,
+            start_time: timeToMinutes(item.startTime),
+            end_time: timeToMinutes(item.endTime),
             duration_in_hours: item.durationInHours || undefined,
             unknown_time: item.unknownTime ? 1 : 0,
             budget: item.budget || undefined,
@@ -380,6 +394,8 @@ function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[]) {
     durationInDays: itinerary.duration_in_days,
     agendaItems: agendaItems.map(({ record_status, created_dt, ...item }: any) => ({
       ...item,
+      start_time: minutesToTime(item.start_time),
+      end_time: minutesToTime(item.end_time),
       files: item.files?.map(({ record_status: _rs, created_dt: _cd, ...file }: any) => file) ?? [],
     })),
   };
