@@ -19,11 +19,11 @@ export const RestRequestLogger = function (
       ? JSON.stringify(req.query)
       : sanitisedMessage(JSON.stringify(req.body));
 
-  const ip = req.ip ?? req.socket.remoteAddress ?? "-";
+const ipAddress = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
 
   res.on("finish", () => {
     LoggingUtilities.controller.access(
-      ip,
+      ipAddress[0],
       req.method,
       req.originalUrl,
       req.httpVersion,
