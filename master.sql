@@ -198,3 +198,64 @@ CREATE TABLE tb_analytic_user_activity (
 
 SELECT * FROM tb_analytic_user_activity;
 
+-- ── Travel Itinerary ──────────────────────────────────────────────────────────
+
+DROP TABLE IF EXISTS wuxi.tb_travel_itinerary;
+
+CREATE TABLE IF NOT EXISTS wuxi.tb_travel_itinerary (
+  id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+  session_id       VARCHAR(64)  UNIQUE NOT NULL,
+  short_code       VARCHAR(16)  UNIQUE NOT NULL,
+  idempotency_key  VARCHAR(64)  UNIQUE,
+  session_title    VARCHAR(512) NOT NULL,
+  destination      VARCHAR(512),
+  destination_raw  LONGTEXT,                      -- JSON-encoded string[]
+  country          VARCHAR(256),
+  number_of_pax    INT          DEFAULT 1,
+  itinerary_date_raw LONGTEXT,                    -- JSON-encoded string[]
+  start_date       BIGINT,
+  end_date         BIGINT,
+  unknown_date     TINYINT(1)   DEFAULT 0,
+  duration_in_days INT          DEFAULT 1,
+  created_dt       BIGINT       NOT NULL,
+  created_by       VARCHAR(64)  NOT NULL,
+  record_status    VARCHAR(1)   NOT NULL DEFAULT 'A',
+  INDEX idx_session_id (session_id),
+  INDEX idx_short_code (short_code)
+);
+
+DROP TABLE IF EXISTS wuxi.tb_travel_agenda_item;
+
+CREATE TABLE IF NOT EXISTS wuxi.tb_travel_agenda_item (
+  id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+  itinerary_id     BIGINT       NOT NULL,
+  title            VARCHAR(512) NOT NULL,
+  `desc`           LONGTEXT,
+  city             VARCHAR(512),
+  city_raw         LONGTEXT,                      -- JSON-encoded string[]
+  start_time       BIGINT,
+  end_time         BIGINT,
+  duration_in_hours DECIMAL(6,2),
+  unknown_time     TINYINT(1)   DEFAULT 0,
+  budget           DECIMAL(12,2),
+  day              BIGINT,
+  `date`           VARCHAR(32),
+  created_dt       BIGINT       NOT NULL,
+  record_status    VARCHAR(1)   NOT NULL DEFAULT 'A',
+  INDEX idx_itinerary_id (itinerary_id)
+);
+
+DROP TABLE IF EXISTS wuxi.tb_travel_agenda_file;
+
+CREATE TABLE IF NOT EXISTS wuxi.tb_travel_agenda_file (
+  id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+  uuid             VARCHAR(64)  UNIQUE NOT NULL,
+  agenda_item_id   BIGINT       NOT NULL,
+  name             VARCHAR(512),
+  mime_type        VARCHAR(128),
+  size_in_bytes    BIGINT,
+  `blob`             LONGBLOB,
+  created_dt       BIGINT       NOT NULL,
+  record_status    VARCHAR(1)   NOT NULL DEFAULT 'A',
+  INDEX idx_agenda_item_id (agenda_item_id)
+);

@@ -4,9 +4,9 @@ import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ConnectivityService } from "./Connectivity.service";
 
-export default function createConnectivityController(db?: KnexSqlUtilities) {
+export default function createConnectivityController(db: KnexSqlUtilities) {
   const router = Router();
-  const connectivityService = new ConnectivityService();
+  const connectivityService = new ConnectivityService(db);
 
   /**
    * route GET /connectivity

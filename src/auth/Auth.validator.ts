@@ -65,16 +65,15 @@ export class AuthValidator {
     if (!password || typeof password !== "string") {
       throw new InvalidRequestException("password");
     }
-    if (this._validatePasswordStrength(password).valid === false) {
-      throw new InvalidRequestException("password");
-    }
-
     return { password };
   };
 
   static validatePasswordUpdateRequest = (req: Request): { newPassword: string } => {
     const { newPassword } = req.body;
     if (!newPassword || typeof newPassword !== "string") {
+      throw new InvalidRequestException("newPassword");
+    }
+    if (this._validatePasswordStrength(newPassword).valid === false) {
       throw new InvalidRequestException("newPassword");
     }
     return { newPassword };

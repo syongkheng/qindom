@@ -13,20 +13,24 @@ export const RestRequestLogger = function (
       '"password":"[REDACTED]"'
     );
   };
-  
-  if (req.method === "GET") {
-    LoggingUtilities.controller.start(
+
+  const message =
+    req.method === "GET"
+      ? JSON.stringify(req.query)
+      : sanitisedMessage(JSON.stringify(req.body));
+
+  const ip = req.ip ?? req.socket.remoteAddress ?? "-";
+
+  res.on("finish", () => {
+    LoggingUtilities.controller.access(
+      ip,
       req.method,
       req.originalUrl,
-      JSON.stringify(req.query)
+      req.httpVersion,
+      res.statusCode,
+      message
     );
-  } else {
-    LoggingUtilities.controller.start(
-      req.method,
-      req.originalUrl,
-      sanitisedMessage(JSON.stringify(req.body))
-    );
-  }
+  });
 
   next();
 };

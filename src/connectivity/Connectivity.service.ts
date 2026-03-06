@@ -4,7 +4,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
  * Service to handle connectivity checks.
  */
 export class ConnectivityService {
-  // constructor(private db: KnexSqlUtilities) {}
+  constructor(private db: KnexSqlUtilities) {}
 
   /**
    * Simple JSON message to indicate server status.

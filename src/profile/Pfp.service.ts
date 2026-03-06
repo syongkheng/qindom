@@ -32,7 +32,7 @@ export class PfpService {
         { username_system, record_status: "A" },
         { country }
       );
-      return updatedUser.map((user) => ({
+      return updatedUser.map(({ record_status, created_dt, ...user }: any) => ({
         ...user,
         password: "[REDACTED]",
         token: "[REDACTED]",
@@ -52,7 +52,7 @@ export class PfpService {
         { username_system, record_status: "A" },
         { pfp_picture_blob: photoUrl }
       );
-      return updatedUser.map((user) => ({
+      return updatedUser.map(({ record_status, created_dt, ...user }: any) => ({
         ...user,
         password: "[REDACTED]",
         token: "[REDACTED]",

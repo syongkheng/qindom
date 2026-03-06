@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 export interface IDecodedTokenUser {
   username: string;
   system: string;
-  role: string;
+  roles: string[];
   lastLoggedInDt: number;
 }
 
@@ -29,12 +29,12 @@ export class TokenService {
   async generateToken({
     username,
     system,
-    role,
+    roles,
     lastLoggedInDt,
   }: {
     username: string;
     system: string;
-    role: string;
+    roles: string[];
     lastLoggedInDt: number;
   }): Promise<string> {
     LoggingUtilities.service.info(
@@ -43,7 +43,7 @@ export class TokenService {
     );
     try {
       const token = jwt.sign(
-        { username, system, role, lastLoggedInDt },
+        { username, system, roles, lastLoggedInDt },
         this.jwtSecret,
         { expiresIn: this.jwtExpiration }
       );

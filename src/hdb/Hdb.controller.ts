@@ -38,7 +38,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
     try {
       const user = req.user as IDecodedTokenUser;
 
-      if (!user || !user.role.includes("R5")) {
+      if (!user || !user.roles.includes("R5")) {
         throw new UnauthorizedAccessException();
       }
       const { address, lat, lng, formedUrl } = req.body as {

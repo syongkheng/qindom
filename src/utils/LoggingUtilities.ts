@@ -30,6 +30,17 @@ export class LoggingUtilities {
     return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
   }
 
+  public static formatApacheDate(date: Date): string {
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+  }
+
   // ======================
   // Controller logs
   // ======================
@@ -51,6 +62,14 @@ export class LoggingUtilities {
         `[${LoggingUtilities.formatDate(
           new Date()
         )}] [${verb}] [${path}] - [EXIT] - ${message}`
+      );
+    }
+
+    static access(ip: string, verb: string, path: string, httpVersion: string, status: number, message: string): void {
+      if (!LoggingUtilities.shouldLog()) return;
+
+      console.log(
+        `${ip} - - [${LoggingUtilities.formatApacheDate(new Date())}] "${verb} ${path} HTTP/${httpVersion}" ${status} - ${message}`
       );
     }
   };

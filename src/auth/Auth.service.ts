@@ -61,16 +61,15 @@ export class AuthService {
     username,
     password,
     system,
-    role,
   }: {
     username: string;
     password: string;
     system: string;
-    role: string;
+    role?: string; // ignored — new users always start with no scoped roles
   }): Promise<{ token: string }> {
     LoggingUtilities.service.info(
       "AuthService.createNewUser",
-      `Creating user: ${username} for system: ${system} with roles: ${role}`
+      `Creating user: ${username} for system: ${system}`
     );
 
     const saltRounds = 10;
@@ -81,7 +80,7 @@ export class AuthService {
         username: username,
         password: hashedPassword,
         system: system,
-        role: role,
+        roles: '[]',
         username_system: `${username}_${system}`,
         state: "REGISTER",
         created_dt: new Date().getTime(),
@@ -126,10 +125,18 @@ export class AuthService {
       throw new Exceptions.InvalidLoginCredentials();
     }
 
+    let parsedRoles: string[] = [];
+    try {
+      const parsed = JSON.parse(existingUser.roles ?? '[]');
+      parsedRoles = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      parsedRoles = [];
+    }
+
     const generatedToken = await this.tokenService.generateToken({
       username: existingUser.username,
       system: existingUser.system,
-      role: existingUser.role,
+      roles: parsedRoles,
       lastLoggedInDt: existingUser.last_logged_in_dt,
     });
 
@@ -153,7 +160,7 @@ export class AuthService {
     return { token: generatedToken };
   }
 
-  async authenticateToken(token: string): Promise<{ username: string; role: string; exist: boolean }> {
+  async authenticateToken(token: string): Promise<{ username: string; roles: string[]; exist: boolean }> {
     LoggingUtilities.service.info(
       "AuthService.authenticateToken",
       "Checking if token has expired / is valid format / if user exists"
@@ -168,7 +175,7 @@ export class AuthService {
       `Does ${decodedToken.username}_${decodedToken.system} exists - ${exist}`
     );
 
-    return { username: decodedToken.username, role: decodedToken.role, exist };
+    return { username: decodedToken.username, roles: decodedToken.roles ?? [], exist };
   }
 
   async validatePassword(username_system: string, password: string): Promise<{ isValid: boolean }> {

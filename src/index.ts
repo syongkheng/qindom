@@ -20,6 +20,8 @@ import createAuthController from "./auth/Auth.controller";
 import createPfpController from "./profile/Pfp.controller";
 import createHeartbeatController from "./analytics/Heartbeat.controller";
 import createFndController from "./fnd/Fnd.controller";
+import createItineraryController from "./itinerary/Itinerary.controller";
+import createFileController from "./file/File.controller";
 
 async function startServer() {
   const app: Application = express();
@@ -40,17 +42,19 @@ async function startServer() {
   app.use(cors(corsOptions));
 
   // Initialize database
-  // const db = await initializeDatabase();
+  const db = await initializeDatabase();
 
   // Inject db into controllers
   // Use custom middlewares in each controllers
-  app.use("/connectivity", [RestRequestLogger, RequestHeaderFilter], createConnectivityController());
-  // app.use("/api/hdb", [RestRequestLogger, RequestHeaderFilter], createHdbController(db));
-  // app.use("/api/lta", [RestRequestLogger, RequestHeaderFilter], createLtaController(db));
-  // app.use("/api/auth", [RestRequestLogger, RequestHeaderFilter], createAuthController(db));
-  app.use("/api/fnd", [RestRequestLogger], createFndController());
-  // app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
-  // app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
+  app.use("/connectivity", [RestRequestLogger, RequestHeaderFilter], createConnectivityController(db));
+  app.use("/api/hdb", [RestRequestLogger, RequestHeaderFilter], createHdbController(db));
+  app.use("/api/lta", [RestRequestLogger, RequestHeaderFilter], createLtaController(db));
+  app.use("/api/auth", [RestRequestLogger, RequestHeaderFilter], createAuthController(db));
+  app.use("/api/fnd", [RestRequestLogger], createFndController(db));
+  app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
+  app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
+  app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
+  app.use("/api/file", [RestRequestLogger, RequestHeaderFilter], createFileController(db));
 
   // Start server
   app.listen(port, () => {
