@@ -98,7 +98,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       if (itinerary.challenge !== challenge) return response.badRequest("Incorrect access code");
 
-      const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "day", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
+      const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
 
       const itemsWithFiles = await Promise.all(
         agendaItems.map(async (item) => {
@@ -224,7 +224,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
         return response.ok({ hasChallenge: true });
       }
 
-      const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "day", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
+      const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
 
       const itemsWithFiles = await Promise.all(
         agendaItems.map(async (item) => {
@@ -248,7 +248,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
       const itinerary = await db.findOne<ITB_ITINERARY>(TABLE_ITINERARY, { session_id: sessionId, record_status: "A" }) as ITB_ITINERARY | undefined;
       if (!itinerary) return response.badRequest("Itinerary not found");
 
-      const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "day", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
+      const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
 
       const itemsWithFiles = await Promise.all(
         agendaItems.map(async (item) => {
