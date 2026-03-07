@@ -392,6 +392,7 @@ function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[]) {
     endDate: itinerary.end_date,
     unknownDate: !!itinerary.unknown_date,
     durationInDays: itinerary.duration_in_days,
+    challenge: itinerary.challenge,
     agendaItems: agendaItems.map(({ record_status, created_dt, ...item }: any) => ({
       ...item,
       start_time: minutesToTime(item.start_time),
