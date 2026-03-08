@@ -26,6 +26,19 @@ function timeToMinutes(time: string | undefined): number | undefined {
   return h * 60 + m;
 }
 
+// Accepts an array or an already-JSON-encoded string; always returns a plain array (or null).
+// Prevents double-encoding when items round-trip through the API with city_raw as a string.
+function normaliseCityRaw(value: string[] | string | undefined | null): string[] | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value.length ? value : null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.length ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function minutesToTime(minutes: number | undefined | null): string | undefined {
   if (minutes == null) return undefined;
   const h = Math.floor(minutes / 60).toString().padStart(2, "0");
@@ -319,7 +332,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
         if (item.id) {
           // Update existing — save current state regardless of _agendaIdsToUpdate
           // Accept both camelCase (from frontend store) and snake_case (round-tripped from DB)
-          const cityRaw = item.cityRaw ?? item.city_raw;
+          const cityRaw = normaliseCityRaw(item.cityRaw ?? item.city_raw);
           const startTime = item.startTime ?? item.start_time;
           const endTime = item.endTime ?? item.end_time;
           const unknownTime = item.unknownTime ?? item.unknown_time;
