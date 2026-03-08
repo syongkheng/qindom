@@ -259,3 +259,25 @@ CREATE TABLE IF NOT EXISTS wuxi.tb_travel_agenda_file (
   record_status    VARCHAR(1)   NOT NULL DEFAULT 'A',
   INDEX idx_agenda_item_id (agenda_item_id)
 );
+
+  ALTER TABLE tb_travel_agenda_item
+    ADD COLUMN category VARCHAR(32) NULL AFTER itinerary_id;
+    
+    ALTER TABLE tb_travel_itinerary ADD COLUMN challenge VARCHAR(6) NULL;
+    
+ALTER TABLE tb_aa_user CHANGE COLUMN role roles VARCHAR(1000) NOT NULL DEFAULT '[]';
+
+UPDATE tb_aa_user SET roles = '[]' WHERE roles IN ('R1', 'R2', 'R3');
+UPDATE tb_aa_user SET roles = '["PPHS_R4","KS_R4"]' WHERE roles = 'R4';
+UPDATE tb_aa_user SET roles = '["SYSTEM_R5","PPHS_R5","KS_R5"]' WHERE roles = 'R5';
+
+-- Email verification columns (run once on existing DB)
+ALTER TABLE tb_aa_user
+    ADD COLUMN email VARCHAR(255) NULL AFTER username,
+    ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0 AFTER email,
+    ADD COLUMN verify_code VARCHAR(64) NULL AFTER email_verified,
+    ADD COLUMN verify_code_expires_at BIGINT NULL AFTER verify_code,
+    ADD COLUMN verify_attempts INT NOT NULL DEFAULT 0 AFTER verify_code_expires_at;
+
+-- Mark existing users as verified so they are not locked out
+UPDATE tb_aa_user SET email_verified = 1 WHERE email_verified = 0;

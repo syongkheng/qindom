@@ -1,6 +1,11 @@
 export interface ITB_AA_USER {
   id?: number;
   username: string;
+  email?: string;
+  email_verified?: number; // 0 = unverified, 1 = verified
+  verify_code?: string | null;            // SHA-256 hex of the OTP
+  verify_code_expires_at?: number | null; // Unix ms expiry
+  verify_attempts?: number;               // brute-force guard
   password: string;
   system: string;
   country?: string;

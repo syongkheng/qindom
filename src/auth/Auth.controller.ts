@@ -21,13 +21,14 @@ export default function createAuthController(db: KnexSqlUtilities) {
     try {
       if (!hasSystemR5(req.user?.roles)) return response.result(403, "Forbidden", "Insufficient permissions");
       const users = await db.find<ITB_AA_USER>("tb_aa_user", { record_status: "A" }, {
-        columns: ["id", "username", "system", "roles", "state", "last_logged_in_dt", "created_dt"],
+        columns: ["id", "username", "email", "system", "roles", "state", "last_logged_in_dt", "created_dt"],
         orderBy: "created_dt",
         orderDirection: "asc",
       });
       return response.ok(users.map((u) => ({
         id: u.id,
         username: u.username,
+        email: u.email,
         system: u.system,
         roles: (() => { try { return JSON.parse(u.roles || "[]"); } catch { return []; } })(),
         state: u.state,
@@ -54,11 +55,12 @@ export default function createAuthController(db: KnexSqlUtilities) {
     }
   });
 
+  // POST /preflight — check if email exists (routes to login or register)
   router.post("/preflight", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
-      const { username, system } = AuthValidator.validatePreflightRequest(req);
-      return response.ok(await authService.checkIfUsernameExistsWithinSystem({ username, system }));
+      const { email, system } = AuthValidator.validatePreflightRequest(req);
+      return response.ok(await authService.checkIfEmailExistsWithinSystem({ email, system }));
     } catch (error: any) {
       if (error instanceof BaseExceptions) {
         return response.result(error.httpStatus, error.message, error.toResponseMessage());
@@ -67,11 +69,12 @@ export default function createAuthController(db: KnexSqlUtilities) {
     }
   });
 
+  // POST /login — authenticate with email + password
   router.post("/login", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
-      const { username, password, system } = AuthValidator.validateLoginRequest(req);
-      return response.ok(await authService.login({ username, password, system }));
+      const { email, password, system } = AuthValidator.validateLoginRequest(req);
+      return response.ok(await authService.login({ email, password, system }));
     } catch (error: any) {
       if (error instanceof BaseExceptions) {
         return response.result(error.httpStatus, error.message, error.toResponseMessage());
@@ -80,11 +83,12 @@ export default function createAuthController(db: KnexSqlUtilities) {
     }
   });
 
+  // POST /register — create account and send verification email
   router.post("/register", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
-      const { username, password, system, role } = AuthValidator.validateRegisterRequest(req);
-      return response.ok(await authService.createNewUser({ username, password, system, role }));
+      const { username, email, password, system } = AuthValidator.validateRegisterRequest(req);
+      return response.ok(await authService.createNewUser({ username, email, password, system }));
     } catch (error: any) {
       if (error instanceof BaseExceptions) {
         return response.result(error.httpStatus, error.message, error.toResponseMessage());
@@ -93,6 +97,34 @@ export default function createAuthController(db: KnexSqlUtilities) {
     }
   });
 
+  // POST /verify-email — submit 6-digit OTP, returns JWT on success
+  router.post("/verify-email", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+    try {
+      const { email, system, code } = AuthValidator.validateEmailVerifyRequest(req);
+      return response.ok(await authService.verifyEmail({ email, system, code }));
+    } catch (error: any) {
+      if (error instanceof BaseExceptions) {
+        return response.result(error.httpStatus, error.message, error.toResponseMessage());
+      }
+      return response.ko(error.message);
+    }
+  });
+
+  // POST /resend-verify — resend a new verification code
+  router.post("/resend-verify", async (req: Request, res: Response) => {
+    const response = new ControllerResponse(res);
+    try {
+      const { email, system } = AuthValidator.validatePreflightRequest(req);
+      await authService.resendVerifyCode({ email, system });
+      // Always respond 200 to avoid leaking whether the email is registered
+      return response.ok({ sent: true });
+    } catch (error: any) {
+      return response.ok({ sent: true }); // intentionally swallow errors
+    }
+  });
+
+  // POST /verification — validate a JWT token
   router.post("/verification", async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
@@ -111,11 +143,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
     const response = new ControllerResponse(res);
     try {
       const user = req.user;
-
-      if (!user) {
-        throw new Exceptions.UnauthorizedAccess();
-      }
-
+      if (!user) throw new Exceptions.UnauthorizedAccess();
       const { password } = AuthValidator.validatePasswordValidateRequest(req);
       const result = await authService.validatePassword(`${user.username}_${user.system}`, password);
       return response.ok(result);

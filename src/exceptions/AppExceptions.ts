@@ -3,6 +3,7 @@ import { EntityNotFoundException } from "./EntityNotFoundException";
 import { EntityRetrievalException } from "./EntityRetrievalException";
 import { EntityUpdateException } from "./EntityUpdateException";
 import { ExternalRequestException } from "./ExternalRequestException";
+import { EmailNotVerifiedException } from "./EmailNotVerifiedException";
 import { InvalidLoginCredentialsException } from "./InvalidLoginCredentialsException";
 import { InvalidRequestException } from "./InvalidRequestException";
 import { ParseJsonException } from "./ParseJsonException";
@@ -17,6 +18,7 @@ export const Exceptions = {
   EntityCreation: EntityCreationException,
   EntityRetrieval: EntityRetrievalException,
   EntityUpdate: EntityUpdateException,
+  EmailNotVerified: EmailNotVerifiedException,
   InvalidLoginCredentials: InvalidLoginCredentialsException,
   InvalidRequest: InvalidRequestException,
   NotFound: EntityNotFoundException,

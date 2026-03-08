@@ -1,55 +1,67 @@
-import { Request, response } from "express";
+import { Request } from "express";
 import { InvalidRequestException } from "../exceptions/InvalidRequestException";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export class AuthValidator {
-  static validatePreflightRequest = (req: Request): { username: string; system: string } => {
-    const { username, system } = req.body;
-    if (!username || typeof username !== "string") {
-      throw new InvalidRequestException("username");
+  static validatePreflightRequest = (req: Request): { email: string; system: string } => {
+    const { email, system } = req.body;
+    if (!email || typeof email !== "string" || !EMAIL_REGEX.test(email)) {
+      throw new InvalidRequestException("email");
     }
     if (!system || typeof system !== "string") {
       throw new InvalidRequestException("system");
     }
-    return { username, system };
+    return { email: email.toLowerCase().trim(), system };
   };
 
-  static validateLoginRequest = (req: Request): { username: string; password: string; system: string } => {
-    const { username, password, system } = req.body;
-    if (!username || typeof username !== "string") {
-      throw new InvalidRequestException("username");
+  static validateLoginRequest = (req: Request): { email: string; password: string; system: string } => {
+    const { email, password, system } = req.body;
+    if (!email || typeof email !== "string" || !EMAIL_REGEX.test(email)) {
+      throw new InvalidRequestException("email");
     }
-
     if (!password || typeof password !== "string") {
       throw new InvalidRequestException("password");
     }
-
     if (!system || typeof system !== "string") {
       throw new InvalidRequestException("system");
     }
-
-    return { username, password, system };
+    return { email: email.toLowerCase().trim(), password, system };
   };
 
   static validateRegisterRequest = (
     req: Request
-  ): { username: string; password: string; system: string; role: string } => {
-    const { username, password, system, role } = req.body;
-    if (!username || typeof username !== "string") {
+  ): { username: string; email: string; password: string; system: string } => {
+    const { username, email, password, system } = req.body;
+
+    if (!username || typeof username !== "string" || username.trim().length < 3) {
       throw new InvalidRequestException("username");
     }
-
+    if (!email || typeof email !== "string" || !EMAIL_REGEX.test(email)) {
+      throw new InvalidRequestException("email");
+    }
     if (!password || typeof password !== "string") {
       throw new InvalidRequestException("password");
     }
-
     if (!system || typeof system !== "string") {
       throw new InvalidRequestException("system");
     }
-    if (!role || typeof role !== "string") {
-      throw new InvalidRequestException("role");
+    return { username: username.trim(), email: email.toLowerCase().trim(), password, system };
+  };
+
+  static validateEmailVerifyRequest = (req: Request): { email: string; system: string; code: string } => {
+    const { email, system, code } = req.body;
+    if (!email || typeof email !== "string" || !EMAIL_REGEX.test(email)) {
+      throw new InvalidRequestException("email");
     }
-    return { username, password, system, role };
+    if (!system || typeof system !== "string") {
+      throw new InvalidRequestException("system");
+    }
+    if (!code || typeof code !== "string" || !/^\d{6}$/.test(code)) {
+      throw new InvalidRequestException("code");
+    }
+    return { email: email.toLowerCase().trim(), system, code };
   };
 
   static validateValidateTokenRequest = (req: Request): { token: string } => {
