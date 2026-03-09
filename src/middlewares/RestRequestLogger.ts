@@ -7,11 +7,11 @@ export const RestRequestLogger = function (
   next: NextFunction
 ) {
   const sanitisedMessage = (message: string) => {
-    // Simple sanitization to avoid logging sensitive info like passwords
-    return message.replace(
-      /"password"\s*:\s*".*?"/gi,
-      '"password":"[REDACTED]"'
-    );
+    return message
+      .replace(/"password"\s*:\s*".*?"/gi, '"password":"[REDACTED]"')
+      .replace(/"blob"\s*:\s*"[^"]*"/gi, '"blob":"[REDACTED]"')
+      .replace(/"blobString"\s*:\s*"[^"]*"/gi, '"blobString":"[REDACTED]"')
+      .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"[REDACTED]"');
   };
 
   const message =

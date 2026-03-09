@@ -1,6 +1,15 @@
 import { Response } from "express";
 import { LoggingUtilities } from "../../utils/LoggingUtilities";
 
+const isPrd = process.env.NODE_ENV === "prd";
+
+function sanitiseForLog(json: string): string {
+  return json
+    .replace(/"blob"\s*:\s*"[^"]*"/gi, '"blob":"[REDACTED]"')
+    .replace(/"blobString"\s*:\s*"[^"]*"/gi, '"blobString":"[REDACTED]"')
+    .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"[REDACTED]"');
+}
+
 export class ControllerResponse {
   private res: Response;
   private httpMethod: string;
@@ -21,22 +30,22 @@ export class ControllerResponse {
     LoggingUtilities.controller.end(
       this.httpMethod,
       this.pathName,
-      JSON.stringify(responseBody)
+      sanitiseForLog(JSON.stringify(responseBody))
     );
     return this.res.status(200).json(responseBody);
   }
 
   ko(data: unknown): Response {
+    LoggingUtilities.service.error(
+      `${this.httpMethod} ${this.pathName}`,
+      typeof data === "string" ? data : JSON.stringify(data)
+    );
+    const clientMessage = isPrd ? "An internal error occurred. Please try again later." : data;
     const responseBody = {
       code: 500,
       status: "Ko",
-      data: data,
+      data: clientMessage,
     };
-    LoggingUtilities.controller.end(
-      this.httpMethod,
-      this.pathName,
-      JSON.stringify(responseBody)
-    );
     return this.res.status(500).json(responseBody);
   }
 

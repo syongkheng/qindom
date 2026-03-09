@@ -71,7 +71,8 @@ export class PfpService {
         record_status: "A",
       });
 
-      return { blobString: userRecord?.pfp_picture_blob || null };
+      const blob = userRecord?.pfp_picture_blob;
+      return { blobString: blob ? Buffer.from(blob as any).toString("utf8") : null };
     } catch (error) {
       throw new UnknownException();
     }
