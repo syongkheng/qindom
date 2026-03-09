@@ -5,6 +5,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { PfpService } from "./Pfp.service";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
+import { toMessage } from "../utils/errorUtils";
 
 export default function createPfpController(db: KnexSqlUtilities) {
   const router = Router();
@@ -22,8 +23,8 @@ export default function createPfpController(db: KnexSqlUtilities) {
         return response.ok(
           await pfpService.getCountry(`${username}_${system}`)
         );
-      } catch (error: any) {
-        return response.ko(error.message);
+      } catch (error) {
+        return response.ko(toMessage(error));
       }
     }
   );
@@ -42,8 +43,8 @@ export default function createPfpController(db: KnexSqlUtilities) {
           country
         );
         return response.ok(result);
-      } catch (error: any) {
-        return response.ko(error.message);
+      } catch (error) {
+        return response.ko(toMessage(error));
       }
     }
   );
@@ -61,8 +62,8 @@ export default function createPfpController(db: KnexSqlUtilities) {
           `${username}_${system}`
         );
         return response.ok(userRecord);
-      } catch (error: any) {
-        return response.ko(error.message);
+      } catch (error) {
+        return response.ko(toMessage(error));
       }
     }
   );
@@ -83,8 +84,8 @@ export default function createPfpController(db: KnexSqlUtilities) {
             blobString
           )
         );
-      } catch (error: any) {
-        return response.ko(error.message);
+      } catch (error) {
+        return response.ko(toMessage(error));
       }
     }
   );

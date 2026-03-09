@@ -2,6 +2,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { ITB_ANALYTIC_USER_ACTIVITY } from "../models/databases/tb_analytic_user_activity";
+import { toMessage } from "../utils/errorUtils";
 
 /**
  * Hearbeat service to handle tracking users that are currently on the webpage.
@@ -50,10 +51,10 @@ export class HeartbeatService {
           ...(username ? { user_id: username } : {}),
         }
       );
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "HeartbeatService.insertHeartbeatRecord",
-        `Error inserting heartbeat record: ${error.message}`
+        `Error inserting heartbeat record: ${toMessage(error)}`
       );
       throw new Exceptions.EntityCreation("Heartbeat");
     }

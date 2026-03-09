@@ -281,3 +281,32 @@ ALTER TABLE tb_aa_user
 
 -- Mark existing users as verified so they are not locked out
 UPDATE tb_aa_user SET email_verified = 1 WHERE email_verified = 0;
+
+-- ─────────────────────────────────────────────
+-- Feature Flags
+-- ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS wuxi.tb_aa_feature_flag (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  feature_key   VARCHAR(64)  NOT NULL,
+  label         VARCHAR(128) NOT NULL,
+  is_enabled    TINYINT(1)   NOT NULL DEFAULT 1,
+  remarks       VARCHAR(512) NULL,
+  updated_dt    BIGINT       NULL,
+  updated_by    VARCHAR(64)  NULL,
+  created_dt    BIGINT       NOT NULL,
+  created_by    VARCHAR(64)  NOT NULL,
+  record_status VARCHAR(1)   NOT NULL DEFAULT 'A',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_feature_key (feature_key)
+);
+
+INSERT INTO wuxi.tb_aa_feature_flag
+  (feature_key, label, is_enabled, remarks, created_dt, created_by, record_status)
+VALUES
+  ('registration',     'User Registration',             1, 'Controls whether new users can register an account',         UNIX_TIMESTAMP() * 1000, 'system', 'A'),
+  ('kop_registration', 'KoP Appointment Registration',  0, 'Controls whether the KoP booking form accepts submissions',   UNIX_TIMESTAMP() * 1000, 'system', 'A'),
+  ('pphs',             'PPHS Module',                   1, 'Controls visibility of the PPHS module on the workbench',     UNIX_TIMESTAMP() * 1000, 'system', 'A'),
+  ('travel',           'Travel Module',                 1, 'Controls visibility of the Travel module on the workbench',   UNIX_TIMESTAMP() * 1000, 'system', 'A'),
+  ('flat_analysis',    'Flat Analysis Module',          1, 'Controls visibility of the Flat Analysis module',             UNIX_TIMESTAMP() * 1000, 'system', 'A')
+ON DUPLICATE KEY UPDATE label = VALUES(label);

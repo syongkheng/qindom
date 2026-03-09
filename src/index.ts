@@ -22,24 +22,37 @@ import createHeartbeatController from "./analytics/Heartbeat.controller";
 import createFndController from "./fnd/Fnd.controller";
 import createItineraryController from "./itinerary/Itinerary.controller";
 import createFileController from "./file/File.controller";
+import createFeatureController from "./feature/Feature.controller";
+import { globalLimiter, featureLimiter } from "./middlewares/RateLimiter";
 
 async function startServer() {
   const app: Application = express();
   const port: number = 3000;
 
-  // Middleware
-  app.use(express.json({ limit: "5mb" }));
-  app.use(express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 }));
-
-  // Cors
+  // CORS — must come before rate limiter so preflight OPTIONS requests are not blocked
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
 
   const corsOptions = {
-    origin: "*",
-    methods: "GET,POST",
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
+    methods: "GET,POST,OPTIONS",
     credentials: true,
     optionsSuccessStatus: 204,
   };
   app.use(cors(corsOptions));
+  app.options("/{*path}", cors(corsOptions)); // handle preflight for all routes
+
+  // Middleware
+  app.use(globalLimiter);
+  app.use(express.json({ limit: "5mb" }));
+  app.use(express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 }));
 
   // Initialize database
   const db = await initializeDatabase();
@@ -55,6 +68,7 @@ async function startServer() {
   app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
   app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
   app.use("/api/file", [RestRequestLogger, RequestHeaderFilter], createFileController(db));
+  app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
 
   // Start server
   app.listen(port, () => {

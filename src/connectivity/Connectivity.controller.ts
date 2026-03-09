@@ -3,6 +3,7 @@ import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ConnectivityService } from "./Connectivity.service";
+import { toMessage } from "../utils/errorUtils";
 
 export default function createConnectivityController(db: KnexSqlUtilities) {
   const router = Router();
@@ -18,8 +19,8 @@ export default function createConnectivityController(db: KnexSqlUtilities) {
     try {
       const stats = await connectivityService.statistics();
       return response.ok(stats);
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 

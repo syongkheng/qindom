@@ -15,30 +15,19 @@ export class LoggingUtilities {
     }
   }
 
-  private static shouldLog(): boolean {
-    // Only log in prd
-    return LoggingUtilities.appEnv === "prd" || LoggingUtilities.appEnv === "dev_log";
+  private static timestamp(): string {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    const seconds = String(d.getSeconds()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   }
 
-  public static formatDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const seconds = String(date.getSeconds()).padStart(2, "0");
-    return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
-  }
-
-  public static formatApacheDate(date: Date): string {
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const seconds = String(date.getSeconds()).padStart(2, "0");
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+  private static col(value: string, width: number): string {
+    return value.length >= width ? value : value.padEnd(width);
   }
 
   // ======================
@@ -46,30 +35,20 @@ export class LoggingUtilities {
   // ======================
   static controller = class {
     static start(verb: string, path: string, message: string): void {
-      if (!LoggingUtilities.shouldLog()) return;
-
       console.log(
-        `[${LoggingUtilities.formatDate(
-          new Date()
-        )}] [${verb}] [${path}] - [ENTR] - ${message}`
+        `${LoggingUtilities.timestamp()} | DEBUG | ${LoggingUtilities.col(`${verb} ${path}`, 30)} | ENTER | ${message}`
       );
     }
 
     static end(verb: string, path: string, message: string): void {
-      if (!LoggingUtilities.shouldLog()) return;
-
       console.log(
-        `[${LoggingUtilities.formatDate(
-          new Date()
-        )}] [${verb}] [${path}] - [EXIT] - ${message}`
+        `${LoggingUtilities.timestamp()} | DEBUG | ${LoggingUtilities.col(`${verb} ${path}`, 30)} | EXIT  | ${message}`
       );
     }
 
-    static access(ip: string, verb: string, path: string, httpVersion: string, status: number, message: string): void {
-      if (!LoggingUtilities.shouldLog()) return;
-
+    static access(ip: string, verb: string, path: string, _httpVersion: string, status: number, message: string): void {
       console.log(
-        `${ip} - - [${LoggingUtilities.formatApacheDate(new Date())}] "${verb} ${path} HTTP/${httpVersion}" ${status} - ${message}`
+        `${LoggingUtilities.timestamp()} | ${LoggingUtilities.col(verb, 5)} | ${LoggingUtilities.col(path, 30)} | ${status} | ${ip} | ${message}`
       );
     }
   };
@@ -79,42 +58,26 @@ export class LoggingUtilities {
   // ======================
   static service = class {
     static info(serviceName: string, message: string): void {
-      if (!LoggingUtilities.shouldLog()) return;
-
       console.log(
-        `[${LoggingUtilities.formatDate(
-          new Date()
-        )}] [I] [${serviceName}] - ${message}`
+        `${LoggingUtilities.timestamp()} | INFO  | ${LoggingUtilities.col(serviceName, 30)} | ${message}`
       );
     }
 
     static warn(serviceName: string, message: string): void {
-      if (!LoggingUtilities.shouldLog()) return;
-
-      console.log(
-        `[${LoggingUtilities.formatDate(
-          new Date()
-        )}] [W] [${serviceName}] - ${message}`
+      console.warn(
+        `${LoggingUtilities.timestamp()} | WARN  | ${LoggingUtilities.col(serviceName, 30)} | ${message}`
       );
     }
 
     static debug(serviceName: string, message: string): void {
-      if (!LoggingUtilities.shouldLog()) return;
-
       console.log(
-        `[${LoggingUtilities.formatDate(
-          new Date()
-        )}] [D] [${serviceName}] - ${message}`
+        `${LoggingUtilities.timestamp()} | DEBUG | ${LoggingUtilities.col(serviceName, 30)} | ${message}`
       );
     }
 
     static error(serviceName: string, message: string): void {
-      if (!LoggingUtilities.shouldLog()) return;
-
-      console.log(
-        `[${LoggingUtilities.formatDate(
-          new Date()
-        )}] [E] [${serviceName}] - ${message} \n===== END ======`
+      console.error(
+        `${LoggingUtilities.timestamp()} | ERROR | ${LoggingUtilities.col(serviceName, 30)} | ${message}`
       );
     }
   };

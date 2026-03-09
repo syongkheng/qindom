@@ -17,7 +17,7 @@ export class PfpService {
         record_status: "A",
       });
       return { country: userRecord?.country || null };
-    } catch (error: any) {
+    } catch (error) {
       throw new UnknownException();
     }
   }
@@ -37,7 +37,7 @@ export class PfpService {
         password: "[REDACTED]",
         token: "[REDACTED]",
       }));
-    } catch (error: any) {
+    } catch (error) {
       throw new UnknownException();
     }
   }
@@ -57,7 +57,7 @@ export class PfpService {
         password: "[REDACTED]",
         token: "[REDACTED]",
       }));
-    } catch (error: any) {
+    } catch (error) {
       throw new UnknownException();
     }
   }
@@ -71,12 +71,8 @@ export class PfpService {
         record_status: "A",
       });
 
-      const base64String = Buffer.from(userRecord!.pfp_picture_blob!).toString(
-        "base64"
-      );
-      const blobString = atob(base64String);
-      return { blobString: blobString || null };
-    } catch (error: any) {
+      return { blobString: userRecord?.pfp_picture_blob || null };
+    } catch (error) {
       throw new UnknownException();
     }
   }

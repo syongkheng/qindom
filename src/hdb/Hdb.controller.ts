@@ -8,6 +8,7 @@ import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { UnauthorizedAccessException } from "../exceptions/UnauthorizedAccessException";
 import { IDecodedTokenUser } from "../token/Token.service";
+import { toMessage } from "../utils/errorUtils";
 
 export default function createHdbController(db: KnexSqlUtilities) {
   const router = Router();
@@ -27,8 +28,8 @@ export default function createHdbController(db: KnexSqlUtilities) {
       const { batch } = req.body as { batch: string };
       const result = await hdbService.retrieveListOfPphsWithCoordinates(batch);
       return response.ok(result);
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -53,8 +54,8 @@ export default function createHdbController(db: KnexSqlUtilities) {
         user.username
       );
       return response.ok(result);
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -68,8 +69,8 @@ export default function createHdbController(db: KnexSqlUtilities) {
         radius: number;
       };
       return response.ok(await hdbService.retrieveBusstopWithinRadiusOfLatLng(lat, lng, radius));
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -81,9 +82,9 @@ export default function createHdbController(db: KnexSqlUtilities) {
         lng: string;
         limit?: number;
       };
-      return response.ok(await hdbService.retrieveNearestMrtStationsOfLatLng(lat, lng));
-    } catch (error: any) {
-      return response.ko(error.message);
+      return response.ok(await hdbService.retrieveNearestMrtStationsOfLatLng(lat, lng, limit));
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 

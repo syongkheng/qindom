@@ -3,6 +3,7 @@ import { UnknownException } from "../exceptions/UnknownException";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import dotenv from "dotenv";
+import { toMessage } from "../utils/errorUtils";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -96,10 +97,10 @@ export class LtaService {
         records: data.Services as BusTimingRecord[],
         source: "website",
       };
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "LtaService.statistics",
-        `Error fetching LTA data: ${error.message}`
+        `Error fetching LTA data: ${toMessage(error)}`
       );
     }
     throw new Exceptions.Unknown();

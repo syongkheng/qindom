@@ -43,7 +43,7 @@
 //       );
 
 //       return eventsWithViewCount;
-//     } catch (error: any) {
+//     } catch (error) {
 //       LoggingUtilities.service.error(
 //         "FndEventService.getAllEvent",
 //         `Something went wrong: ${error}`
@@ -75,7 +75,7 @@
 //         created_dt: new Date().getTime(),
 //         created_by: createdBy,
 //       });
-//     } catch (error: any) {
+//     } catch (error) {
 //       throw new Exceptions.EntityCreation("ITB_FND_EVENT");
 //     }
 //   }
@@ -120,7 +120,7 @@
 //           updated_by: updatedBy,
 //         }
 //       );
-//     } catch (error: any) {
+//     } catch (error) {
 //       LoggingUtilities.service.error(
 //         "FndEventService.updateEvent",
 //         `Something went wrong: ${error}`
@@ -151,7 +151,7 @@
 //         );
 //         throw new Exceptions.EntityUpdate("ITB_FND_EVENT");
 //       }
-//     } catch (error: any) {
+//     } catch (error) {
 //       LoggingUtilities.service.error(
 //         "FndEventService.deleteEvent",
 //         `Something went wrong: ${error}`
@@ -187,7 +187,7 @@
 //         username: username,
 //         created_dt: new Date().getTime(),
 //       });
-//     } catch (error: any) {
+//     } catch (error) {
 //       LoggingUtilities.service.error(
 //         "FndEventService.viewEvent",
 //         `Something went wrong: ${error}`
@@ -207,7 +207,7 @@
 //       });
 
 //       return { count: res.length };
-//     } catch (error: any) {
+//     } catch (error) {
 //       LoggingUtilities.service.error(
 //         "FndEventService.getEventViews",
 //         `Something went wrong: ${error}`

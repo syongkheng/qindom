@@ -49,10 +49,10 @@ export class TokenService {
       );
       LoggingUtilities.service.info(
         "TokenService.generateToken",
-        `Token generated - ${token}`
+        `Token generated - [REDACTED]`
       );
       return token;
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "TokenService.generateToken",
         `Something went wrong generating the token: ${error}`
@@ -64,7 +64,7 @@ export class TokenService {
   async decodeToken(token: string) {
     LoggingUtilities.service.info(
       "TokenService.decodeToken",
-      `Decoding: ${token}`
+      `Decoding: [REDACTED]`
     );
     try {
       const decoded = jwt.verify(token, this.jwtSecret) as IDecodedTokenUser;

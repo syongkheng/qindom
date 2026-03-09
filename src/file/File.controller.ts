@@ -2,8 +2,12 @@ import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file";
+import { toMessage } from "../utils/errorUtils";
 
 const TABLE_AGENDA_FILE = "tb_travel_agenda_file";
+
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"]);
+const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
 export default function createFileController(db: KnexSqlUtilities) {
   const router = Router();
@@ -16,6 +20,15 @@ export default function createFileController(db: KnexSqlUtilities) {
 
       if (!uuid || !agendaId) return response.badRequest("uuid and agendaId are required");
       if (!blob) return response.badRequest("blob is required");
+
+      if (!mimeType || !ALLOWED_MIME_TYPES.has(mimeType)) {
+        return response.badRequest("Only image files are allowed (jpeg, png, gif, webp, svg)");
+      }
+
+      const blobSizeBytes = Buffer.byteLength(blob, "base64");
+      if (blobSizeBytes > MAX_SIZE_BYTES) {
+        return response.badRequest("File size must not exceed 5MB");
+      }
 
       const now = Date.now();
 
@@ -31,8 +44,8 @@ export default function createFileController(db: KnexSqlUtilities) {
       });
 
       return response.ok({ id: file.id, uuid: file.uuid });
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -51,8 +64,8 @@ export default function createFileController(db: KnexSqlUtilities) {
       }
 
       return response.ok({ deleted: _fileIdsToDelete.length });
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 

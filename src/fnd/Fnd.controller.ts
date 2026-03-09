@@ -1,10 +1,12 @@
 // src/controllers/Fnd.controller.ts
 import { Router, Request, Response } from "express";
+import { identityLimiter, apptLimiter } from "../middlewares/RateLimiter";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import crypto from "crypto";
 import { google } from "googleapis";
 import path from "path";
+import { toMessage } from "../utils/errorUtils";
 
 // Path to your service account key JSON
 const serviceAccountPath = path.join(__dirname, "../config/db/serviceAccountKey.json");
@@ -17,8 +19,7 @@ const auth = new google.auth.GoogleAuth({
 // Create Google Sheets client
 const sheets = google.sheets({ version: "v4", auth });
 
-// Replace with your actual Sheet ID
-const SPREADSHEET_ID = "1NFMWxbwj5REfT9EOTL3CXErvEyrqnLIpuAiDW9d4urg";
+const SPREADSHEET_ID = process.env.KOP_SPREADSHEET_ID!;
 
 export default function createFndController(db: KnexSqlUtilities) {
   const router = Router();
@@ -28,12 +29,12 @@ export default function createFndController(db: KnexSqlUtilities) {
     const response = new ControllerResponse(res);
     try {
       return response.ok("Ok");
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
-  router.post("/identity", async (req: Request, res: Response) => {
+  router.post("/identity", [identityLimiter], async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
       const { identity } = req.body;
@@ -70,12 +71,12 @@ export default function createFndController(db: KnexSqlUtilities) {
 
       const governorName = JSON.stringify(serverResponse.data.nickname.replace(/"/g, "")) || "N/A";
       return response.ok(governorName);
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
-  router.post("/appt", async (req: Request, res: Response) => {
+  router.post("/appt", [apptLimiter], async (req: Request, res: Response) => {
     const response = new ControllerResponse(res);
     try {
       const { alliance, appointment, appointmentTiming, governorId, governorName, remarks } = req.body;
@@ -121,8 +122,8 @@ export default function createFndController(db: KnexSqlUtilities) {
 
       const { record_status, created_dt, ...safeRecord } = record as any;
       return response.ok(safeRecord);
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 

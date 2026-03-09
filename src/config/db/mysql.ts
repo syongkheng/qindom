@@ -47,7 +47,7 @@ export async function initializeDatabase() {
     LoggingUtilities.service.info("init_db", "Database connection established");
 
     return db;
-  } catch (error: any) {
+  } catch (error) {
     LoggingUtilities.service.error("init_db", "Failed to connect to database");
     process.exit(1); // Exit if database connection fails
   }

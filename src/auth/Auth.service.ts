@@ -108,7 +108,7 @@ export class AuthService {
       LoggingUtilities.service.info("AuthService.createNewUser", `Verification code sent to ${email}`);
 
       return { requiresVerification: true, email };
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error("AuthService.createNewUser", `Registration failed for ${email}: ${error}`);
       throw new Exceptions.RegistrationException();
     }
@@ -315,7 +315,7 @@ export class AuthService {
         { username_system, record_status: "A" },
         { password: hashedPassword },
       );
-    } catch (error: any) {
+    } catch (error) {
       throw new Exceptions.EntityUpdate("Password");
     }
 

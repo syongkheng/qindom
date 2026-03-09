@@ -5,6 +5,7 @@ import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { InvalidRequestException } from "../exceptions/InvalidRequestException";
 import { UnknownException } from "../exceptions/UnknownException";
+import { toMessage } from "../utils/errorUtils";
 
 interface FlatRecord {
   town: string;
@@ -82,8 +83,8 @@ export class HdbService {
       }
 
       html = await response.text();
-    } catch (error: any) {
-      LoggingUtilities.service.error("HdbService.statistics", `Failed to fetch from HDB website: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("HdbService.statistics", `Failed to fetch from HDB website: ${toMessage(error)}`);
       return { records: [], source: "error" };
     }
 
@@ -111,10 +112,10 @@ export class HdbService {
         "HdbService.statistics",
         `Successfully stored ${records.length} records for batch ${currentBatch} in database`
       );
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "HdbService.statistics",
-        `Failed to insert records into database: ${error.message}`
+        `Failed to insert records into database: ${toMessage(error)}`
       );
     }
 
@@ -253,7 +254,7 @@ export class HdbService {
 
       return [...new Set(batches.map((b) => b.batch))];
     } catch (error) {
-      console.error("Error fetching available batches:", error);
+      LoggingUtilities.service.error("HdbService.getAvailableBatches", `${error}`);
       return [];
     }
   }

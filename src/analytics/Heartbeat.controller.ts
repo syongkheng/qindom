@@ -5,6 +5,7 @@ import { BaseExceptions } from "../exceptions/BaseException";
 import { HeartbeatService } from "./Heartbeat.service";
 import { OptionalTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
+import { toMessage } from "../utils/errorUtils";
 
 export default function createHeartbeatController(db: KnexSqlUtilities) {
   const router = Router();
@@ -14,7 +15,8 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
     const response = new ControllerResponse(res);
     try {
       const userAgent = req.headers["user-agent"] || "Unknown";
-      const ipAddress = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
+      const rawIp = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
+      const ipAddress = Array.isArray(rawIp) ? rawIp[0] : rawIp;
 
       // Use token-derived username if available, else fallback to client-provided username
       const tokenUsername = req.user?.username;
@@ -29,16 +31,16 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
       await heartbeatService.insertHeartbeatRecord({
         sessionId,
         username: heartbeatUsername,
-        ipAddress: JSON.stringify(ipAddress),
+        ipAddress,
         userAgent,
       });
 
       return response.ok({ message: "Heartbeat recorded successfully." });
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof BaseExceptions) {
-        return response.result(error.httpStatus, error.message, error.toResponseMessage());
+        return response.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       }
-      return response.ko(error.message);
+      return response.ko(toMessage(error));
     }
   });
 

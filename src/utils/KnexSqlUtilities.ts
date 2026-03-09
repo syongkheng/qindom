@@ -3,6 +3,7 @@ import { LoggingUtilities } from "./LoggingUtilities";
 import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop";
 import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info";
 import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station";
+import { toMessage } from "./errorUtils";
 
 class KnexSqlUtilities {
   constructor(private knex: Knex) {
@@ -24,9 +25,9 @@ class KnexSqlUtilities {
       LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
       const [row] = await this.knex(table).where({ id }).select("*");
       return row as R;
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.insert", `Insert error: ${error.message}`);
-      throw new Error(`Insert failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.insert", `Insert error: ${toMessage(error)}`);
+      throw new Error(`Insert failed: ${toMessage(error)}`);
     }
   }
 
@@ -40,9 +41,9 @@ class KnexSqlUtilities {
       const query = this.knex(table).select(columns).where(whereClause).first();
       LoggingUtilities.service.debug("KnexSqlUtilities.findOne", `Executing query - [ ${query.toQuery()} ]`);
       return (await query) as T | undefined;
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.findOne", `Find one error: ${error.message}`);
-      throw new Error(`Find one failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.findOne", `Find one error: ${toMessage(error)}`);
+      throw new Error(`Find one failed: ${toMessage(error)}`);
     }
   }
 
@@ -76,9 +77,9 @@ class KnexSqlUtilities {
       LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
 
       return (await query) as T[];
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.find", `Find error: ${error.message}`);
-      throw new Error(`Find failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.find", `Find error: ${toMessage(error)}`);
+      throw new Error(`Find failed: ${toMessage(error)}`);
     }
   }
 
@@ -90,9 +91,9 @@ class KnexSqlUtilities {
       await query;
       const rows = await this.knex(table).where(whereClause).select("*");
       return rows as R[];
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.update", `Update error: ${error.message}`);
-      throw new Error(`Update failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.update", `Update error: ${toMessage(error)}`);
+      throw new Error(`Update failed: ${toMessage(error)}`);
     }
   }
 
@@ -103,9 +104,9 @@ class KnexSqlUtilities {
       LoggingUtilities.service.debug("KnexSqlUtilities.delete", `Executing query - [ ${query.toQuery()} ]`);
       const result = await query;
       return result; // returns number of deleted rows
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.delete", `Delete error: ${error.message}`);
-      throw new Error(`Delete failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.delete", `Delete error: ${toMessage(error)}`);
+      throw new Error(`Delete failed: ${toMessage(error)}`);
     }
   }
 
@@ -116,9 +117,9 @@ class KnexSqlUtilities {
       LoggingUtilities.service.debug("KnexSqlUtilities.raw", `Executing raw query - [ ${query.toQuery()} ]`);
       const [rows] = await query;
       return rows as T;
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.raw", `Raw query error: ${error.message}`);
-      throw new Error(`Raw query failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.raw", `Raw query error: ${toMessage(error)}`);
+      throw new Error(`Raw query failed: ${toMessage(error)}`);
     }
   }
 
@@ -129,9 +130,9 @@ class KnexSqlUtilities {
       LoggingUtilities.service.debug("KnexSqlUtilities.count", `Executing query - [ ${query.toQuery()} ]`);
       const result = await query;
       return Number(result[0]?.count || 0);
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.count", `Count error: ${error.message}`);
-      throw new Error(`Count failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.count", `Count error: ${toMessage(error)}`);
+      throw new Error(`Count failed: ${toMessage(error)}`);
     }
   }
 
@@ -147,9 +148,9 @@ class KnexSqlUtilities {
       LoggingUtilities.service.debug("KnexSqlUtilities.transaction", `Transaction committed successfully`);
 
       return result;
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.transaction", `Transaction failed: ${error.message}`);
-      throw new Error(`Transaction failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.transaction", `Transaction failed: ${toMessage(error)}`);
+      throw new Error(`Transaction failed: ${toMessage(error)}`);
     }
   }
 
@@ -211,9 +212,9 @@ class KnexSqlUtilities {
       const resultRows = allRows.slice(0, 10);
 
       return { rows: resultRows, count };
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${error.message}`);
-      throw new Error(`Failed to find nearby bus stops: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${toMessage(error)}`);
+      throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
     }
   }
 
@@ -252,9 +253,9 @@ class KnexSqlUtilities {
       const count = allRows.length;
 
       return { rows: allRows, count };
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${error.message}`);
-      throw new Error(`Failed to find nearby bus stops: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${toMessage(error)}`);
+      throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
     }
   }
 
@@ -304,12 +305,12 @@ class KnexSqlUtilities {
       const resultRows = allRows;
 
       return { rows: resultRows, count };
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "KnexSqlUtilities.lta.findBusServicesByBusStopCode",
-        `Query error: ${error.message}`
+        `Query error: ${toMessage(error)}`
       );
-      throw new Error(`Failed to find bus services: ${error.message}`);
+      throw new Error(`Failed to find bus services: ${toMessage(error)}`);
     }
   }
 
@@ -323,9 +324,9 @@ class KnexSqlUtilities {
       LoggingUtilities.service.debug("KnexSqlUtilities.upsert", `Executing query - [ ${query.toQuery()} ]`);
 
       await query;
-    } catch (error: any) {
-      LoggingUtilities.service.error("KnexSqlUtilities.upsert", `Upsert error: ${error.message}`);
-      throw new Error(`Upsert failed: ${error.message}`);
+    } catch (error) {
+      LoggingUtilities.service.error("KnexSqlUtilities.upsert", `Upsert error: ${toMessage(error)}`);
+      throw new Error(`Upsert failed: ${toMessage(error)}`);
     }
   }
 }

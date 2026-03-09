@@ -3,6 +3,7 @@ import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LtaService } from "./Lta.service";
+import { toMessage } from "../utils/errorUtils";
 
 export default function createLtaController(db: KnexSqlUtilities) {
   const router = Router();
@@ -28,8 +29,8 @@ export default function createLtaController(db: KnexSqlUtilities) {
 
       const result = await ltaService.statistics(busStopCode as string);
       return response.ok(result);
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -40,8 +41,8 @@ export default function createLtaController(db: KnexSqlUtilities) {
       return response.ok(
         await ltaService.retrieveBusServicesByBusStopCode(busStopCode)
       );
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -50,7 +51,7 @@ export default function createLtaController(db: KnexSqlUtilities) {
 
   //   try {
   //     return response.ok(await ltaService._retrieveAllBusstops());
-  //   } catch (error: any) {
+  //   } catch (error) {
   //     return response.ko(error.message);
   //   }
   // });
@@ -59,7 +60,7 @@ export default function createLtaController(db: KnexSqlUtilities) {
   //   const response = new ControllerResponse(res);
   //   try {
   //     return response.ok(await ltaService._retrieveAllBusInformation());
-  //   } catch (error: any) {
+  //   } catch (error) {
   //     return response.ko(error.message);
   //   }
   // });

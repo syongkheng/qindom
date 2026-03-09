@@ -6,6 +6,7 @@ import { ITB_ITINERARY } from "../models/databases/tb_itinerary";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
+import { toMessage } from "../utils/errorUtils";
 
 const TABLE_ITINERARY = "tb_travel_itinerary";
 const TABLE_AGENDA_ITEM = "tb_travel_agenda_item";
@@ -75,8 +76,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
       }));
 
       return response.ok({ myTrips, sharedTrips: [] });
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -94,8 +95,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
       await db.update<ITB_ITINERARY>(TABLE_ITINERARY, { session_id: sessionId }, { record_status: "D" });
 
       return response.ok({ deleted: true });
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -113,16 +114,11 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
 
-      const itemsWithFiles = await Promise.all(
-        agendaItems.map(async (item) => {
-          const files = await db.find(TABLE_AGENDA_FILE, { agenda_item_id: item.id!, record_status: "A" });
-          return { ...item, files };
-        })
-      );
+      const itemsWithFiles = await attachFilesToAgendaItems(db, agendaItems);
 
       return response.ok(buildItineraryResponse(itinerary, itemsWithFiles));
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -171,56 +167,60 @@ export default function createItineraryController(db: KnexSqlUtilities) {
       const shortCode = generateShortCode();
       const now = Date.now();
 
-      const itinerary = await db.insert<ITB_ITINERARY, ITB_ITINERARY>(TABLE_ITINERARY, {
-        session_id: sessionId,
-        short_code: shortCode,
-        idempotency_key: idempotencyKey || undefined,
-        session_title: sessionTitle,
-        destination: destination || undefined,
-        destination_raw: destinationRaw?.length ? JSON.stringify(destinationRaw) : undefined,
-        country: country || undefined,
-        number_of_pax: numberOfPax || 1,
-        itinerary_date_raw: itineraryDateRaw?.length ? JSON.stringify(itineraryDateRaw) : undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        unknown_date: unknownDate ? 1 : 0,
-        duration_in_days: durationInDays || 1,
-        challenge: challenge || undefined,
-        created_dt: now,
-        created_by: req.user!.username,
-        record_status: "A",
-      });
-
-      const agendaToFileMap: { agendaId: number; fileUuids: string[] }[] = [];
-
-      for (const item of agendaItems) {
-        const agendaItem = await db.insert<ITB_AGENDA_ITEM, ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, {
-          itinerary_id: itinerary.id!,
-          category: item.category || undefined,
-          title: item.title,
-          desc: item.desc || undefined,
-          city: item.city || undefined,
-          city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
-          start_time: timeToMinutes(item.startTime),
-          end_time: timeToMinutes(item.endTime),
-          duration_in_hours: item.durationInHours || undefined,
-          unknown_time: item.unknownTime ? 1 : 0,
-          budget: item.budget || undefined,
-          day: item.day || undefined,
-          date: item.date || undefined,
+      const agendaToFileMap = await db.transaction(async (trx) => {
+        const [itineraryId] = await trx(TABLE_ITINERARY).insert({
+          session_id: sessionId,
+          short_code: shortCode,
+          idempotency_key: idempotencyKey || undefined,
+          session_title: sessionTitle,
+          destination: destination || undefined,
+          destination_raw: destinationRaw?.length ? JSON.stringify(destinationRaw) : undefined,
+          country: country || undefined,
+          number_of_pax: numberOfPax || 1,
+          itinerary_date_raw: itineraryDateRaw?.length ? JSON.stringify(itineraryDateRaw) : undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          unknown_date: unknownDate ? 1 : 0,
+          duration_in_days: durationInDays || 1,
+          challenge: challenge || undefined,
           created_dt: now,
+          created_by: req.user!.username,
           record_status: "A",
         });
 
-        agendaToFileMap.push({
-          agendaId: agendaItem.id!,
-          fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
-        });
-      }
+        const map: { agendaId: number; fileUuids: string[] }[] = [];
+
+        for (const item of agendaItems) {
+          const [agendaItemId] = await trx(TABLE_AGENDA_ITEM).insert({
+            itinerary_id: itineraryId,
+            category: item.category || undefined,
+            title: item.title,
+            desc: item.desc || undefined,
+            city: item.city || undefined,
+            city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
+            start_time: timeToMinutes(item.startTime),
+            end_time: timeToMinutes(item.endTime),
+            duration_in_hours: item.durationInHours || undefined,
+            unknown_time: item.unknownTime ? 1 : 0,
+            budget: item.budget || undefined,
+            day: item.day || undefined,
+            date: item.date || undefined,
+            created_dt: now,
+            record_status: "A",
+          });
+
+          map.push({
+            agendaId: agendaItemId,
+            fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
+          });
+        }
+
+        return map;
+      });
 
       return response.ok({ shortCode, sessionId, agendaToFileMap });
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -239,16 +239,11 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
 
-      const itemsWithFiles = await Promise.all(
-        agendaItems.map(async (item) => {
-          const files = await db.find(TABLE_AGENDA_FILE, { agenda_item_id: item.id!, record_status: "A" });
-          return { ...item, files };
-        })
-      );
+      const itemsWithFiles = await attachFilesToAgendaItems(db, agendaItems);
 
       return response.ok(buildItineraryResponse(itinerary, itemsWithFiles));
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -263,18 +258,13 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
 
-      const itemsWithFiles = await Promise.all(
-        agendaItems.map(async (item) => {
-          const files = await db.find(TABLE_AGENDA_FILE, { agenda_item_id: item.id!, record_status: "A" }, {
-            columns: ["id", "uuid", "name", "mime_type", "size_in_bytes", "created_dt"],
-          });
-          return { ...item, files };
-        })
-      );
+      const itemsWithFiles = await attachFilesToAgendaItems(db, agendaItems, [
+        "id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "created_dt",
+      ]);
 
       return response.ok(buildItineraryResponse(itinerary, itemsWithFiles));
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
@@ -307,87 +297,122 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       const now = Date.now();
 
-      await db.update<ITB_ITINERARY>(TABLE_ITINERARY, { session_id: sessionId }, {
-        session_title: sessionTitle || itinerary.session_title,
-        destination: destination || undefined,
-        destination_raw: destinationRaw?.length ? JSON.stringify(destinationRaw) : undefined,
-        country: country || undefined,
-        number_of_pax: numberOfPax || 1,
-        itinerary_date_raw: itineraryDateRaw?.length ? JSON.stringify(itineraryDateRaw) : undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        unknown_date: unknownDate ? 1 : 0,
-        duration_in_days: durationInDays || 1,
-        challenge: challenge !== undefined ? (challenge || null) : itinerary.challenge,
+      const agendaToFileMap = await db.transaction(async (trx) => {
+        await trx(TABLE_ITINERARY).where({ session_id: sessionId }).update({
+          session_title: sessionTitle || itinerary.session_title,
+          destination: destination || undefined,
+          destination_raw: destinationRaw?.length ? JSON.stringify(destinationRaw) : undefined,
+          country: country || undefined,
+          number_of_pax: numberOfPax || 1,
+          itinerary_date_raw: itineraryDateRaw?.length ? JSON.stringify(itineraryDateRaw) : undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          unknown_date: unknownDate ? 1 : 0,
+          duration_in_days: durationInDays || 1,
+          challenge: challenge !== undefined ? (challenge || null) : itinerary.challenge,
+        });
+
+        // Soft-delete removed agenda items
+        for (const agendaId of _agendaIdsToDelete) {
+          await trx(TABLE_AGENDA_ITEM).where({ id: Number(agendaId) }).update({ record_status: "D" });
+        }
+
+        const map: { agendaId: number; fileUuids: string[] }[] = [];
+
+        for (const item of agendaItems) {
+          if (item.id) {
+            // Update existing — accept both camelCase (frontend store) and snake_case (round-tripped from DB)
+            const cityRaw = normaliseCityRaw(item.cityRaw ?? item.city_raw);
+            const startTime = item.startTime ?? item.start_time;
+            const endTime = item.endTime ?? item.end_time;
+            const unknownTime = item.unknownTime ?? item.unknown_time;
+            const durationInHours = item.durationInHours ?? item.duration_in_hours;
+            await trx(TABLE_AGENDA_ITEM).where({ id: Number(item.id) }).update({
+              category: item.category || undefined,
+              title: item.title,
+              desc: item.desc || undefined,
+              city: item.city || undefined,
+              city_raw: cityRaw?.length ? JSON.stringify(cityRaw) : undefined,
+              start_time: timeToMinutes(startTime),
+              end_time: timeToMinutes(endTime),
+              duration_in_hours: durationInHours || undefined,
+              unknown_time: unknownTime ? 1 : 0,
+              budget: item.budget || undefined,
+              day: item.day || undefined,
+              date: item.date || undefined,
+            });
+            map.push({
+              agendaId: Number(item.id),
+              fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
+            });
+          } else {
+            // Insert new
+            const [newItemId] = await trx(TABLE_AGENDA_ITEM).insert({
+              itinerary_id: itinerary.id!,
+              category: item.category || undefined,
+              title: item.title,
+              desc: item.desc || undefined,
+              city: item.city || undefined,
+              city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
+              start_time: timeToMinutes(item.startTime),
+              end_time: timeToMinutes(item.endTime),
+              duration_in_hours: item.durationInHours || undefined,
+              unknown_time: item.unknownTime ? 1 : 0,
+              budget: item.budget || undefined,
+              day: item.day || undefined,
+              date: item.date || undefined,
+              created_dt: now,
+              record_status: "A",
+            });
+            map.push({
+              agendaId: newItemId,
+              fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
+            });
+          }
+        }
+
+        return map;
       });
 
-      // Soft-delete removed agenda items
-      for (const agendaId of _agendaIdsToDelete) {
-        await db.update<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { id: Number(agendaId) }, { record_status: "D" });
-      }
-
-      const agendaToFileMap: { agendaId: number; fileUuids: string[] }[] = [];
-
-      for (const item of agendaItems) {
-        if (item.id) {
-          // Update existing — save current state regardless of _agendaIdsToUpdate
-          // Accept both camelCase (from frontend store) and snake_case (round-tripped from DB)
-          const cityRaw = normaliseCityRaw(item.cityRaw ?? item.city_raw);
-          const startTime = item.startTime ?? item.start_time;
-          const endTime = item.endTime ?? item.end_time;
-          const unknownTime = item.unknownTime ?? item.unknown_time;
-          const durationInHours = item.durationInHours ?? item.duration_in_hours;
-          await db.update<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { id: Number(item.id) }, {
-            category: item.category || undefined,
-            title: item.title,
-            desc: item.desc || undefined,
-            city: item.city || undefined,
-            city_raw: cityRaw?.length ? JSON.stringify(cityRaw) : undefined,
-            start_time: timeToMinutes(startTime),
-            end_time: timeToMinutes(endTime),
-            duration_in_hours: durationInHours || undefined,
-            unknown_time: unknownTime ? 1 : 0,
-            budget: item.budget || undefined,
-            day: item.day || undefined,
-            date: item.date || undefined,
-          });
-          agendaToFileMap.push({
-            agendaId: Number(item.id),
-            fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
-          });
-        } else {
-          // Insert new
-          const newItem = await db.insert<ITB_AGENDA_ITEM, ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, {
-            itinerary_id: itinerary.id!,
-            category: item.category || undefined,
-            title: item.title,
-            desc: item.desc || undefined,
-            city: item.city || undefined,
-            city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
-            start_time: timeToMinutes(item.startTime),
-            end_time: timeToMinutes(item.endTime),
-            duration_in_hours: item.durationInHours || undefined,
-            unknown_time: item.unknownTime ? 1 : 0,
-            budget: item.budget || undefined,
-            day: item.day || undefined,
-            date: item.date || undefined,
-            created_dt: now,
-            record_status: "A",
-          });
-          agendaToFileMap.push({
-            agendaId: newItem.id!,
-            fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
-          });
-        }
-      }
-
       return response.ok({ shortCode: itinerary.short_code, sessionId, agendaToFileMap });
-    } catch (error: any) {
-      return response.ko(error.message);
+    } catch (error) {
+      return response.ko(toMessage(error));
     }
   });
 
   return router;
+}
+
+/**
+ * Fetches all files for the given agenda items in a single query,
+ * then groups them by agenda_item_id — eliminating the N+1 pattern.
+ */
+async function attachFilesToAgendaItems(
+  db: KnexSqlUtilities,
+  agendaItems: ITB_AGENDA_ITEM[],
+  columns?: readonly string[]
+): Promise<(ITB_AGENDA_ITEM & { files: any[] })[]> {
+  const ids = agendaItems.map((i) => i.id!).filter(Boolean);
+
+  if (!ids.length) return agendaItems.map((item) => ({ ...item, files: [] }));
+
+  const files = await db.find(
+    TABLE_AGENDA_FILE,
+    { record_status: "A" },
+    {
+      extraWhere: (qb) => qb.whereIn("agenda_item_id", ids),
+      ...(columns ? { columns } : {}),
+    }
+  );
+
+  const filesByItemId = files.reduce<Record<number, any[]>>((acc, file: any) => {
+    const key = file.agenda_item_id as number;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(file);
+    return acc;
+  }, {});
+
+  return agendaItems.map((item) => ({ ...item, files: filesByItemId[item.id!] ?? [] }));
 }
 
 function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[]) {
@@ -410,7 +435,7 @@ function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[]) {
       ...item,
       start_time: minutesToTime(item.start_time),
       end_time: minutesToTime(item.end_time),
-      files: item.files?.map(({ record_status: _rs, created_dt: _cd, ...file }: any) => file) ?? [],
+      files: item.files?.map(({ record_status: _rs, created_dt: _cd, agenda_item_id: _aid, ...file }: any) => file) ?? [],
     })),
   };
 }

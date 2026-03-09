@@ -13,11 +13,6 @@ export const MandatoryTokenFilter = (req: RequestWithUserInfo, res: Response, ne
   const jwtSecret = process.env.JWT_SECRET;
 
   try {
-    if (req.headers["x-bypass-token-filter"] === "true") {
-      LoggingUtilities.service.warn("TokenFilter", "Bypassing token filter");
-      return next();
-    }
-
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
       return response.badRequest("Invalid Header - Authorization");
@@ -51,12 +46,6 @@ export const OptionalTokenFilter = (req: RequestWithUserInfo, res: Response, nex
   const jwtSecret = process.env.JWT_SECRET;
 
   try {
-    // Allow bypass via header (optional)
-    if (req.headers["x-bypass-token-filter"] === "true") {
-      LoggingUtilities.service.warn("OptionalTokenFilter", "Bypassing token filter");
-      return next();
-    }
-
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
       // No token provided → proceed as visitor

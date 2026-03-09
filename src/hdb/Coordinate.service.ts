@@ -4,6 +4,7 @@ import { ITB_HDB_PPHS_COORDINATE } from "../models/databases/tb_hdb_pphs_coordin
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { CoordinateUtilities } from "../utils/CoordinateUtilities";
+import { toMessage } from "../utils/errorUtils";
 
 type CoordinateSource = "database" | "google" | "error" | "unparseable";
 
@@ -147,10 +148,10 @@ export class CoordinateService {
       }
 
       return await response.text();
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "CoordinateService.fetchGoogleMapsHtml",
-        `Fetch failed for ${address}: ${error.message}`
+        `Fetch failed for ${address}: ${toMessage(error)}`
       );
       return null;
     }
@@ -242,10 +243,10 @@ export class CoordinateService {
       });
 
       LoggingUtilities.service.info("CoordinateService.storeCoordinates", `Stored coordinates for ${address}`);
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "CoordinateService.storeCoordinates",
-        `DB insert failed for ${address}: ${error.message}`
+        `DB insert failed for ${address}: ${toMessage(error)}`
       );
     }
   }
@@ -267,10 +268,10 @@ export class CoordinateService {
 
       LoggingUtilities.service.info("CoordinateService.updateCoordinates", `Updated coordinates for ${address}`);
       return true;
-    } catch (error: any) {
+    } catch (error) {
       LoggingUtilities.service.error(
         "CoordinateService.updateCoordinates",
-        `DB update failed for ${address}: ${error.message}`
+        `DB update failed for ${address}: ${toMessage(error)}`
       );
       return false;
     }
