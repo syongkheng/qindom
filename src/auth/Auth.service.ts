@@ -65,7 +65,13 @@ export class AuthService {
     // Reject if email already registered in this system
     const existing = await this.db.find<ITB_AA_USER>("tb_aa_user", { email, system, record_status: "A" }, { limit: 1 });
     if (existing.length > 0) {
-      throw new Exceptions.RegistrationException();
+      throw new Exceptions.EmailAlreadyRegistered();
+    }
+
+    // Reject if username already taken in this system
+    const existingUsername = await this.db.find<ITB_AA_USER>("tb_aa_user", { username_system: `${username}_${system}`, record_status: "A" }, { limit: 1 });
+    if (existingUsername.length > 0) {
+      throw new Exceptions.UsernameAlreadyTaken();
     }
 
     const saltRounds = 10;
@@ -143,12 +149,12 @@ export class AuthService {
     // Brute-force guard
     if ((user.verify_attempts ?? 0) >= MAX_VERIFY_ATTEMPTS) {
       LoggingUtilities.service.warn("AuthService.verifyEmail", `Max attempts exceeded for ${email}`);
-      throw new Exceptions.InvalidLoginCredentials();
+      throw new Exceptions.MaxVerifyAttempts();
     }
 
     // Expiry check
     if (!user.verify_code_expires_at || Date.now() > user.verify_code_expires_at) {
-      throw new Exceptions.InvalidLoginCredentials();
+      throw new Exceptions.VerifyCodeExpired();
     }
 
     const incoming = hashCode(code);
