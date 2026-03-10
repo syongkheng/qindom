@@ -4,13 +4,39 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import crypto from "crypto";
 import { ITB_ITINERARY } from "../models/databases/tb_itinerary";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
+import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { toMessage } from "../utils/errorUtils";
+import { LoggingUtilities } from "../utils/LoggingUtilities";
+
+const TABLE_ITINERARY_VIEW = "tb_travel_itinerary_view";
 
 const TABLE_ITINERARY = "tb_travel_itinerary";
 const TABLE_AGENDA_ITEM = "tb_travel_agenda_item";
 const TABLE_AGENDA_FILE = "tb_travel_agenda_file";
+
+function extractIp(req: Request): string {
+  const raw = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
+async function recordView(db: KnexSqlUtilities, shortCode: string, req: Request): Promise<void> {
+  try {
+    await db.insert<ITB_TRAVEL_ITINERARY_VIEW>(TABLE_ITINERARY_VIEW, {
+      short_code: shortCode,
+      ip_address: extractIp(req),
+      user_agent: (req.headers["user-agent"] || "Unknown").slice(0, 512),
+      viewed_at: Date.now(),
+    });
+  } catch (err) {
+    LoggingUtilities.service.warn("ItineraryController.recordView", `Failed to record view for ${shortCode}: ${toMessage(err)}`);
+  }
+}
+
+async function getViewCount(db: KnexSqlUtilities, shortCode: string): Promise<number> {
+  return db.count(TABLE_ITINERARY_VIEW, { short_code: shortCode });
+}
 
 function generateSessionId(): string {
   return crypto.randomUUID();
@@ -113,10 +139,13 @@ export default function createItineraryController(db: KnexSqlUtilities) {
       if (itinerary.challenge !== challenge) return response.badRequest("Incorrect access code");
 
       const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
-
       const itemsWithFiles = await attachFilesToAgendaItems(db, agendaItems);
 
-      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles));
+      // Record view and fetch count
+      recordView(db, itinerary.short_code, req);
+      const viewCount = await getViewCount(db, itinerary.short_code);
+
+      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles, viewCount));
     } catch (error) {
       return response.ko(toMessage(error));
     }
@@ -238,10 +267,13 @@ export default function createItineraryController(db: KnexSqlUtilities) {
       }
 
       const agendaItems = await db.find<ITB_AGENDA_ITEM>(TABLE_AGENDA_ITEM, { itinerary_id: itinerary.id!, record_status: "A" }, { orderBy: "id", orderDirection: "asc" }) as ITB_AGENDA_ITEM[];
-
       const itemsWithFiles = await attachFilesToAgendaItems(db, agendaItems);
 
-      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles));
+      // Record view and fetch count (fire-and-forget the insert, await the count)
+      recordView(db, shortCode, req);
+      const viewCount = await getViewCount(db, shortCode);
+
+      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles, viewCount));
     } catch (error) {
       return response.ko(toMessage(error));
     }
@@ -415,7 +447,7 @@ async function attachFilesToAgendaItems(
   return agendaItems.map((item) => ({ ...item, files: filesByItemId[item.id!] ?? [] }));
 }
 
-function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[]) {
+function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[], viewCount?: number) {
   return {
     id: itinerary.id,
     sessionId: itinerary.session_id,
@@ -431,6 +463,7 @@ function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[]) {
     unknownDate: !!itinerary.unknown_date,
     durationInDays: itinerary.duration_in_days,
     challenge: itinerary.challenge,
+    ...(viewCount !== undefined ? { viewCount } : {}),
     agendaItems: agendaItems.map(({ record_status, created_dt, ...item }: any) => ({
       ...item,
       start_time: minutesToTime(item.start_time),

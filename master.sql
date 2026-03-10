@@ -310,3 +310,12 @@ VALUES
   ('travel',           'Travel Module',                 1, 'Controls visibility of the Travel module on the workbench',   UNIX_TIMESTAMP() * 1000, 'system', 'A'),
   ('flat_analysis',    'Flat Analysis Module',          1, 'Controls visibility of the Flat Analysis module',             UNIX_TIMESTAMP() * 1000, 'system', 'A')
 ON DUPLICATE KEY UPDATE label = VALUES(label);
+
+  CREATE TABLE IF NOT EXISTS tb_travel_itinerary_view (
+    id         BIGINT       AUTO_INCREMENT PRIMARY KEY,
+    short_code VARCHAR(16)  NOT NULL,
+    ip_address VARCHAR(64),
+    user_agent TEXT,
+    viewed_at  BIGINT       NOT NULL,
+    INDEX idx_itinerary_view_short_code (short_code)
+  );

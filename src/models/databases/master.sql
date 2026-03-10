@@ -270,6 +270,15 @@ CREATE TABLE IF NOT EXISTS wuxi.tb_travel_agenda_file (
     ADD COLUMN category VARCHAR(32) NULL AFTER itinerary_id;
     
     ALTER TABLE tb_travel_itinerary ADD COLUMN challenge VARCHAR(6) NULL;
+
+CREATE TABLE IF NOT EXISTS tb_travel_itinerary_view (
+  id         BIGINT       AUTO_INCREMENT PRIMARY KEY,
+  short_code VARCHAR(16)  NOT NULL,
+  ip_address VARCHAR(64),
+  user_agent TEXT,
+  viewed_at  BIGINT       NOT NULL,
+  INDEX idx_itinerary_view_short_code (short_code)
+);
     
 ALTER TABLE tb_aa_user CHANGE COLUMN role roles VARCHAR(1000) NOT NULL DEFAULT '[]';
 
