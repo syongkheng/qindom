@@ -68,6 +68,15 @@ export const apptLimiter = rateLimit({
   message: rateLimitResponse("Too many appointment submissions. Please try again in an hour."),
 });
 
+/** GET /api/douyin/live */
+export const douyinLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,       // 1 minute
+  limit: 15,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many Douyin requests. Please slow down."),
+});
+
 /** GET /api/feature */
 export const featureLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,       // 1 minute

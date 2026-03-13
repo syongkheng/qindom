@@ -23,7 +23,9 @@ import createFndController from "./fnd/Fnd.controller";
 import createItineraryController from "./itinerary/Itinerary.controller";
 import createFileController from "./file/File.controller";
 import createFeatureController from "./feature/Feature.controller";
-import { globalLimiter, featureLimiter } from "./middlewares/RateLimiter";
+import createDouyinController from "./douyin/Douyin.controller";
+import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
+import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
 async function startServer() {
   const app: Application = express();
@@ -69,6 +71,7 @@ async function startServer() {
   app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
   app.use("/api/file", [RestRequestLogger, RequestHeaderFilter], createFileController(db));
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
+  app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
 
   // Start server
   app.listen(port, () => {
