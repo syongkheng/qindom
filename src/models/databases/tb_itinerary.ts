@@ -14,6 +14,7 @@ export interface ITB_ITINERARY {
   unknown_date?: number; // tinyint 0/1
   duration_in_days?: number;
   challenge?: string;
+  pax_names?: string;
   created_dt: number;
   created_by: string;
   record_status: string;

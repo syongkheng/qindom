@@ -296,3 +296,30 @@ ALTER TABLE tb_aa_user
 
 -- Mark existing users as verified so they are not locked out
 UPDATE tb_aa_user SET email_verified = 1 WHERE email_verified = 0;
+
+-- ── Trip Bookings ──────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS wuxi.tb_travel_itinerary_booking (
+  id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+  itinerary_id      BIGINT        NOT NULL,
+  category          VARCHAR(32),
+  item              VARCHAR(512)  NOT NULL,
+  location          VARCHAR(128),
+  link              VARCHAR(1024),
+  payment           VARCHAR(256),
+  start_date        VARCHAR(32),
+  end_date          VARCHAR(32),
+  nights            INT,
+  price             DECIMAL(12,2),
+  booked            TINYINT(1)    DEFAULT 0,
+  free_cancellation VARCHAR(256),
+  breakfast         TINYINT(1)    DEFAULT 0,
+  deposit           VARCHAR(128),
+  pax_breakdown     LONGTEXT,
+  sort_order        INT           DEFAULT 0,
+  created_dt        BIGINT        NOT NULL,
+  record_status     VARCHAR(1)    NOT NULL DEFAULT 'A',
+  INDEX idx_booking_itinerary_id (itinerary_id)
+);
+
+ALTER TABLE wuxi.tb_travel_itinerary ADD COLUMN pax_names LONGTEXT NULL;

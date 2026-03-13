@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { ITB_ITINERARY } from "../models/databases/tb_itinerary";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
 import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view";
+import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { toMessage } from "../utils/errorUtils";
@@ -15,6 +16,7 @@ const TABLE_ITINERARY_VIEW = "tb_travel_itinerary_view";
 const TABLE_ITINERARY = "tb_travel_itinerary";
 const TABLE_AGENDA_ITEM = "tb_travel_agenda_item";
 const TABLE_AGENDA_FILE = "tb_travel_agenda_file";
+const TABLE_BOOKING = "tb_travel_itinerary_booking";
 
 function extractIp(req: Request): string {
   const raw = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
@@ -143,9 +145,12 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       // Record view and fetch count
       recordView(db, itinerary.short_code, req);
-      const viewCount = await getViewCount(db, itinerary.short_code);
+      const [viewCount, bookings] = await Promise.all([
+        getViewCount(db, itinerary.short_code),
+        fetchBookingsForItinerary(db, itinerary.id!),
+      ]);
 
-      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles, viewCount));
+      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings));
     } catch (error) {
       return response.ko(toMessage(error));
     }
@@ -175,6 +180,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
         durationInDays,
         challenge,
         agendaItems = [],
+        paxNames = [],
+        bookings = [],
       } = req.body;
 
       if (!sessionTitle) return response.badRequest("sessionTitle is required");
@@ -212,6 +219,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
           unknown_date: unknownDate ? 1 : 0,
           duration_in_days: durationInDays || 1,
           challenge: challenge || undefined,
+          pax_names: paxNames?.length ? JSON.stringify(paxNames) : undefined,
           created_dt: now,
           created_by: req.user!.username,
           record_status: "A",
@@ -244,6 +252,30 @@ export default function createItineraryController(db: KnexSqlUtilities) {
           });
         }
 
+        // Insert bookings
+        for (const b of bookings) {
+          await trx(TABLE_BOOKING).insert({
+            itinerary_id: itineraryId,
+            category: b.category || undefined,
+            item: b.item,
+            location: b.location || undefined,
+            link: b.link || undefined,
+            payment: b.payment || undefined,
+            start_date: b.startDate || undefined,
+            end_date: b.endDate || undefined,
+            nights: b.nights != null ? b.nights : undefined,
+            price: b.price != null ? b.price : undefined,
+            booked: b.booked ? 1 : 0,
+            free_cancellation: b.freeCancellation || undefined,
+            breakfast: b.breakfast ? 1 : 0,
+            deposit: b.deposit || undefined,
+            pax_breakdown: b.paxBreakdown ? JSON.stringify(b.paxBreakdown) : undefined,
+            sort_order: b.sortOrder ?? 0,
+            created_dt: now,
+            record_status: "A",
+          });
+        }
+
         return map;
       });
 
@@ -271,9 +303,12 @@ export default function createItineraryController(db: KnexSqlUtilities) {
 
       // Record view and fetch count (fire-and-forget the insert, await the count)
       recordView(db, shortCode, req);
-      const viewCount = await getViewCount(db, shortCode);
+      const [viewCount, bookings] = await Promise.all([
+        getViewCount(db, shortCode),
+        fetchBookingsForItinerary(db, itinerary.id!),
+      ]);
 
-      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles, viewCount));
+      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings));
     } catch (error) {
       return response.ko(toMessage(error));
     }
@@ -294,7 +329,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
         "id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "created_dt",
       ]);
 
-      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles));
+      const bookings = await fetchBookingsForItinerary(db, itinerary.id!);
+      return response.ok(buildItineraryResponse(itinerary, itemsWithFiles, undefined, bookings));
     } catch (error) {
       return response.ko(toMessage(error));
     }
@@ -320,6 +356,9 @@ export default function createItineraryController(db: KnexSqlUtilities) {
         agendaItems = [],
         _agendaIdsToDelete = [],
         _agendaIdsToUpdate = [],
+        paxNames,
+        bookings = [],
+        _bookingIdsToDelete = [],
       } = req.body;
 
       const itinerary = await db.findOne<ITB_ITINERARY>(TABLE_ITINERARY, { session_id: sessionId, record_status: "A" }) as ITB_ITINERARY | undefined;
@@ -342,6 +381,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
           unknown_date: unknownDate ? 1 : 0,
           duration_in_days: durationInDays || 1,
           challenge: challenge !== undefined ? (challenge || null) : itinerary.challenge,
+          pax_names: paxNames !== undefined ? (paxNames?.length ? JSON.stringify(paxNames) : null) : undefined,
         });
 
         // Soft-delete removed agenda items
@@ -403,6 +443,55 @@ export default function createItineraryController(db: KnexSqlUtilities) {
           }
         }
 
+        // Soft-delete removed bookings
+        for (const bookingId of _bookingIdsToDelete) {
+          await trx(TABLE_BOOKING).where({ id: Number(bookingId) }).update({ record_status: "D" });
+        }
+
+        // Upsert bookings
+        for (const b of bookings) {
+          if (b.id) {
+            await trx(TABLE_BOOKING).where({ id: Number(b.id) }).update({
+              category: b.category || undefined,
+              item: b.item,
+              location: b.location || undefined,
+              link: b.link || undefined,
+              payment: b.payment || undefined,
+              start_date: b.startDate || undefined,
+              end_date: b.endDate || undefined,
+              nights: b.nights != null ? b.nights : undefined,
+              price: b.price != null ? b.price : undefined,
+              booked: b.booked ? 1 : 0,
+              free_cancellation: b.freeCancellation || undefined,
+              breakfast: b.breakfast ? 1 : 0,
+              deposit: b.deposit || undefined,
+              pax_breakdown: b.paxBreakdown ? JSON.stringify(b.paxBreakdown) : undefined,
+              sort_order: b.sortOrder ?? 0,
+            });
+          } else {
+            await trx(TABLE_BOOKING).insert({
+              itinerary_id: itinerary.id!,
+              category: b.category || undefined,
+              item: b.item,
+              location: b.location || undefined,
+              link: b.link || undefined,
+              payment: b.payment || undefined,
+              start_date: b.startDate || undefined,
+              end_date: b.endDate || undefined,
+              nights: b.nights != null ? b.nights : undefined,
+              price: b.price != null ? b.price : undefined,
+              booked: b.booked ? 1 : 0,
+              free_cancellation: b.freeCancellation || undefined,
+              breakfast: b.breakfast ? 1 : 0,
+              deposit: b.deposit || undefined,
+              pax_breakdown: b.paxBreakdown ? JSON.stringify(b.paxBreakdown) : undefined,
+              sort_order: b.sortOrder ?? 0,
+              created_dt: now,
+              record_status: "A",
+            });
+          }
+        }
+
         return map;
       });
 
@@ -447,7 +536,35 @@ async function attachFilesToAgendaItems(
   return agendaItems.map((item) => ({ ...item, files: filesByItemId[item.id!] ?? [] }));
 }
 
-function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[], viewCount?: number) {
+async function fetchBookingsForItinerary(db: KnexSqlUtilities, itineraryId: number): Promise<any[]> {
+  const rows = await db.find<ITB_TRAVEL_ITINERARY_BOOKING>(
+    TABLE_BOOKING,
+    { itinerary_id: itineraryId, record_status: "A" },
+    { orderBy: "sort_order", orderDirection: "asc" }
+  ) as ITB_TRAVEL_ITINERARY_BOOKING[];
+
+  return rows.map((b) => ({
+    id: b.id,
+    itineraryId: b.itinerary_id,
+    category: b.category,
+    item: b.item,
+    location: b.location,
+    link: b.link,
+    payment: b.payment,
+    startDate: b.start_date,
+    endDate: b.end_date,
+    nights: b.nights,
+    price: b.price != null ? Number(b.price) : undefined,
+    booked: !!b.booked,
+    freeCancellation: b.free_cancellation,
+    breakfast: !!b.breakfast,
+    deposit: b.deposit,
+    paxBreakdown: b.pax_breakdown ? JSON.parse(b.pax_breakdown) : undefined,
+    sortOrder: b.sort_order,
+  }));
+}
+
+function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[], viewCount?: number, bookings: any[] = []) {
   return {
     id: itinerary.id,
     sessionId: itinerary.session_id,
@@ -463,7 +580,9 @@ function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[], vi
     unknownDate: !!itinerary.unknown_date,
     durationInDays: itinerary.duration_in_days,
     challenge: itinerary.challenge,
+    paxNames: itinerary.pax_names ? JSON.parse(itinerary.pax_names) : [],
     ...(viewCount !== undefined ? { viewCount } : {}),
+    bookings,
     agendaItems: agendaItems.map(({ record_status, created_dt, ...item }: any) => ({
       ...item,
       start_time: minutesToTime(item.start_time),
