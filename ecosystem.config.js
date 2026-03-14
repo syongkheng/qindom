@@ -15,6 +15,9 @@ module.exports = {
       out_file: "/home/ubuntu/.pm2/logs/qindom.out.log",
       error_file: "/home/ubuntu/.pm2/logs/qindom.err.log",
       log_date_format: "YYYY-MM-DD HH:mm:ss",
+      max_size: "50M",
+      rotate_interval: "1d",
+      retain: 7,
 
       // Default (fallback)
       env: {

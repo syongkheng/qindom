@@ -111,5 +111,5 @@ export async function startDiscordBot(): Promise<void> {
     }
   });
 
-  client.login(BOT_TOKEN);
+  await client.login(BOT_TOKEN);
 }

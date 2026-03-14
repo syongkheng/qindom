@@ -24,6 +24,7 @@ import createItineraryController from "./itinerary/Itinerary.controller";
 import createFileController from "./file/File.controller";
 import createFeatureController from "./feature/Feature.controller";
 import createDouyinController from "./douyin/Douyin.controller";
+import createMealController from "./meal/Meal.controller";
 import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
@@ -72,6 +73,7 @@ async function startServer() {
   app.use("/api/file", [RestRequestLogger, RequestHeaderFilter], createFileController(db));
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
   app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
+  app.use("/api/meal", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createMealController(db));
 
   // Start server
   app.listen(port, () => {
@@ -86,4 +88,4 @@ startServer();
 // Start Discord Bot
 import { startDiscordBot } from "./fnd/discord/Fnd.bot";
 import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter";
-startDiscordBot();
+startDiscordBot().catch((err) => LoggingUtilities.service.error("Discord", err?.message ?? String(err)));

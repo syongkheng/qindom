@@ -323,3 +323,34 @@ CREATE TABLE IF NOT EXISTS wuxi.tb_travel_itinerary_booking (
 );
 
 ALTER TABLE wuxi.tb_travel_itinerary ADD COLUMN pax_names LONGTEXT NULL;
+
+-- ── Meal Prep ──────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS `tb_meal_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `log_date` varchar(10) NOT NULL,
+  `meal_type` varchar(16) NOT NULL,
+  `planned_name` varchar(256) NOT NULL,
+  `notes` text,
+  `created_by` varchar(128) NOT NULL,
+  `created_dt` bigint NOT NULL,
+  `record_status` varchar(1) NOT NULL DEFAULT 'A',
+  PRIMARY KEY (`id`),
+  KEY `idx_meal_log_created_by` (`created_by`),
+  KEY `idx_meal_log_date` (`log_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `tb_meal_photo` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `uuid` varchar(64) NOT NULL,
+  `meal_log_id` bigint NOT NULL,
+  `name` varchar(256),
+  `mime_type` varchar(128),
+  `size_in_bytes` bigint,
+  `blob` longblob,
+  `created_dt` bigint NOT NULL,
+  `record_status` varchar(1) NOT NULL DEFAULT 'A',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_meal_photo_uuid` (`uuid`),
+  KEY `idx_meal_photo_log_id` (`meal_log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

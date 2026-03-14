@@ -311,11 +311,60 @@ VALUES
   ('flat_analysis',    'Flat Analysis Module',          1, 'Controls visibility of the Flat Analysis module',             UNIX_TIMESTAMP() * 1000, 'system', 'A')
 ON DUPLICATE KEY UPDATE label = VALUES(label);
 
-  CREATE TABLE IF NOT EXISTS tb_travel_itinerary_view (
-    id         BIGINT       AUTO_INCREMENT PRIMARY KEY,
-    short_code VARCHAR(16)  NOT NULL,
-    ip_address VARCHAR(64),
-    user_agent TEXT,
-    viewed_at  BIGINT       NOT NULL,
-    INDEX idx_itinerary_view_short_code (short_code)
-  );
+-- ── Trip Bookings ──────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS wuxi.tb_travel_itinerary_booking (
+  id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+  itinerary_id      BIGINT        NOT NULL,
+  category          VARCHAR(32),
+  item              VARCHAR(512)  NOT NULL,
+  location          VARCHAR(128),
+  link              VARCHAR(1024),
+  payment           VARCHAR(256),
+  start_date        VARCHAR(32),
+  end_date          VARCHAR(32),
+  nights            INT,
+  price             DECIMAL(12,2),
+  booked            TINYINT(1)    DEFAULT 0,
+  free_cancellation VARCHAR(256),
+  breakfast         TINYINT(1)    DEFAULT 0,
+  deposit           VARCHAR(128),
+  pax_breakdown     LONGTEXT,
+  sort_order        INT           DEFAULT 0,
+  created_dt        BIGINT        NOT NULL,
+  record_status     VARCHAR(1)    NOT NULL DEFAULT 'A',
+  INDEX idx_booking_itinerary_id (itinerary_id)
+);
+
+ALTER TABLE wuxi.tb_travel_itinerary ADD COLUMN pax_names LONGTEXT NULL;
+
+-- ── Meal Prep ──────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS `tb_meal_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `log_date` varchar(10) NOT NULL,
+  `meal_type` varchar(16) NOT NULL,
+  `planned_name` varchar(256) NOT NULL,
+  `notes` text,
+  `created_by` varchar(128) NOT NULL,
+  `created_dt` bigint NOT NULL,
+  `record_status` varchar(1) NOT NULL DEFAULT 'A',
+  PRIMARY KEY (`id`),
+  KEY `idx_meal_log_created_by` (`created_by`),
+  KEY `idx_meal_log_date` (`log_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `tb_meal_photo` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `uuid` varchar(64) NOT NULL,
+  `meal_log_id` bigint NOT NULL,
+  `name` varchar(256),
+  `mime_type` varchar(128),
+  `size_in_bytes` bigint,
+  `blob` longblob,
+  `created_dt` bigint NOT NULL,
+  `record_status` varchar(1) NOT NULL DEFAULT 'A',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_meal_photo_uuid` (`uuid`),
+  KEY `idx_meal_photo_log_id` (`meal_log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
