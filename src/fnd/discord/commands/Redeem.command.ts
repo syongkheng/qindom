@@ -5,7 +5,7 @@ import { signPayload } from "./Register.command";
 import { LoggingUtilities } from "../../../utils/LoggingUtilities";
 import { toMessage } from "../../../utils/errorUtils";
 
-const ALLOWED_REDEEMER_IDS = ["340529865952460800"];
+const ALLOWED_REDEEMER_IDS = ["340529865952460800", "383607274624778241"];
 const EMBED_BATCH_SIZE = 10;
 const MIN_DELAY_MS = 800;
 const MAX_DELAY_MS = 1200;
@@ -148,7 +148,7 @@ async function sendSummaryEmbed(
 
 export const redeemCommand = {
   name: "redeem",
-  description: "Redeem a gift code for all registered governors only for Awense.",
+  description: "Redeem a gift code for all registered governors only for Awense/Ipuda.",
 
   execute: async (message: Message, args: string[]): Promise<void> => {
     if (!message.channel.isTextBased() || message.channel.type !== ChannelType.GuildText) return;
