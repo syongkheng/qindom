@@ -25,6 +25,7 @@ import createFileController from "./file/File.controller";
 import createFeatureController from "./feature/Feature.controller";
 import createDouyinController from "./douyin/Douyin.controller";
 import createMealController from "./meal/Meal.controller";
+import createGeocodeController from "./geocode/Geocode.controller";
 import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
@@ -75,6 +76,7 @@ async function startServer() {
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
   app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
   app.use("/api/meal", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createMealController(db));
+  app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
 
   // Start server
   app.listen(port, () => {

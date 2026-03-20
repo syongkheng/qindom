@@ -354,3 +354,12 @@ CREATE TABLE IF NOT EXISTS `tb_meal_photo` (
   UNIQUE KEY `uq_meal_photo_uuid` (`uuid`),
   KEY `idx_meal_photo_log_id` (`meal_log_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Geocode Cache ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS wuxi.tb_geocode_cache (
+  id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+  query        VARCHAR(512) NOT NULL,
+  results_json LONGTEXT     NOT NULL,
+  created_dt   BIGINT       NOT NULL,
+  INDEX idx_geocode_query (query(255))
+);
