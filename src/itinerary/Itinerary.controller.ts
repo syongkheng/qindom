@@ -235,6 +235,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
             desc: item.desc || undefined,
             city: item.city || undefined,
             city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
+            coordinates_lat: item.coordinates?.lat ?? undefined,
+            coordinates_lng: item.coordinates?.lng ?? undefined,
             start_time: timeToMinutes(item.startTime),
             end_time: timeToMinutes(item.endTime),
             duration_in_hours: item.durationInHours || undefined,
@@ -405,6 +407,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
               desc: item.desc || undefined,
               city: item.city || undefined,
               city_raw: cityRaw?.length ? JSON.stringify(cityRaw) : undefined,
+              coordinates_lat: item.coordinates?.lat ?? undefined,
+              coordinates_lng: item.coordinates?.lng ?? undefined,
               start_time: timeToMinutes(startTime),
               end_time: timeToMinutes(endTime),
               duration_in_hours: durationInHours || undefined,
@@ -426,6 +430,8 @@ export default function createItineraryController(db: KnexSqlUtilities) {
               desc: item.desc || undefined,
               city: item.city || undefined,
               city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
+              coordinates_lat: item.coordinates?.lat ?? undefined,
+              coordinates_lng: item.coordinates?.lng ?? undefined,
               start_time: timeToMinutes(item.startTime),
               end_time: timeToMinutes(item.endTime),
               duration_in_hours: item.durationInHours || undefined,
@@ -583,10 +589,13 @@ function buildItineraryResponse(itinerary: ITB_ITINERARY, agendaItems: any[], vi
     paxNames: itinerary.pax_names ? JSON.parse(itinerary.pax_names) : [],
     ...(viewCount !== undefined ? { viewCount } : {}),
     bookings,
-    agendaItems: agendaItems.map(({ record_status, created_dt, ...item }: any) => ({
+    agendaItems: agendaItems.map(({ record_status, created_dt, coordinates_lat, coordinates_lng, ...item }: any) => ({
       ...item,
       start_time: minutesToTime(item.start_time),
       end_time: minutesToTime(item.end_time),
+      coordinates: coordinates_lat != null && coordinates_lng != null
+        ? { lat: Number(coordinates_lat), lng: Number(coordinates_lng) }
+        : undefined,
       files: item.files?.map(({ record_status: _rs, created_dt: _cd, agenda_item_id: _aid, ...file }: any) => file) ?? [],
     })),
   };

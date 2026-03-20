@@ -355,6 +355,11 @@ CREATE TABLE IF NOT EXISTS `tb_meal_photo` (
   KEY `idx_meal_photo_log_id` (`meal_log_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Agenda Item Coordinates ────────────────────────────────────────────────────
+ALTER TABLE wuxi.tb_travel_agenda_item
+  ADD COLUMN coordinates_lat DECIMAL(11,8) NULL,
+  ADD COLUMN coordinates_lng DECIMAL(11,8) NULL;
+
 -- ── Geocode Cache ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS wuxi.tb_geocode_cache (
   id           BIGINT PRIMARY KEY AUTO_INCREMENT,

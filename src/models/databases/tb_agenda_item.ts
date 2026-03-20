@@ -13,6 +13,8 @@ export interface ITB_AGENDA_ITEM {
   budget?: number;
   day?: number;
   date?: string;
+  coordinates_lat?: number;
+  coordinates_lng?: number;
   created_dt: number;
   record_status: string;
 }
