@@ -56,6 +56,7 @@ async function startServer() {
   app.use(globalLimiter);
   app.use(express.json({ limit: "5mb" }));
   app.use(express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 }));
+  app.disable('x-powered-by');
 
   // Initialize database
   const db = await initializeDatabase();
