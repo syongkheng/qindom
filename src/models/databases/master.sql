@@ -368,3 +368,50 @@ CREATE TABLE IF NOT EXISTS wuxi.tb_geocode_cache (
   created_dt   BIGINT       NOT NULL,
   INDEX idx_geocode_query (query(255))
 );
+
+  ALTER TABLE wuxi.tb_travel_agenda_item
+    ADD COLUMN coordinates_lat DECIMAL(11,8) NULL,
+    ADD COLUMN coordinates_lng DECIMAL(11,8) NULL;
+    
+    
+    
+-- ── Expense Tracker ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS `tb_expense_transaction` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `type` varchar(16) NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  `description` varchar(256) NOT NULL,
+  `category` varchar(64) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `notes` text,
+  `card_id` bigint DEFAULT NULL,
+  `created_by` varchar(128) NOT NULL,
+  `created_dt` bigint NOT NULL,
+  `record_status` varchar(1) NOT NULL DEFAULT 'A',
+  PRIMARY KEY (`id`),
+  KEY `idx_exp_tx_user` (`created_by`),
+  KEY `idx_exp_tx_date` (`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `tb_expense_card` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(128) NOT NULL,
+  `cycle_end_day` int NOT NULL,
+  `due_day` int NOT NULL,
+  `color` varchar(16) NOT NULL,
+  `created_by` varchar(128) NOT NULL,
+  `created_dt` bigint NOT NULL,
+  `record_status` varchar(1) NOT NULL DEFAULT 'A',
+  PRIMARY KEY (`id`),
+  KEY `idx_exp_card_user` (`created_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `tb_expense_balance` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `balance` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `created_by` varchar(128) NOT NULL,
+  `updated_dt` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_exp_balance_user` (`created_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
