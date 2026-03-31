@@ -1,69 +1,34 @@
-// src/controllers/Lta.controller.ts
 import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LtaService } from "./Lta.service";
-import { toMessage } from "../utils/errorUtils";
+import { Exceptions } from "../exceptions/AppExceptions";
+import { handleException } from "../utils/requestUtils";
 
 export default function createLtaController(db: KnexSqlUtilities) {
   const router = Router();
-  const ltaService = new LtaService(db);
+  const svc = new LtaService(db);
 
-  /**
-   * Gets bus arrival timings for a specific bus stop code.
-   * @route GET /lta/timing?busStopCode={busStopCode}
-   * @param {string} busStopCode.query.required - The bus stop code to retrieve timings for
-   * @returns {ControllerResponse} 200 - An array of bus arrival timingso
-   * @returns {ControllerResponse} 400 - Bad request, missing or invalid parameters
-   * @returns {ControllerResponse} 500 - Internal server error
-   */
   router.get("/timing", async (req: Request, res: Response) => {
-    const response = new ControllerResponse(res);
-
+    const cr = new ControllerResponse(res);
     try {
       const { busStopCode } = req.query;
-
-      if (!busStopCode) {
-        return response.ko("[busStopCode] is required");
-      }
-
-      const result = await ltaService.statistics(busStopCode as string);
-      return response.ok(result);
-    } catch (error) {
-      return response.ko(toMessage(error));
+      if (!busStopCode) throw new Exceptions.InvalidRequest("busStopCode");
+      return cr.ok(await svc.statistics(busStopCode as string));
+    } catch (err) {
+      return handleException(err, cr, "LtaController.GET /timing", "Failed to fetch bus timings");
     }
   });
 
   router.post("/bus/services", async (req: Request, res: Response) => {
-    const response = new ControllerResponse(res);
+    const cr = new ControllerResponse(res);
     try {
       const { busStopCode } = req.body as { busStopCode: string };
-      return response.ok(
-        await ltaService.retrieveBusServicesByBusStopCode(busStopCode)
-      );
-    } catch (error) {
-      return response.ko(toMessage(error));
+      return cr.ok(await svc.retrieveBusServicesByBusStopCode(busStopCode));
+    } catch (err) {
+      return handleException(err, cr, "LtaController.POST /bus/services", "Failed to fetch bus services");
     }
   });
-
-  // router.get("/busstops", async (req: Request, res: Response) => {
-  //   const response = new ControllerResponse(res);
-
-  //   try {
-  //     return response.ok(await ltaService._retrieveAllBusstops());
-  //   } catch (error) {
-  //     return response.ko(error.message);
-  //   }
-  // });
-
-  // router.get("/bus-routes", async (req: Request, res: Response) => {
-  //   const response = new ControllerResponse(res);
-  //   try {
-  //     return response.ok(await ltaService._retrieveAllBusInformation());
-  //   } catch (error) {
-  //     return response.ko(error.message);
-  //   }
-  // });
 
   return router;
 }

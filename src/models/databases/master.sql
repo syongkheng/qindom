@@ -1,7 +1,7 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- master.sql  —  wuxi database schema
 -- Full reference schema: run on a clean database to recreate all tables.
--- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense
+-- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding
 -- ══════════════════════════════════════════════════════════════════════════════
 
 USE wuxi;
@@ -396,3 +396,119 @@ VALUES
   ('travel',           'Travel Module',                1, 'Controls visibility of the Travel module on the workbench', UNIX_TIMESTAMP() * 1000, 'system', 'A'),
   ('flat_analysis',    'Flat Analysis Module',         1, 'Controls visibility of the Flat Analysis module',           UNIX_TIMESTAMP() * 1000, 'system', 'A')
 ON DUPLICATE KEY UPDATE label = VALUES(label);
+
+-- ── Sleep Tracker ─────────────────────────────────────────────────────────────
+-- Nightly sleep logs from Garmin watch or phone app.
+-- All stage/SpO2/HR fields nullable — availability depends on device & night.
+
+DROP TABLE IF EXISTS tb_sleep_log;
+
+CREATE TABLE IF NOT EXISTS tb_sleep_log (
+  id                      BIGINT       PRIMARY KEY AUTO_INCREMENT,
+  date                    VARCHAR(10)  NOT NULL,
+  source                  VARCHAR(16)  NOT NULL DEFAULT 'garmin',
+  bedtime                 VARCHAR(5)   NULL,
+  wake_time               VARCHAR(5)   NULL,
+  total_sleep_min         INT          NULL,
+  deep_min                INT          NULL,
+  light_min               INT          NULL,
+  rem_min                 INT          NULL,
+  awake_min               INT          NULL,
+  deep_pct                TINYINT      NULL,
+  light_pct               TINYINT      NULL,
+  rem_pct                 TINYINT      NULL,
+  resting_hr_bpm          TINYINT      NULL,
+  body_battery_change     TINYINT      NULL,
+  avg_spo2_pct            TINYINT      NULL,
+  lowest_spo2_pct         TINYINT      NULL,
+  avg_respiration_brpm    TINYINT      NULL,
+  lowest_respiration_brpm TINYINT      NULL,
+  notes                   TEXT         NULL,
+  created_by              VARCHAR(128) NOT NULL,
+  created_dt              BIGINT       NOT NULL,
+  record_status           VARCHAR(1)   NOT NULL DEFAULT 'A',
+  UNIQUE KEY uq_sleep_date_user (date, created_by)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Wedding Date Picker ────────────────────────────────────────────────────────
+-- Chinese wedding date planning: sessions shareable via short code, proposed
+-- dates with ceremony type + auspicious notes, guest comments on each date.
+
+DROP TABLE IF EXISTS tb_wedding_date_comment;
+DROP TABLE IF EXISTS tb_wedding_date;
+DROP TABLE IF EXISTS tb_wedding_session;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_session (
+  id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+  short_code    VARCHAR(16)  NOT NULL,
+  title         VARCHAR(255) NOT NULL,
+  created_by    VARCHAR(128) NOT NULL,
+  created_dt    BIGINT       NOT NULL,
+  record_status VARCHAR(1)   NOT NULL DEFAULT 'A',
+  UNIQUE KEY uq_wedding_short_code (short_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_date (
+  id               BIGINT       PRIMARY KEY AUTO_INCREMENT,
+  session_id       BIGINT       NOT NULL,
+  date             VARCHAR(10)  NOT NULL,
+  ceremony_type    VARCHAR(64)  NOT NULL,
+  auspicious_notes TEXT         NULL,
+  status           VARCHAR(16)  NOT NULL DEFAULT 'pending',
+  created_by       VARCHAR(128) NOT NULL,
+  created_dt       BIGINT       NOT NULL,
+  record_status    VARCHAR(1)   NOT NULL DEFAULT 'A',
+  CONSTRAINT fk_wd_session FOREIGN KEY (session_id) REFERENCES tb_wedding_session(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_date_comment (
+  id             BIGINT       PRIMARY KEY AUTO_INCREMENT,
+  date_id        BIGINT       NOT NULL,
+  commenter_name VARCHAR(128) NOT NULL,
+  comment        TEXT         NOT NULL,
+  created_by     VARCHAR(128) NOT NULL,
+  created_dt     BIGINT       NOT NULL,
+  record_status  VARCHAR(1)   NOT NULL DEFAULT 'A',
+  CONSTRAINT fk_wdc_date FOREIGN KEY (date_id) REFERENCES tb_wedding_date(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Wedding Planner — Events, Tables, Guests ──────────────────────────────────
+
+DROP TABLE IF EXISTS tb_wedding_guest;
+DROP TABLE IF EXISTS tb_wedding_table;
+DROP TABLE IF EXISTS tb_wedding_event;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_event (
+  id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+  title         VARCHAR(255) NOT NULL,
+  date          VARCHAR(10)  NOT NULL,
+  category      VARCHAR(32)  NOT NULL DEFAULT 'other',
+  status        VARCHAR(16)  NOT NULL DEFAULT 'pending',
+  notes         TEXT         NULL,
+  created_by    VARCHAR(128) NOT NULL,
+  created_dt    BIGINT       NOT NULL,
+  record_status VARCHAR(1)   NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_table (
+  id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+  name          VARCHAR(128) NOT NULL,
+  capacity      INT          NOT NULL DEFAULT 8,
+  created_by    VARCHAR(128) NOT NULL,
+  created_dt    BIGINT       NOT NULL,
+  record_status VARCHAR(1)   NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_guest (
+  id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+  name          VARCHAR(128) NOT NULL,
+  guest_group   VARCHAR(16)  NOT NULL DEFAULT 'mutual',
+  rsvp          VARCHAR(16)  NOT NULL DEFAULT 'pending',
+  plus_one      TINYINT(1)   NOT NULL DEFAULT 0,
+  dietary_notes TEXT         NULL,
+  table_id      BIGINT       NULL,
+  seat_number   INT          NULL,
+  created_by    VARCHAR(128) NOT NULL,
+  created_dt    BIGINT       NOT NULL,
+  record_status VARCHAR(1)   NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

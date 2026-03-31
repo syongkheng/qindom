@@ -386,13 +386,4 @@ CREATE TABLE IF NOT EXISTS tb_expense_balance (
 -- Email verification: mark all pre-existing users as verified so they are not locked out.
 -- UPDATE tb_aa_user SET email_verified = 1 WHERE email_verified = 0;
 
--- Feature flags: initial seed rows.
-INSERT INTO tb_aa_feature_flag
-  (feature_key, label, is_enabled, remarks, created_dt, created_by, record_status)
-VALUES
-  ('registration',     'User Registration',            1, 'Controls whether new users can register an account',        UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-  ('kop_registration', 'KoP Appointment Registration', 0, 'Controls whether the KoP booking form accepts submissions',  UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-  ('pphs',             'PPHS Module',                  1, 'Controls visibility of the PPHS module on the workbench',   UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-  ('travel',           'Travel Module',                1, 'Controls visibility of the Travel module on the workbench', UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-  ('flat_analysis',    'Flat Analysis Module',         1, 'Controls visibility of the Flat Analysis module',           UNIX_TIMESTAMP() * 1000, 'system', 'A')
-ON DUPLICATE KEY UPDATE label = VALUES(label);
+

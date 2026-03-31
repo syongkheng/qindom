@@ -13,6 +13,7 @@ import { ParseJsonException } from "./ParseJsonException";
 import { RegistrationException } from "./RegistrationException";
 import { TokenExpiredException } from "./TokenExpiredException";
 import { TokenFormatException } from "./TokenFormatException";
+import { ForbiddenAccessException } from "./ForbiddenAccessException";
 import { UnauthorizedAccessException } from "./UnauthorizedAccessException";
 import { UnknownException } from "./UnknownException";
 import { VerifyCodeExpiredException } from "./VerifyCodeExpiredException";
@@ -27,6 +28,7 @@ export const Exceptions = {
   InvalidLoginCredentials: InvalidLoginCredentialsException,
   InvalidRequest: InvalidRequestException,
   MaxVerifyAttempts: MaxVerifyAttemptsException,
+  ForbiddenAccess: ForbiddenAccessException,
   NotFound: EntityNotFoundException,
   ParseJsonException: ParseJsonException,
   RegistrationException: RegistrationException,

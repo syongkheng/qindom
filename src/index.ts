@@ -27,6 +27,8 @@ import createDouyinController from "./douyin/Douyin.controller";
 import createMealController from "./meal/Meal.controller";
 import createGeocodeController from "./geocode/Geocode.controller";
 import createExpenseController from "./expense/Expense.controller";
+import createWeddingController from "./wedding/Wedding.controller";
+import createSleepController from "./sleep/Sleep.controller";
 import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
@@ -73,12 +75,14 @@ async function startServer() {
   app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
   app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
   app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
-  app.use("/api/file", [RestRequestLogger, RequestHeaderFilter], createFileController(db));
+  app.use("/api/file", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createFileController(db));
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
   app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
   app.use("/api/meal", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createMealController(db));
   app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
   app.use("/api/expense", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createExpenseController(db));
+  app.use("/api/wedding", [RestRequestLogger, RequestHeaderFilter], createWeddingController(db));
+  app.use("/api/sleep", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createSleepController(db));
 
   // Start server
   app.listen(port, () => {

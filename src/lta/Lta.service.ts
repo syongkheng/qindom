@@ -64,7 +64,7 @@ export class LtaService {
         "LtaService.statistics",
         "LTA_DATAMALL_API_KEY is not set in environment variables"
       );
-      throw new Error("LTA API key not configured");
+      throw new Exceptions.Unknown();
     }
 
     try {

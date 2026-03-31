@@ -4,6 +4,7 @@
 - All endpoints require authentication — data is strictly per-user
 - Transactions support two types: `expense` and `earning`
 - Credit card expenses only reduce the balance on the card's due date, not at swipe time
+- The frontend `BALANCE` stat excludes CC transactions (`cardId != null`) and future-dated transactions — only cash movements up to today count toward the displayed balance
 ------------------------------------------------------------------------------------------
 
 #### Load expense data (init)

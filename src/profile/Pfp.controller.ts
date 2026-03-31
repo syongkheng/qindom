@@ -1,94 +1,56 @@
-// src/controllers/Hdb.controller.ts
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { PfpService } from "./Pfp.service";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { toMessage } from "../utils/errorUtils";
+import { getUser, handleException } from "../utils/requestUtils";
 
 export default function createPfpController(db: KnexSqlUtilities) {
   const router = Router();
   const pfpService = new PfpService(db);
 
-  router.get(
-    "/user/country",
-    [MandatoryTokenFilter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const response = new ControllerResponse(res);
-
-      try {
-        const username = req.user?.username ?? "UNKNOWN";
-        const system = req.user?.system ?? "UNKNOWN";
-        return response.ok(
-          await pfpService.getCountry(`${username}_${system}`)
-        );
-      } catch (error) {
-        return response.ko(toMessage(error));
-      }
+  router.get("/user/country", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { username, system } = getUser(req);
+      return cr.ok(await pfpService.getCountry(`${username}_${system}`));
+    } catch (err) {
+      return handleException(err, cr, "PfpController.GET /user/country", "Failed to get country");
     }
-  );
+  });
 
-  router.post(
-    "/user/country",
-    [MandatoryTokenFilter],
-    async (_req: RequestWithUserInfo, res: Response) => {
-      const response = new ControllerResponse(res);
-
-      try {
-        const username = _req.user?.username ?? "UNKNOWN";
-        const { country, system } = _req.body;
-        const result = await pfpService.updateCountry(
-          `${username}_${system}`,
-          country
-        );
-        return response.ok(result);
-      } catch (error) {
-        return response.ko(toMessage(error));
-      }
+  router.post("/user/country", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { username, system } = getUser(req);
+      const { country } = req.body;
+      return cr.ok(await pfpService.updateCountry(`${username}_${system}`, country));
+    } catch (err) {
+      return handleException(err, cr, "PfpController.POST /user/country", "Failed to update country");
     }
-  );
+  });
 
-  router.get(
-    "/user/photo",
-    [MandatoryTokenFilter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const response = new ControllerResponse(res);
-      try {
-        const username = req.user?.username ?? "UNKNOWN";
-        const system = req.user?.system ?? "UNKNOWN";
-
-        const userRecord = await pfpService.getProfilePhoto(
-          `${username}_${system}`
-        );
-        return response.ok(userRecord);
-      } catch (error) {
-        return response.ko(toMessage(error));
-      }
+  router.get("/user/photo", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { username, system } = getUser(req);
+      return cr.ok(await pfpService.getProfilePhoto(`${username}_${system}`));
+    } catch (err) {
+      return handleException(err, cr, "PfpController.GET /user/photo", "Failed to get profile photo");
     }
-  );
+  });
 
-  router.post(
-    "/user/photo",
-    [MandatoryTokenFilter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const response = new ControllerResponse(res);
-      try {
-        const username = req.user?.username ?? "UNKNOWN";
-        const system = req.user?.system ?? "UNKNOWN";
-        const { blobString } = req.body;
-
-        return response.ok(
-          await pfpService.updateProfilePhoto(
-            `${username}_${system}`,
-            blobString
-          )
-        );
-      } catch (error) {
-        return response.ko(toMessage(error));
-      }
+  router.post("/user/photo", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { username, system } = getUser(req);
+      const { blobString } = req.body;
+      return cr.ok(await pfpService.updateProfilePhoto(`${username}_${system}`, blobString));
+    } catch (err) {
+      return handleException(err, cr, "PfpController.POST /user/photo", "Failed to update profile photo");
     }
-  );
+  });
 
   return router;
 }

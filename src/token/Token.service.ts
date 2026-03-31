@@ -57,7 +57,7 @@ export class TokenService {
         "TokenService.generateToken",
         `Something went wrong generating the token: ${error}`
       );
-      return "";
+      throw new Exceptions.Unknown();
     }
   }
 

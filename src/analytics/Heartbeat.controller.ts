@@ -1,46 +1,31 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { BaseExceptions } from "../exceptions/BaseException";
 import { HeartbeatService } from "./Heartbeat.service";
 import { OptionalTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { toMessage } from "../utils/errorUtils";
+import { Exceptions } from "../exceptions/AppExceptions";
+import { handleException } from "../utils/requestUtils";
 
 export default function createHeartbeatController(db: KnexSqlUtilities) {
   const router = Router();
-  const heartbeatService = new HeartbeatService(db);
+  const svc = new HeartbeatService(db);
 
   router.post("/heartbeat", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const response = new ControllerResponse(res);
+    const cr = new ControllerResponse(res);
     try {
-      const userAgent = req.headers["user-agent"] || "Unknown";
-      const rawIp = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
-      const ipAddress = Array.isArray(rawIp) ? rawIp[0] : rawIp;
+      const { sessionId } = req.body;
+      if (!sessionId) throw new Exceptions.InvalidRequest("sessionId");
 
-      // Use token-derived username if available, else fallback to client-provided username
-      const tokenUsername = req.user?.username;
-      const { sessionId  } = req.body;
+      const userAgent  = req.headers["user-agent"] || "Unknown";
+      const rawIp      = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
+      const ipAddress  = Array.isArray(rawIp) ? rawIp[0] : rawIp;
+      const username   = req.user?.username ?? "Anonymous";
 
-      const heartbeatUsername = tokenUsername ?? "Anonymous";
-
-      if (!sessionId) {
-        return response.badRequest("Missing sessionId in request body.");
-      }
-
-      await heartbeatService.insertHeartbeatRecord({
-        sessionId,
-        username: heartbeatUsername,
-        ipAddress,
-        userAgent,
-      });
-
-      return response.ok({ message: "Heartbeat recorded successfully." });
-    } catch (error) {
-      if (error instanceof BaseExceptions) {
-        return response.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      }
-      return response.ko(toMessage(error));
+      await svc.insertHeartbeatRecord({ sessionId, username, ipAddress, userAgent });
+      return cr.ok({ message: "Heartbeat recorded successfully." });
+    } catch (err) {
+      return handleException(err, cr, "HeartbeatController.POST /heartbeat", "Failed to record heartbeat");
     }
   });
 

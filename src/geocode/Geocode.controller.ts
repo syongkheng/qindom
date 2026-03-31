@@ -1,22 +1,22 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { GeocodeService } from "./Geocode.service";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { toMessage } from "../utils/errorUtils";
+import { Exceptions } from "../exceptions/AppExceptions";
+import { handleException } from "../utils/requestUtils";
 
 export default function createGeocodeController(db: KnexSqlUtilities) {
   const router = Router();
-  const geocodeService = new GeocodeService(db);
+  const svc = new GeocodeService(db);
 
-  router.get("/", async (req, res) => {
-    const response = new ControllerResponse(res);
-    const q = String(req.query.q ?? "").trim();
-    if (!q) return response.badRequest("Missing query param: q");
+  router.get("/", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(res);
     try {
-      const results = await geocodeService.search(q);
-      return response.ok(results);
-    } catch (error) {
-      return response.ko(toMessage(error));
+      const q = String(req.query.q ?? "").trim();
+      if (!q) throw new Exceptions.InvalidRequest("q");
+      return cr.ok(await svc.search(q));
+    } catch (err) {
+      return handleException(err, cr, "GeocodeController.GET /", "Failed to geocode");
     }
   });
 

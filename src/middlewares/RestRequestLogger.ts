@@ -17,9 +17,9 @@ export const RestRequestLogger = function (
   const message =
     req.method === "GET"
       ? JSON.stringify(req.query)
-      : sanitisedMessage(JSON.stringify(req.body));
+      : sanitisedMessage(JSON.stringify(req.body) ?? "");
 
-const ipAddress = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
+  const ipAddress = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown");
 
   res.on("finish", () => {
     LoggingUtilities.controller.access(
