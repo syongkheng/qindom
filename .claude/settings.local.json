@@ -6,7 +6,9 @@
       "Bash(sh /Users/rowense/.claude/statusline-command.sh)",
       "Read(//Users/rowense/.claude/**)",
       "Bash(bash:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(npm install:*)",
+      "Bash(npm audit:*)"
     ]
   }
 }
