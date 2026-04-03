@@ -1,10 +1,31 @@
-import { Router, Response } from "express";
+import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { FileService } from "./File.service";
 import { FileValidator } from "./File.validator";
 import { getUser, handleException } from "../utils/requestUtils";
+import { Exceptions } from "../exceptions/AppExceptions";
+
+export function createFileGetController(db: KnexSqlUtilities): Router {
+  const router = Router();
+  const svc = new FileService(db);
+
+  router.get("/:uuid", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { uuid } = req.params;
+      if (!uuid) throw new Exceptions.InvalidRequest("uuid");
+      const result = await svc.getBlob(uuid);
+      if (!result) throw new Exceptions.NotFound();
+      return cr.ok(result);
+    } catch (err) {
+      return handleException(err, cr, "FileController.GET /:uuid", "Failed to retrieve file");
+    }
+  });
+
+  return router;
+}
 
 export default function createFileController(db: KnexSqlUtilities): Router {
   const router = Router();

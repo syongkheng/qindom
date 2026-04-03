@@ -21,7 +21,7 @@ import createPfpController from "./profile/Pfp.controller";
 import createHeartbeatController from "./analytics/Heartbeat.controller";
 import createFndController from "./fnd/Fnd.controller";
 import createItineraryController from "./itinerary/Itinerary.controller";
-import createFileController from "./file/File.controller";
+import createFileController, { createFileGetController } from "./file/File.controller";
 import createFeatureController from "./feature/Feature.controller";
 import createDouyinController from "./douyin/Douyin.controller";
 import createMealController from "./meal/Meal.controller";
@@ -29,6 +29,8 @@ import createGeocodeController from "./geocode/Geocode.controller";
 import createExpenseController from "./expense/Expense.controller";
 import createWeddingController from "./wedding/Wedding.controller";
 import createSleepController from "./sleep/Sleep.controller";
+import createTelegramController, { createTelegramWebhookHandler } from "./telegram/Telegram.controller";
+import { initTelegramBot } from "./telegram/Telegram.bot";
 import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
@@ -75,6 +77,7 @@ async function startServer() {
   app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
   app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
   app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
+  app.use("/api/file", [RestRequestLogger], createFileGetController(db));
   app.use("/api/file", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createFileController(db));
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
   app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
@@ -83,11 +86,16 @@ async function startServer() {
   app.use("/api/expense", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createExpenseController(db));
   app.use("/api/wedding", [RestRequestLogger, RequestHeaderFilter], createWeddingController(db));
   app.use("/api/sleep", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createSleepController(db));
+  app.use("/api/telegram", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createTelegramController(db));
+  app.post("/api/telegram/webhook", createTelegramWebhookHandler(db));
 
   // Start server
   app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
+    initTelegramBot(db).catch((err) =>
+      LoggingUtilities.service.error("TelegramBot", err?.message ?? String(err))
+    );
   });
 }
 

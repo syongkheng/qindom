@@ -6,7 +6,7 @@ import { Exceptions } from "../exceptions/AppExceptions";
 
 const TB_TRAVEL_AGENDA_FILE = "tb_travel_agenda_file";
 const TB_TRAVEL_AGENDA_ITEM = "tb_travel_agenda_item";
-const TB_TRAVEL_ITINERARY   = "tb_travel_itinerary";
+const TB_TRAVEL_ITINERARY = "tb_travel_itinerary";
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -29,24 +29,42 @@ export class FileService {
     if (!agendaItem) throw new Exceptions.ForbiddenAccess();
 
     const itinerary = await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
-      id:            agendaItem.itinerary_id,
-      created_by:    username,
+      id: agendaItem.itinerary_id,
+      created_by: username,
       record_status: "A",
     });
     if (!itinerary) throw new Exceptions.ForbiddenAccess();
 
-    const file = await this.db.insert<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, {
+    const file = (await this.db.insert<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, {
       uuid,
       agenda_item_id: agendaId,
-      name:           name ?? undefined,
-      mime_type:      mimeType,
-      size_in_bytes:  sizeInBytes ?? undefined,
+      name: name ?? undefined,
+      mime_type: mimeType,
+      size_in_bytes: sizeInBytes ?? undefined,
       blob,
-      created_dt:     Date.now(),
-      record_status:  "A",
-    }) as ITB_AGENDA_FILE;
+      created_dt: Date.now(),
+      record_status: "A",
+    })) as ITB_AGENDA_FILE;
 
     return { id: file.id!, uuid: file.uuid };
+  }
+
+  async getBlob(uuid: string): Promise<{ blob: string; mimeType: string } | null> {
+    const file = await this.db.findOne<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, { uuid, record_status: "A" }, [
+      "blob",
+      "mime_type",
+    ]);
+
+    if (!file?.blob) return null;
+
+    const buffer = Buffer.isBuffer(file.blob) ? file.blob : Buffer.from(file.blob); // <-- important
+
+    const base64 = buffer.toString("base64");
+
+    return {
+      blob: base64,
+      mimeType: file.mime_type ?? "application/octet-stream",
+    };
   }
 
   async deleteByUuids(username: string, fileIds: string[]): Promise<number> {
@@ -58,7 +76,7 @@ export class FileService {
        WHERE af.uuid IN (?)
          AND it.created_by = ?
          AND af.record_status = 'A'`,
-      [fileIds, username]
+      [fileIds, username],
     );
     return fileIds.length;
   }

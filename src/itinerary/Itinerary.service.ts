@@ -224,7 +224,9 @@ export class ItineraryService {
       { orderBy: "id", orderDirection: "asc" }
     ) as ITB_AGENDA_ITEM[];
 
-    const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems);
+    const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
+      "id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "created_dt",
+    ]);
     const [viewCount, bookings] = await Promise.all([
       this.getViewCount(shortCode),
       this.fetchBookingsForItinerary(itinerary.id!),
@@ -246,7 +248,9 @@ export class ItineraryService {
       { orderBy: "id", orderDirection: "asc" }
     ) as ITB_AGENDA_ITEM[];
 
-    const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems);
+    const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
+      "id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "created_dt",
+    ]);
     const [viewCount, bookings] = await Promise.all([
       this.getViewCount(shortCode),
       this.fetchBookingsForItinerary(itinerary.id!),
