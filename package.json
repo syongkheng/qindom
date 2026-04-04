@@ -7,7 +7,11 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "NODE_ENV=dev nodemon src/index.ts",
     "dev:log": "NODE_ENV=dev_log nodemon src/index.ts",
-    "build": "npx tsc --build --verbose"
+    "build": "npx tsc --build --verbose",
+    "migrate": "knex --knexfile knexfile.ts migrate:latest",
+    "migrate:rollback": "knex --knexfile knexfile.ts migrate:rollback",
+    "migrate:make": "knex --knexfile knexfile.ts migrate:make",
+    "migrate:status": "knex --knexfile knexfile.ts migrate:status"
   },
   "keywords": [],
   "author": "",

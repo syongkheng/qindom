@@ -21,11 +21,13 @@ export interface TxDto {
 }
 
 export interface CardDto {
-  id:          number | undefined;
-  name:        string;
-  cycleEndDay: number;
-  dueDay:      number;
-  color:       string;
+  id:              number | undefined;
+  name:            string;
+  cycleEndDay:     number;
+  dueDay:          number;
+  color:           string;
+  cycleStartDate:  string | null;
+  dueDate:         string | null;
 }
 
 export interface CreateTxBody {
@@ -39,10 +41,12 @@ export interface CreateTxBody {
 }
 
 export interface CardBody {
-  name:        string;
-  cycleEndDay: number;
-  dueDay:      number;
-  color:       string;
+  name:            string;
+  cycleEndDay:     number;
+  dueDay:          number;
+  color:           string;
+  cycleStartDate?: string | null;
+  dueDate?:        string | null;
 }
 
 export class ExpenseService {
@@ -66,11 +70,13 @@ export class ExpenseService {
 
   private mapCard(row: ITB_EXPENSE_CARD): CardDto {
     return {
-      id:          row.id,
-      name:        row.name,
-      cycleEndDay: row.cycle_end_day,
-      dueDay:      row.due_day,
-      color:       row.color,
+      id:             row.id,
+      name:           row.name,
+      cycleEndDay:    row.cycle_end_day,
+      dueDay:         row.due_day,
+      color:          row.color,
+      cycleStartDate: row.cycle_start_date ?? null,
+      dueDate:        row.due_date ?? null,
     };
   }
 
@@ -181,13 +187,15 @@ export class ExpenseService {
 
   async createCard(username: string, body: CardBody): Promise<CardDto> {
     const inserted = await this.db.insert<ITB_EXPENSE_CARD>(TB_EXPENSE_CARD, {
-      name:          body.name.trim(),
-      cycle_end_day: body.cycleEndDay,
-      due_day:       body.dueDay,
-      color:         body.color,
-      created_by:    username,
-      created_dt:    Date.now(),
-      record_status: "A",
+      name:             body.name.trim(),
+      cycle_end_day:    body.cycleEndDay,
+      due_day:          body.dueDay,
+      color:            body.color,
+      cycle_start_date: body.cycleStartDate ?? null,
+      due_date:         body.dueDate ?? null,
+      created_by:       username,
+      created_dt:       Date.now(),
+      record_status:    "A",
     });
     return this.mapCard(inserted);
   }
@@ -201,10 +209,12 @@ export class ExpenseService {
     if (!existing) return null;
 
     const updated = await this.db.update<ITB_EXPENSE_CARD>(TB_EXPENSE_CARD, { id }, {
-      name:          body.name.trim(),
-      cycle_end_day: body.cycleEndDay,
-      due_day:       body.dueDay,
-      color:         body.color,
+      name:             body.name.trim(),
+      cycle_end_day:    body.cycleEndDay,
+      due_day:          body.dueDay,
+      color:            body.color,
+      cycle_start_date: body.cycleStartDate ?? null,
+      due_date:         body.dueDate ?? null,
     });
     return this.mapCard(updated[0]);
   }

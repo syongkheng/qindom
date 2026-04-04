@@ -8,7 +8,8 @@
       "Bash(bash:*)",
       "Bash(open:*)",
       "Bash(npm install:*)",
-      "Bash(npm audit:*)"
+      "Bash(npm audit:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

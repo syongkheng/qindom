@@ -1,6 +1,7 @@
 import knex from "knex";
 import { Knex } from "knex";
 import dotenv from "dotenv";
+import path from "path";
 import KnexSqlUtilities from "../../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../../utils/LoggingUtilities";
 
@@ -20,6 +21,12 @@ const dbConfig: Knex.Config = {
   pool: {
     min: 2,
     max: 10,
+  },
+  migrations: {
+    // __dirname is src/config/db in dev (ts-node) and config/db in prod (compiled JS).
+    // Two levels up lands at src/ in dev and the project root in prod — then into migrations/.
+    directory: path.join(__dirname, "../../migrations"),
+    extension: __filename.endsWith(".ts") ? "ts" : "js",
   },
 };
 
@@ -45,6 +52,10 @@ export async function initializeDatabase() {
     await db.raw("SELECT 1 as connection_test");
 
     LoggingUtilities.service.info("init_db", "Database connection established");
+
+    // Apply any pending migrations automatically
+    await knexInstance.migrate.latest();
+    LoggingUtilities.service.info("init_db", "Migrations applied");
 
     return db;
   } catch (error) {

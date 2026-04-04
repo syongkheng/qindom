@@ -33,17 +33,26 @@ export class ExpenseValidator {
 
   static validateCreateCardRequest(req: Request): {
     name: string; cycleEndDay: number; dueDay: number; color: string;
+    cycleStartDate?: string | null; dueDate?: string | null;
   } {
-    const { name, cycleEndDay, dueDay, color } = req.body;
+    const { name, cycleEndDay, dueDay, color, cycleStartDate, dueDate } = req.body;
     if (!name) throw new InvalidRequestException("name");
     if (cycleEndDay == null) throw new InvalidRequestException("cycleEndDay");
     if (dueDay == null) throw new InvalidRequestException("dueDay");
     if (!color) throw new InvalidRequestException("color");
-    return { name, cycleEndDay: Number(cycleEndDay), dueDay: Number(dueDay), color };
+    return {
+      name,
+      cycleEndDay:    Number(cycleEndDay),
+      dueDay:         Number(dueDay),
+      color,
+      cycleStartDate: cycleStartDate ?? null,
+      dueDate:        dueDate ?? null,
+    };
   }
 
   static validateUpdateCardRequest(req: Request): {
     id: number; name: string; cycleEndDay: number; dueDay: number; color: string;
+    cycleStartDate?: string | null; dueDate?: string | null;
   } {
     const { id } = req.body;
     if (!id) throw new InvalidRequestException("id");

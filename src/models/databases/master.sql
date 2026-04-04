@@ -1,6 +1,8 @@
 -- ══════════════════════════════════════════════════════════════════════════════
--- master.sql  —  wuxi database schema
--- Full reference schema: run on a clean database to recreate all tables.
+-- master.sql  —  wuxi database schema  (REFERENCE ONLY)
+-- Schema is now managed via Knex migrations in src/migrations/.
+-- Do NOT run this file manually. To apply schema changes, add a migration file
+-- and run: npm run migrate
 -- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding
 -- ══════════════════════════════════════════════════════════════════════════════
 
@@ -349,19 +351,26 @@ CREATE TABLE IF NOT EXISTS tb_expense_transaction (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Credit card definitions: billing cycle end day and payment due day (1–28).
+-- cycle_start_date / due_date allow manual override of the auto-calculated dates.
 DROP TABLE IF EXISTS tb_expense_card;
 CREATE TABLE IF NOT EXISTS tb_expense_card (
-  id            BIGINT        NOT NULL AUTO_INCREMENT,
-  name          VARCHAR(128)  NOT NULL,
-  cycle_end_day INT           NOT NULL,
-  due_day       INT           NOT NULL,
-  color         VARCHAR(16)   NOT NULL,
-  created_by    VARCHAR(128)  NOT NULL,
-  created_dt    BIGINT        NOT NULL,
-  record_status VARCHAR(1)    NOT NULL DEFAULT 'A',
+  id               BIGINT        NOT NULL AUTO_INCREMENT,
+  name             VARCHAR(128)  NOT NULL,
+  cycle_end_day    INT           NOT NULL,
+  due_day          INT           NOT NULL,
+  color            VARCHAR(16)   NOT NULL,
+  cycle_start_date VARCHAR(10)   DEFAULT NULL,
+  due_date         VARCHAR(10)   DEFAULT NULL,
+  created_by       VARCHAR(128)  NOT NULL,
+  created_dt       BIGINT        NOT NULL,
+  record_status    VARCHAR(1)    NOT NULL DEFAULT 'A',
   PRIMARY KEY (id),
   KEY idx_exp_card_user (created_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE tb_expense_card
+	ADD COLUMN cycle_start_date VARCHAR(10) DEFAULT NULL,
+	ADD COLUMN due_date VARCHAR(10) DEFAULT NULL;
 
 -- One row per user; upserted on balance update. UNIQUE on created_by enforces this.
 DROP TABLE IF EXISTS tb_expense_balance;
