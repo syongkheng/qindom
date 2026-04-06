@@ -56,6 +56,7 @@ export class PfpService {
         ...user,
         password: "[REDACTED]",
         token: "[REDACTED]",
+        pfp_picture_blob: "[REDACTED]",
       }));
     } catch (error) {
       throw new UnknownException();
@@ -72,7 +73,10 @@ export class PfpService {
       });
 
       const blob = userRecord?.pfp_picture_blob;
-      return { blobString: blob ? Buffer.from(blob as any).toString("utf8") : null };
+      if (!blob) return { blobString: null };
+      const decoded = Buffer.from(blob as any).toString("utf8");
+      const blobString = decoded.startsWith("data:") ? decoded : `data:image/jpeg;base64,${decoded}`;
+      return { blobString };
     } catch (error) {
       throw new UnknownException();
     }
