@@ -9,7 +9,9 @@
       "Bash(open:*)",
       "Bash(npm install:*)",
       "Bash(npm audit:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Read(//dev/**)",
+      "Bash(wait)"
     ]
   }
 }

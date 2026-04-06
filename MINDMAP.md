@@ -56,11 +56,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── Upload base64 files for itinerary items
 │   │   └── DB: tb_travel_agenda_file
 │   │
-│   ├── MEAL TRACKER  /api/meal  [AUTH REQUIRED]
-│   │   ├── Breakfast / lunch / dinner entries + photos
-│   │   ├── Query by date
-│   │   └── DB: tb_meal_log, tb_meal_photo
-│   │
 │   ├── SLEEP TRACKER  /api/sleep  [AUTH REQUIRED]
 │   │   ├── Sleep log entries (date range queries)
 │   │   └── DB: tb_sleep_log

@@ -24,7 +24,6 @@ import createItineraryController from "./itinerary/Itinerary.controller";
 import createFileController, { createFileGetController } from "./file/File.controller";
 import createFeatureController from "./feature/Feature.controller";
 import createDouyinController from "./douyin/Douyin.controller";
-import createMealController from "./meal/Meal.controller";
 import createGeocodeController from "./geocode/Geocode.controller";
 import createExpenseController from "./expense/Expense.controller";
 import createWeddingController from "./wedding/Wedding.controller";
@@ -81,8 +80,7 @@ async function startServer() {
   app.use("/api/file", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createFileController(db));
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
   app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
-  app.use("/api/meal", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createMealController(db));
-  app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
+app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
   app.use("/api/expense", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createExpenseController(db));
   app.use("/api/wedding", [RestRequestLogger, RequestHeaderFilter], createWeddingController(db));
   app.use("/api/sleep", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createSleepController(db));
