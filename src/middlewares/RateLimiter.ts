@@ -50,24 +50,6 @@ export const resendVerifyLimiter = rateLimit({
   message: rateLimitResponse("Too many resend requests. Please try again in 15 minutes."),
 });
 
-/** POST /api/fnd/identity */
-export const identityLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
-  limit: 20,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: rateLimitResponse("Too many identity lookups. Please try again in 15 minutes."),
-});
-
-/** POST /api/fnd/appt */
-export const apptLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,      // 1 hour
-  limit: 5,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: rateLimitResponse("Too many appointment submissions. Please try again in an hour."),
-});
-
 /** GET /api/douyin/live */
 export const douyinLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,       // 1 minute

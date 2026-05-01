@@ -52,5 +52,18 @@ export default function createPfpController(db: KnexSqlUtilities) {
     }
   });
 
+  router.post("/user/username", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { username, system } = getUser(req);
+      const { newUsername } = req.body;
+      if (!newUsername || String(newUsername).trim().length < 3)
+        return cr.badRequest("Username must be at least 3 characters.");
+      return cr.ok(await pfpService.updateUsername(`${username}_${system}`, String(newUsername).trim(), system));
+    } catch (err) {
+      return handleException(err, cr, "PfpController.POST /user/username", "Failed to update username");
+    }
+  });
+
   return router;
 }

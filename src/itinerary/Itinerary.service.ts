@@ -4,6 +4,7 @@ import { ITB_ITINERARY } from "../models/databases/tb_itinerary";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
 import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view";
 import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking";
+import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { LoggingUtilities } from "../utils/LoggingUtilities";
 import { toMessage } from "../utils/errorUtils";
@@ -13,6 +14,7 @@ const TB_TRAVEL_AGENDA_ITEM       = "tb_travel_agenda_item";
 const TB_TRAVEL_AGENDA_FILE       = "tb_travel_agenda_file";
 const TB_TRAVEL_ITINERARY_BOOKING = "tb_travel_itinerary_booking";
 const TB_TRAVEL_ITINERARY_VIEW    = "tb_travel_itinerary_view";
+const TB_TRAVEL_PACKING_ITEM      = "tb_travel_packing_item";
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -46,7 +48,8 @@ export function buildItineraryResponse(
   itinerary: ITB_ITINERARY,
   agendaItems: any[],
   viewCount?: number,
-  bookings: any[] = []
+  bookings: any[] = [],
+  packingItems: any[] = []
 ) {
   return {
     id:               itinerary.id,
@@ -66,6 +69,7 @@ export function buildItineraryResponse(
     paxNames:         itinerary.pax_names ? JSON.parse(itinerary.pax_names) : [],
     ...(viewCount !== undefined ? { viewCount } : {}),
     bookings,
+    packingItems,
     agendaItems: agendaItems.map(({ record_status, created_dt, coordinates_lat, coordinates_lng, ...item }: any) => ({
       ...item,
       start_time:  minutesToTime(item.start_time),
@@ -107,6 +111,22 @@ export class ItineraryService {
     }, {});
 
     return agendaItems.map((item) => ({ ...item, files: filesByItemId[item.id!] ?? [] }));
+  }
+
+  async fetchPackingItemsForItinerary(itineraryId: number): Promise<any[]> {
+    const rows = await this.db.find<ITB_TRAVEL_PACKING_ITEM>(
+      TB_TRAVEL_PACKING_ITEM,
+      { itinerary_id: itineraryId, record_status: "A" },
+      { orderBy: "sort_order", orderDirection: "asc" }
+    ) as ITB_TRAVEL_PACKING_ITEM[];
+
+    return rows.map((p) => ({
+      id:       p.id,
+      label:    p.label,
+      category: p.category ?? "misc",
+      packed:   !!p.packed,
+      quantity: p.quantity ?? undefined,
+    }));
   }
 
   async fetchBookingsForItinerary(itineraryId: number): Promise<any[]> {
@@ -205,8 +225,11 @@ export class ItineraryService {
     const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
       "id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "created_dt",
     ]);
-    const bookings = await this.fetchBookingsForItinerary(itinerary.id!);
-    return buildItineraryResponse(itinerary, itemsWithFiles, undefined, bookings);
+    const [bookings, packingItems] = await Promise.all([
+      this.fetchBookingsForItinerary(itinerary.id!),
+      this.fetchPackingItemsForItinerary(itinerary.id!),
+    ]);
+    return buildItineraryResponse(itinerary, itemsWithFiles, undefined, bookings, packingItems);
   }
 
   async getByShortCode(shortCode: string): Promise<{ hasChallenge: boolean } | ReturnType<typeof buildItineraryResponse>> {
@@ -227,11 +250,12 @@ export class ItineraryService {
     const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
       "id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "created_dt",
     ]);
-    const [viewCount, bookings] = await Promise.all([
+    const [viewCount, bookings, packingItems] = await Promise.all([
       this.getViewCount(shortCode),
       this.fetchBookingsForItinerary(itinerary.id!),
+      this.fetchPackingItemsForItinerary(itinerary.id!),
     ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings);
+    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems);
   }
 
   async verifyChallenge(shortCode: string, challenge: string): Promise<ReturnType<typeof buildItineraryResponse>> {
@@ -251,18 +275,19 @@ export class ItineraryService {
     const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
       "id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "created_dt",
     ]);
-    const [viewCount, bookings] = await Promise.all([
+    const [viewCount, bookings, packingItems] = await Promise.all([
       this.getViewCount(shortCode),
       this.fetchBookingsForItinerary(itinerary.id!),
+      this.fetchPackingItemsForItinerary(itinerary.id!),
     ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings);
+    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems);
   }
 
   async create(username: string, body: any): Promise<{ shortCode: string; sessionId: string; agendaToFileMap: any[] }> {
     const {
       idempotencyKey, sessionTitle, destination, destinationRaw, country,
       numberOfPax, itineraryDateRaw, startDate, endDate, unknownDate,
-      durationInDays, challenge, agendaItems, paxNames, bookings,
+      durationInDays, challenge, agendaItems, paxNames, bookings, packingItems = [],
     } = body;
 
     if (idempotencyKey) {
@@ -338,6 +363,11 @@ export class ItineraryService {
         await trx(TB_TRAVEL_ITINERARY_BOOKING).insert(this._bookingInsertRow(itineraryId, b, now));
       }
 
+      for (let i = 0; i < packingItems.length; i++) {
+        const p = packingItems[i];
+        await trx(TB_TRAVEL_PACKING_ITEM).insert(this._packingInsertRow(itineraryId, p, i, now));
+      }
+
       return map;
     });
 
@@ -353,6 +383,7 @@ export class ItineraryService {
       sessionTitle, destination, destinationRaw, country, numberOfPax,
       itineraryDateRaw, startDate, endDate, unknownDate, durationInDays,
       challenge, agendaItems, _agendaIdsToDelete, paxNames, bookings, _bookingIdsToDelete,
+      packingItems = [], _packingIdsToDelete = [],
     } = body;
 
     const itinerary = await this.db.findOne<ITB_ITINERARY>(
@@ -446,6 +477,25 @@ export class ItineraryService {
         }
       }
 
+      for (const packingId of _packingIdsToDelete) {
+        await trx(TB_TRAVEL_PACKING_ITEM).where({ id: Number(packingId) }).update({ record_status: "D" });
+      }
+
+      for (let i = 0; i < packingItems.length; i++) {
+        const p = packingItems[i];
+        if (p.id) {
+          await trx(TB_TRAVEL_PACKING_ITEM).where({ id: Number(p.id) }).update({
+            label:      p.label,
+            category:   p.category || "misc",
+            packed:     p.packed ? 1 : 0,
+            quantity:   p.quantity ?? null,
+            sort_order: i,
+          });
+        } else {
+          await trx(TB_TRAVEL_PACKING_ITEM).insert(this._packingInsertRow(itinerary.id!, p, i, now));
+        }
+      }
+
       return map;
     });
 
@@ -453,6 +503,19 @@ export class ItineraryService {
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
+
+  private _packingInsertRow(itineraryId: number, p: any, sortOrder: number, now: number) {
+    return {
+      itinerary_id:  itineraryId,
+      label:         p.label,
+      category:      p.category || "misc",
+      packed:        p.packed ? 1 : 0,
+      quantity:      p.quantity ?? null,
+      sort_order:    sortOrder,
+      created_dt:    now,
+      record_status: "A",
+    };
+  }
 
   private _bookingInsertRow(itineraryId: number, b: any, now: number) {
     return {

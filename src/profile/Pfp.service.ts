@@ -1,12 +1,15 @@
 import { UnknownException } from "../exceptions/UnknownException";
+import { UsernameAlreadyTakenException } from "../exceptions/UsernameAlreadyTakenException";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user";
+import { TokenService } from "../token/Token.service";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 
-/**
- * Service to handle connectivity checks.
- */
 export class PfpService {
-  constructor(private db: KnexSqlUtilities) {}
+  private tokenService: TokenService;
+
+  constructor(private db: KnexSqlUtilities) {
+    this.tokenService = new TokenService(db);
+  }
 
   async getCountry(
     username_system: string
@@ -80,5 +83,49 @@ export class PfpService {
     } catch (error) {
       throw new UnknownException();
     }
+  }
+
+  async updateUsername(
+    username_system: string,
+    newUsername: string,
+    system: string
+  ): Promise<{ token: string; username: string }> {
+    const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
+      username_system,
+      record_status: "A",
+    });
+    if (!user) throw new UnknownException();
+
+    const newUsernameSystem = `${newUsername}_${system}`;
+    const conflict = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
+      username_system: newUsernameSystem,
+      record_status: "A",
+    });
+    if (conflict) throw new UsernameAlreadyTakenException();
+
+    await this.db.update<ITB_AA_USER>(
+      "tb_aa_user",
+      { username_system, record_status: "A" },
+      { username: newUsername, username_system: newUsernameSystem }
+    );
+
+    const parsedRoles: string[] = (() => {
+      try { return JSON.parse(user.roles ?? "[]"); } catch { return []; }
+    })();
+
+    const token = await this.tokenService.generateToken({
+      username: newUsername,
+      system,
+      roles: parsedRoles,
+      lastLoggedInDt: user.last_logged_in_dt,
+    });
+
+    await this.db.update<ITB_AA_USER>(
+      "tb_aa_user",
+      { username_system: newUsernameSystem },
+      { token }
+    );
+
+    return { token, username: newUsername };
   }
 }

@@ -82,16 +82,11 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── Nearest bus stops / MRT stations
 │   │   └── DB: tb_lta_busstop, tb_lta_bus_info, tb_lrt_mrt_station
 │   │
-│   ├── FND / KINGDOM 236  /api/fnd
-│   │   ├── Player identity lookup (Kingdom Server API)
-│   │   ├── Appointment booking (→ Google Sheets)
-│   │   ├── Events + notices (+ view tracking)
-│   │   ├── Discord Bot (prefix !)
-│   │   │   ├── Commands: hello, ping, help, register, deregister,
-│   │   │   │             list, redeem, remind, stalk
-│   │   │   └── Discord user ↔ governor ID via Firestore
-│   │   └── DB: tb_fnd_event, tb_fnd_notice,
-│   │           tb_fnd_event_view, tb_fnd_notice_view
+│   ├── FND / KINGDOM 236
+│   │   └── Discord Bot (prefix !)
+│   │       ├── Commands: hello, ping, help, register, deregister,
+│   │       │             list, redeem, remind, stalk
+│   │       └── Discord user ↔ governor ID via Firestore
 │   │
 │   ├── DOUYIN  /api/douyin  [AUTH REQUIRED]
 │   │   ├── Live stream status check
@@ -116,9 +111,8 @@ qindom (Express 5 + TypeScript + MySQL)
 │
 ├── EXTERNAL SERVICES
 │   ├── MySQL (wuxi DB)
-│   ├── Google Geocoding API (+ Sheets + Firebase/Firestore)
+│   ├── Google Geocoding API (+ Firebase/Firestore)
 │   ├── LTA DataMall API (Singapore transport)
-│   ├── Kingdom Server API — HMAC-SHA256 signed
 │   ├── Douyin webcast API — SM3/a_bogus auth
 │   ├── Telegram Bot API — polling/webhook
 │   ├── Discord.js Bot

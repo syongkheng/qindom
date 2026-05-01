@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
@@ -21,7 +22,7 @@ export class FileService {
     mimeType: string,
     name?: string | null,
     sizeInBytes?: number | null,
-  ): Promise<{ id: number; uuid: string }> {
+  ): Promise<{ id: number; uuid: string; shortCode: string }> {
     const blobSizeBytes = Buffer.byteLength(blob, "base64");
     if (blobSizeBytes > MAX_SIZE_BYTES) throw new Exceptions.InvalidRequest("blob");
 
@@ -35,8 +36,11 @@ export class FileService {
     });
     if (!itinerary) throw new Exceptions.ForbiddenAccess();
 
+    const shortCode = crypto.randomBytes(4).toString("hex");
+
     const file = (await this.db.insert<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, {
       uuid,
+      short_code: shortCode,
       agenda_item_id: agendaId,
       name: name ?? undefined,
       mime_type: mimeType,
@@ -46,7 +50,19 @@ export class FileService {
       record_status: "A",
     })) as ITB_AGENDA_FILE;
 
-    return { id: file.id!, uuid: file.uuid };
+    return { id: file.id!, uuid: file.uuid, shortCode };
+  }
+
+  async getBlobByShortCode(shortCode: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+    const file = await this.db.findOne<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, { short_code: shortCode, record_status: "A" }, [
+      "blob",
+      "mime_type",
+    ]);
+
+    if (!file?.blob) return null;
+
+    const buffer = Buffer.isBuffer(file.blob) ? file.blob : Buffer.from(file.blob as string, "base64");
+    return { buffer, mimeType: file.mime_type ?? "application/octet-stream" };
   }
 
   async getBlob(uuid: string): Promise<{ blob: string; mimeType: string } | null> {

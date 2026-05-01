@@ -519,7 +519,6 @@ export async function up(knex: Knex): Promise<void> {
       (feature_key, label, is_enabled, remarks, created_dt, created_by, record_status)
     VALUES
       ('registration',     'User Registration',            1, 'Controls whether new users can register an account',        UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-      ('kop_registration', 'KoP Appointment Registration', 0, 'Controls whether the KoP booking form accepts submissions',  UNIX_TIMESTAMP() * 1000, 'system', 'A'),
       ('pphs',             'PPHS Module',                  1, 'Controls visibility of the PPHS module on the workbench',   UNIX_TIMESTAMP() * 1000, 'system', 'A'),
       ('travel',           'Travel Module',                1, 'Controls visibility of the Travel module on the workbench', UNIX_TIMESTAMP() * 1000, 'system', 'A'),
       ('flat_analysis',    'Flat Analysis Module',         1, 'Controls visibility of the Flat Analysis module',           UNIX_TIMESTAMP() * 1000, 'system', 'A')

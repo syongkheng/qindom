@@ -25,11 +25,12 @@ interface ITbTelegramMedia {
 }
 
 interface ITbTelegramLink {
-  telegram_user_id: number;
-  username:         string;
+  telegram_user_id:  number;
+  username:          string;
   telegram_username: string | null;
-  linked_dt:        number;
-  record_status:    string;
+  dm_chat_id:        number | null;
+  linked_dt:         number;
+  record_status:     string;
 }
 
 interface ITbTelegramLinkToken {
@@ -103,7 +104,8 @@ export class TelegramService {
   async linkAccount(
     telegramUserId: number,
     telegramUsername: string | undefined,
-    token: string
+    token: string,
+    dmChatId?: number
   ): Promise<string> {
     const row = await this.db.findOne<ITbTelegramLinkToken>(
       TB_TELEGRAM_LINK_TOKEN,
@@ -119,12 +121,17 @@ export class TelegramService {
       throw new Exceptions.VerifyCodeExpired();
     }
 
-    // Upsert the link (allow re-linking)
+    // Upsert the link (allow re-linking); only update dm_chat_id if provided
     await this.db.raw(
-      `INSERT INTO ${TB_TELEGRAM_LINK} (telegram_user_id, username, telegram_username, linked_dt, record_status)
-       VALUES (?, ?, ?, ?, 'A')
-       ON DUPLICATE KEY UPDATE username = VALUES(username), telegram_username = VALUES(telegram_username), linked_dt = VALUES(linked_dt), record_status = 'A'`,
-      [telegramUserId, row.username, telegramUsername ?? null, Date.now()]
+      `INSERT INTO ${TB_TELEGRAM_LINK} (telegram_user_id, username, telegram_username, dm_chat_id, linked_dt, record_status)
+       VALUES (?, ?, ?, ?, ?, 'A')
+       ON DUPLICATE KEY UPDATE
+         username          = VALUES(username),
+         telegram_username = VALUES(telegram_username),
+         dm_chat_id        = COALESCE(VALUES(dm_chat_id), dm_chat_id),
+         linked_dt         = VALUES(linked_dt),
+         record_status     = 'A'`,
+      [telegramUserId, row.username, telegramUsername ?? null, dmChatId ?? null, Date.now()]
     );
 
     // Delete used token
@@ -310,5 +317,74 @@ export class TelegramService {
 
   async setExpiryByBot(id: string, username: string, days: number): Promise<void> {
     return this.setExpiry(id, username, days);
+  }
+
+  // ─── Bot: Record DM chat (called on /start in private chat) ─────────────────
+
+  async setDmChatId(telegramUserId: number, dmChatId: number): Promise<void> {
+    await this.db.raw(
+      `UPDATE ${TB_TELEGRAM_LINK} SET dm_chat_id = ? WHERE telegram_user_id = ? AND record_status = 'A'`,
+      [dmChatId, telegramUserId]
+    );
+  }
+
+  // ─── API: Direct Upload (sendDocument — no compression) ───────────────────
+
+  async uploadMedia(params: {
+    username:     string;
+    fileBuffer:   Buffer;
+    originalname: string;
+    mimetype:     string;
+    size:         number;
+  }): Promise<MediaDto> {
+    const link = await this.db.findOne<ITbTelegramLink>(
+      TB_TELEGRAM_LINK,
+      { username: params.username, record_status: "A" },
+      ["telegram_user_id", "dm_chat_id"]
+    );
+    if (!link) throw new Exceptions.ForbiddenAccess();
+    if (!link.dm_chat_id) throw new Exceptions.InvalidRequest("dm_chat_id");
+
+    const formData = new FormData();
+    formData.append("chat_id", String(link.dm_chat_id));
+    formData.append(
+      "document",
+      new Blob([new Uint8Array(params.fileBuffer)], { type: params.mimetype }),
+      params.originalname
+    );
+
+    const tgRes = await fetch(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    const body = await tgRes.json() as {
+      ok: boolean;
+      result?: { document?: { file_id: string; file_name?: string; file_size?: number } };
+    };
+
+    if (!body.ok || !body.result?.document) {
+      LoggingUtilities.service.error("TelegramService.uploadMedia", JSON.stringify(body));
+      throw new Exceptions.ExternalRequest("Telegram");
+    }
+
+    const doc = body.result.document;
+    const id = await generateUniqueSlug(this.db);
+    const now = Date.now();
+
+    await this.db.raw(
+      `INSERT INTO ${TB_TELEGRAM_MEDIA}
+       (id, telegram_file_id, file_type, file_name, file_size, owner_username, telegram_user_id, created_dt, expires_dt, record_status)
+       VALUES (?, ?, 'document', ?, ?, ?, ?, ?, NULL, 'A')`,
+      [id, doc.file_id, doc.file_name ?? params.originalname, doc.file_size ?? params.size, params.username, link.telegram_user_id, now]
+    );
+
+    return {
+      id,
+      fileType:  "document",
+      fileName:  doc.file_name ?? params.originalname,
+      fileSize:  doc.file_size ?? params.size,
+      createdAt: now,
+      expiresAt: null,
+    };
   }
 }

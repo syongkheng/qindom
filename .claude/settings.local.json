@@ -11,7 +11,8 @@
       "Bash(npm audit:*)",
       "Bash(npx tsc:*)",
       "Read(//dev/**)",
-      "Bash(wait)"
+      "Bash(wait)",
+      "Bash(npx vue-tsc *)"
     ]
   }
 }

@@ -11,6 +11,21 @@ export function createFileGetController(db: KnexSqlUtilities): Router {
   const router = Router();
   const svc = new FileService(db);
 
+  router.get("/img/:shortCode", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { shortCode } = req.params;
+      if (!shortCode) throw new Exceptions.InvalidRequest("shortCode");
+      const result = await svc.getBlobByShortCode(shortCode);
+      if (!result) throw new Exceptions.NotFound();
+      res.setHeader("Content-Type", result.mimeType);
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.send(result.buffer);
+    } catch (err) {
+      return handleException(err, cr, "FileController.GET /img/:shortCode", "Failed to retrieve file");
+    }
+  });
+
   router.get("/:uuid", async (req: Request, res: Response) => {
     const cr = new ControllerResponse(res);
     try {

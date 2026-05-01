@@ -46,6 +46,11 @@ export async function initTelegramBot(db: KnexSqlUtilities): Promise<void> {
   botInstance.onText(/\/start(?: (.+))?/, async (msg, match) => {
     const payload = match?.[1]?.trim();
 
+    // Record DM chat ID so the API can send files to this user later
+    if (msg.chat.type === "private") {
+      await svc.setDmChatId(msg.from!.id, msg.chat.id).catch(() => {});
+    }
+
     if (payload?.startsWith("get_")) {
       const id = payload.slice(4);
       const username = await getLinkedUsername(svc, msg.from!.id);
@@ -103,10 +108,12 @@ export async function initTelegramBot(db: KnexSqlUtilities): Promise<void> {
     }
 
     try {
+      const dmChatId = msg.chat.type === "private" ? msg.chat.id : undefined;
       const username = await svc.linkAccount(
         msg.from!.id,
         msg.from?.username,
-        token
+        token,
+        dmChatId
       );
       await botInstance!.sendMessage(chatId, `✅ Linked to Awense account: ${username}`);
     } catch {
