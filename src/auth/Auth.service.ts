@@ -128,7 +128,7 @@ export class AuthService {
     email: string;
     system: string;
     code: string;
-  }): Promise<{ token: string }> {
+  }): Promise<{ token: string; username: string; roles: string[] }> {
     LoggingUtilities.service.info("AuthService.verifyEmail", `Verifying code for ${email}_${system}`);
 
     const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
@@ -229,7 +229,7 @@ export class AuthService {
     email: string;
     password: string;
     system: string;
-  }): Promise<{ token: string }> {
+  }): Promise<{ token: string; username: string; roles: string[] }> {
     LoggingUtilities.service.info("AuthService.login", `Login attempt for ${email}_${system}`);
 
     const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
@@ -255,7 +255,7 @@ export class AuthService {
     return this._issueToken(user);
   }
 
-  private async _issueToken(user: ITB_AA_USER): Promise<{ token: string }> {
+  private async _issueToken(user: ITB_AA_USER): Promise<{ token: string; username: string; roles: string[] }> {
     let parsedRoles: string[] = [];
     try {
       const parsed = JSON.parse(user.roles ?? "[]");
@@ -282,7 +282,7 @@ export class AuthService {
     );
 
     LoggingUtilities.service.info("AuthService.login", `Token issued for ${user.email} as ${user.username}`);
-    return { token: generatedToken };
+    return { token: generatedToken, username: user.username, roles: parsedRoles };
   }
 
   async authenticateToken(token: string): Promise<{ username: string; roles: string[]; exist: boolean }> {
