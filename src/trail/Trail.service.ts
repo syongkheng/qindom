@@ -35,8 +35,9 @@ function buildSessionResponse(row: ITB_TRAIL_SESSION, splits: ITB_TRAIL_SPLIT[],
   };
 }
 
-function safeJsonParse(value: string | undefined | null, fallback: any): any {
-  if (!value) return fallback;
+function safeJsonParse(value: any, fallback: any): any {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value !== 'string') return value;  // already parsed by mysql2 driver
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
