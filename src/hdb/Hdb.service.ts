@@ -44,13 +44,13 @@ export class HdbService {
         orderBy: "created_dt",
         orderDirection: "desc",
         columns: ["json_string", "batch", "created_dt"],
-      }
+      },
     );
 
     if (existingRecords.length > 0) {
       LoggingUtilities.service.info(
         "HdbService.statistics",
-        `Found existing records for batch ${currentBatch} in database`
+        `Found existing records for batch ${currentBatch} in database`,
       );
       try {
         const records = JSON.parse(existingRecords[0].json_string) as FlatRecord[];
@@ -62,13 +62,12 @@ export class HdbService {
 
     LoggingUtilities.service.info(
       "HdbService.statistics",
-      `No existing records found for batch ${currentBatch}, fetching from HDB website...`
+      `No existing records found for batch ${currentBatch}, fetching from HDB website...`,
     );
 
     // 2️⃣ Fetch from HDB website using fetch()
     const url =
-      "https://www.hdb.gov.sg/residential/renting-a-flat/renting-from-hdb/parenthood-provisional-housing-schemepphs/application-procedure/flats-available-for-application-";
-
+      "https://www.hdb.gov.sg/renting-a-flat/parenthood-provisional-housing-scheme/application-process/pphs-flats-available-for-application";
     let html: string;
     try {
       const response = await fetch(url, {
@@ -88,12 +87,47 @@ export class HdbService {
       return { records: [], source: "error" };
     }
 
-    // 3️⃣ Parse HTML response
+    // 3️⃣ Parse HTML response — table is embedded inside __NEXT_DATA__ JSON
     const root = parse(html);
-    const tables = root.querySelectorAll("table");
+    const nextDataScript = root.querySelector("script#__NEXT_DATA__");
+
+    if (!nextDataScript) {
+      LoggingUtilities.service.error("HdbService.statistics", "Could not find __NEXT_DATA__ script on HDB page.");
+      throw new UnknownException();
+    }
+
+    let bodyContentHtml: string | null = null;
+    try {
+      const nextData = JSON.parse(nextDataScript.text);
+      const componentProps: Record<string, unknown> = nextData?.props?.pageProps?.componentProps ?? {};
+
+      for (const uid of Object.keys(componentProps)) {
+        const items = (componentProps[uid] as { props?: { accordionItems?: { bodyContentVal?: string }[] } })?.props?.accordionItems;
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            if (typeof item.bodyContentVal === "string" && item.bodyContentVal.includes("<table>")) {
+              bodyContentHtml = item.bodyContentVal;
+              break;
+            }
+          }
+        }
+        if (bodyContentHtml) break;
+      }
+    } catch {
+      LoggingUtilities.service.error("HdbService.statistics", "Failed to parse __NEXT_DATA__ JSON.");
+      throw new UnknownException();
+    }
+
+    if (!bodyContentHtml) {
+      LoggingUtilities.service.error("HdbService.statistics", "No accordion body content with table found in __NEXT_DATA__.");
+      throw new UnknownException();
+    }
+
+    const bodyRoot = parse(bodyContentHtml);
+    const tables = bodyRoot.querySelectorAll("table");
 
     if (tables.length === 0) {
-      LoggingUtilities.service.error("HdbService.statistics", "No tables found on the HDB page.");
+      LoggingUtilities.service.error("HdbService.statistics", "No tables found in accordion body content.");
       throw new UnknownException();
     }
 
@@ -110,12 +144,12 @@ export class HdbService {
       });
       LoggingUtilities.service.info(
         "HdbService.statistics",
-        `Successfully stored ${records.length} records for batch ${currentBatch} in database`
+        `Successfully stored ${records.length} records for batch ${currentBatch} in database`,
       );
     } catch (error) {
       LoggingUtilities.service.error(
         "HdbService.statistics",
-        `Failed to insert records into database: ${toMessage(error)}`
+        `Failed to insert records into database: ${toMessage(error)}`,
       );
     }
 
@@ -133,33 +167,55 @@ export class HdbService {
         records.flatMap((record) => {
           const expandedAddresses = [record.address];
 
-          return expandedAddresses
-            .map(async (address) => {
-              LoggingUtilities.service.info(
-                "HdbService.retrieveListOfPphsWithCoordinates",
-                `Fetching coordinates for address: ${address}`
-              );
+          return expandedAddresses.map(async (address) => {
+            LoggingUtilities.service.info(
+              "HdbService.retrieveListOfPphsWithCoordinates",
+              `Fetching coordinates for address: ${address}`,
+            );
 
-              const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
+            const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
 
-              const { formed_url, lat, lng, source } = await this.coordinateService.getCoordinatesOfAddress(
-                transformedAddress
-              );
+            const { formed_url, lat, lng, source } =
+              await this.coordinateService.getCoordinatesOfAddress(transformedAddress);
 
-              return {
-                ...record,
-                address, // keep expanded address
-                formedUrl: formed_url,
-                lat,
-                lng,
-                source,
-              };
-            });
-        })
+            return {
+              ...record,
+              address, // keep expanded address
+              formedUrl: formed_url,
+              lat,
+              lng,
+              source,
+            };
+          });
+        }),
       )
     ).flat();
 
     return { records: recordsWithCoordinates, source };
+  }
+
+  async clearCoordinatesOfAddress(address: string): Promise<void> {
+    const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
+    await this.coordinateService.clearCoordinates(transformedAddress);
+  }
+
+  async getAllCoordinateOptions(address: string): Promise<Array<{
+    source: 'onemap' | 'nominatim';
+    lat: string;
+    lng: string;
+    formedUrl: string;
+  }>> {
+    const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
+    return this.coordinateService.fetchAllCoordinateOptions(transformedAddress);
+  }
+
+  async refreshCoordinatesOfAddress(address: string): Promise<{
+    lat: string; lng: string; formedUrl: string; source: string;
+  }> {
+    const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
+    await this.coordinateService.deleteCache(transformedAddress);
+    const { lat, lng, formed_url, source } = await this.coordinateService.getCoordinatesOfAddress(transformedAddress);
+    return { lat, lng, formedUrl: formed_url, source };
   }
 
   async retrieveBusstopWithinRadiusOfLatLng(lat: string, lng: string, radius: number) {
@@ -180,36 +236,55 @@ export class HdbService {
 
   private parseTable(table: HTMLElement): FlatRecord[] {
     const allRows = table.querySelectorAll("tbody > tr");
-    const rows = allRows.slice(2);
     const results: FlatRecord[] = [];
 
+    // Detect whether the table has a 4-room column by inspecting the second header row
+    const headerRow2Cells = allRows[1]?.querySelectorAll("td") ?? [];
+    const has4Room = headerRow2Cells.length >= 3;
+
+    // Number of cells in a data row that includes the town cell
+    const rowWithTown = has4Room ? 6 : 5;
+    // Minimum cells in a data row (no town cell)
+    const rowWithoutTown = rowWithTown - 1;
+
+    const rows = allRows.slice(2);
     let currentTown = "";
 
     for (const row of rows) {
       const cells = row.querySelectorAll("td");
-      if (cells.length < 5) continue; // Skip malformed rows
+      if (cells.length < rowWithoutTown) continue;
 
       let addressCell: HTMLElement;
       let twoCell: HTMLElement;
       let threeCell: HTMLElement;
-      let fourCell: HTMLElement;
+      let fourCell: HTMLElement | null = null;
       let expiryCell: HTMLElement;
 
-      if (cells.length === 6) {
+      if (cells.length >= rowWithTown) {
+        // Row includes the town cell
         const townText = cells[0].textContent?.trim();
         if (townText) currentTown = townText;
 
         addressCell = cells[1];
         twoCell = cells[2];
         threeCell = cells[3];
-        fourCell = cells[4];
-        expiryCell = cells[5];
+        if (has4Room) {
+          fourCell = cells[4];
+          expiryCell = cells[5];
+        } else {
+          expiryCell = cells[4];
+        }
       } else {
+        // Row without town cell (rowspan from previous row)
         addressCell = cells[0];
         twoCell = cells[1];
         threeCell = cells[2];
-        fourCell = cells[3];
-        expiryCell = cells[4];
+        if (has4Room) {
+          fourCell = cells[3];
+          expiryCell = cells[4];
+        } else {
+          expiryCell = cells[3];
+        }
       }
 
       const record: FlatRecord = {
@@ -221,7 +296,7 @@ export class HdbService {
 
       const t2 = twoCell.textContent?.trim();
       const t3 = threeCell.textContent?.trim();
-      const t4 = fourCell.textContent?.trim();
+      const t4 = fourCell?.textContent?.trim();
 
       if (t2 && t2 !== "-") record.flatTypes["2-room"] = t2;
       if (t3 && t3 !== "-") record.flatTypes["3-room"] = t3;
@@ -249,7 +324,7 @@ export class HdbService {
           columns: ["batch"],
           orderBy: "batch",
           orderDirection: "desc",
-        }
+        },
       );
 
       return [...new Set(batches.map((b) => b.batch))];

@@ -27,13 +27,46 @@ export default function createHdbController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(res);
     try {
       const user = getUser(req);
-      if (!user.roles.includes("R5")) throw new Exceptions.UnauthorizedAccess();
+      if (!user.roles.includes("PPHS_R5") && !user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
       const { address, lat, lng, formedUrl } = req.body as {
         address: string; lat: string; lng: string; formedUrl: string;
       };
       return cr.ok(await coordinateSvc.updateCoordinates(address, { lat, lng, formed_url: formedUrl }, user.username));
     } catch (err) {
       return handleException(err, cr, "HdbController.POST /pphs/update", "Failed to update coordinates");
+    }
+  });
+
+  router.post("/pphs/clear-coordinates", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const user = getUser(req);
+      if (!user.roles.includes("PPHS_R5") && !user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
+      const { address } = req.body as { address: string };
+      await hdbSvc.clearCoordinatesOfAddress(address);
+      return cr.ok(true);
+    } catch (err) {
+      return handleException(err, cr, "HdbController.POST /pphs/clear-coordinates", "Failed to clear coordinates");
+    }
+  });
+
+  router.post("/pphs/geocode-options", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { address } = req.body as { address: string };
+      return cr.ok(await hdbSvc.getAllCoordinateOptions(address));
+    } catch (err) {
+      return handleException(err, cr, "HdbController.POST /pphs/geocode-options", "Failed to fetch coordinate options");
+    }
+  });
+
+  router.post("/pphs/refresh", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(res);
+    try {
+      const { address } = req.body as { address: string };
+      return cr.ok(await hdbSvc.refreshCoordinatesOfAddress(address));
+    } catch (err) {
+      return handleException(err, cr, "HdbController.POST /pphs/refresh", "Failed to refresh coordinates");
     }
   });
 
