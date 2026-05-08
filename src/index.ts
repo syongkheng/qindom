@@ -20,7 +20,7 @@ import createAuthController from "./auth/Auth.controller";
 import createPfpController from "./profile/Pfp.controller";
 import createHeartbeatController from "./analytics/Heartbeat.controller";
 import createItineraryController from "./itinerary/Itinerary.controller";
-import createFileController, { createFileGetController } from "./file/File.controller";
+import createFileController from "./file/File.controller";
 import createFeatureController from "./feature/Feature.controller";
 import createDouyinController from "./douyin/Douyin.controller";
 import createGeocodeController from "./geocode/Geocode.controller";
@@ -28,9 +28,11 @@ import createExpenseController from "./expense/Expense.controller";
 import createWeddingController from "./wedding/Wedding.controller";
 import createSleepController from "./sleep/Sleep.controller";
 import createTelegramController, { createTelegramUploadController, createTelegramWebhookHandler } from "./telegram/Telegram.controller";
+import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller";
 import createScenicController from "./scenic/Scenic.controller";
 import createTrailController from "./trail/Trail.controller";
 import { initTelegramBot } from "./telegram/Telegram.bot";
+import { initTgImageBot } from "./tgimage/TgImage.bot";
 import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
@@ -76,8 +78,9 @@ async function startServer() {
   app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
   app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
   app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
-  app.use("/api/file", [RestRequestLogger], createFileGetController(db));
   app.use("/api/file", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createFileController(db));
+  app.use("/api/img", [RestRequestLogger], createTgImageGetController(db));
+  app.use("/api/img", [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db));
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
   app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
 app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
@@ -96,6 +99,9 @@ app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeC
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
     initTelegramBot(db).catch((err) =>
       LoggingUtilities.service.error("TelegramBot", err?.message ?? String(err))
+    );
+    initTgImageBot(db).catch((err) =>
+      LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err))
     );
   });
 }

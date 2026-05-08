@@ -243,6 +243,8 @@ export async function initTelegramBot(db: KnexSqlUtilities): Promise<void> {
     }
   });
 
+  // ─── /stats ───────────────────────────────────────────────────────────────
+
   // ─── Media upload ─────────────────────────────────────────────────────────
 
   botInstance.on("message", async (msg) => {

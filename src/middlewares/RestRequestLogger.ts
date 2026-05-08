@@ -23,7 +23,7 @@ export const RestRequestLogger = function (
 
   res.on("finish", () => {
     LoggingUtilities.controller.access(
-      ipAddress[0],
+      ipAddress,
       req.method,
       req.originalUrl,
       req.httpVersion,

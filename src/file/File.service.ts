@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
@@ -7,25 +6,20 @@ import { Exceptions } from "../exceptions/AppExceptions";
 
 const TB_TRAVEL_AGENDA_FILE = "tb_travel_agenda_file";
 const TB_TRAVEL_AGENDA_ITEM = "tb_travel_agenda_item";
-const TB_TRAVEL_ITINERARY = "tb_travel_itinerary";
-
-const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+const TB_TRAVEL_ITINERARY   = "tb_travel_itinerary";
 
 export class FileService {
   constructor(private db: KnexSqlUtilities) {}
 
-  async upload(
+  async uploadTg(
     username: string,
     uuid: string,
     agendaId: number,
-    blob: string,
+    tgShortCode: string,
     mimeType: string,
     name?: string | null,
     sizeInBytes?: number | null,
-  ): Promise<{ id: number; uuid: string; shortCode: string }> {
-    const blobSizeBytes = Buffer.byteLength(blob, "base64");
-    if (blobSizeBytes > MAX_SIZE_BYTES) throw new Exceptions.InvalidRequest("blob");
-
+  ): Promise<{ id: number; uuid: string }> {
     const agendaItem = await this.db.findOne<ITB_AGENDA_ITEM>(TB_TRAVEL_AGENDA_ITEM, { id: agendaId });
     if (!agendaItem) throw new Exceptions.ForbiddenAccess();
 
@@ -36,51 +30,24 @@ export class FileService {
     });
     if (!itinerary) throw new Exceptions.ForbiddenAccess();
 
-    const shortCode = crypto.randomBytes(4).toString("hex");
+    const existing = await this.db.findOne<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, {
+      uuid,
+      record_status: "A",
+    });
+    if (existing) return { id: existing.id!, uuid: existing.uuid };
 
     const file = (await this.db.insert<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, {
       uuid,
-      short_code: shortCode,
+      tg_short_code: tgShortCode,
       agenda_item_id: agendaId,
       name: name ?? undefined,
       mime_type: mimeType,
       size_in_bytes: sizeInBytes ?? undefined,
-      blob,
       created_dt: Date.now(),
       record_status: "A",
     })) as ITB_AGENDA_FILE;
 
-    return { id: file.id!, uuid: file.uuid, shortCode };
-  }
-
-  async getBlobByShortCode(shortCode: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
-    const file = await this.db.findOne<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, { short_code: shortCode, record_status: "A" }, [
-      "blob",
-      "mime_type",
-    ]);
-
-    if (!file?.blob) return null;
-
-    const buffer = Buffer.isBuffer(file.blob) ? file.blob : Buffer.from(file.blob as string, "base64");
-    return { buffer, mimeType: file.mime_type ?? "application/octet-stream" };
-  }
-
-  async getBlob(uuid: string): Promise<{ blob: string; mimeType: string } | null> {
-    const file = await this.db.findOne<ITB_AGENDA_FILE>(TB_TRAVEL_AGENDA_FILE, { uuid, record_status: "A" }, [
-      "blob",
-      "mime_type",
-    ]);
-
-    if (!file?.blob) return null;
-
-    const buffer = Buffer.isBuffer(file.blob) ? file.blob : Buffer.from(file.blob); // <-- important
-
-    const base64 = buffer.toString("base64");
-
-    return {
-      blob: base64,
-      mimeType: file.mime_type ?? "application/octet-stream",
-    };
+    return { id: file.id!, uuid: file.uuid };
   }
 
   async deleteByUuids(username: string, fileIds: string[]): Promise<number> {
