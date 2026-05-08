@@ -95,19 +95,14 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── Rate limit: 15 req/min
 │   │
 │   ├── TELEGRAM STORAGE  /api/telegram  [AUTH REQUIRED]
-│   │   ├── Link qindom account to Telegram (ephemeral 10-min token)
-│   │   ├── Upload / list / delete / expire media via bot
-│   │   ├── Stores telegram_file_id only (no binary)
-│   │   ├── Telegram Bot: /start /help /link /get /list /delete /expire
-│   │   └── DB: tb_telegram_link, tb_telegram_media,
-│   │           tb_telegram_link_token
-│   │
-│   └── WEDDING  /api/wedding
-│       ├── Events, guests, tables, dates, date comments
-│       ├── Multiple sub-controllers (events, guests, tables, dates)
-│       └── DB: tb_wedding_event, tb_wedding_guest, tb_wedding_table,
-│               tb_wedding_session, tb_wedding_date,
-│               tb_wedding_date_comment  (7 tables)
+│       ├── Link qindom account to Telegram (ephemeral 10-min token)
+│       ├── Upload / list / delete / expire media via bot
+│       ├── Stores telegram_file_id only (no binary)
+│       ├── Telegram Bot: /start /help /link /get /list /delete /expire
+│       └── DB: tb_telegram_link, tb_telegram_media,
+│               tb_telegram_link_token
+│   
+
 │
 ├── EXTERNAL SERVICES
 │   ├── MySQL (wuxi DB)

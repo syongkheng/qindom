@@ -24,10 +24,11 @@ import createFileController from "./file/File.controller";
 import createFeatureController from "./feature/Feature.controller";
 import createDouyinController from "./douyin/Douyin.controller";
 import createGeocodeController from "./geocode/Geocode.controller";
-import createExpenseController from "./expense/Expense.controller";
-import createWeddingController from "./wedding/Wedding.controller";
 import createSleepController from "./sleep/Sleep.controller";
-import createTelegramController, { createTelegramUploadController, createTelegramWebhookHandler } from "./telegram/Telegram.controller";
+import createTelegramController, {
+  createTelegramUploadController,
+  createTelegramWebhookHandler,
+} from "./telegram/Telegram.controller";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller";
 import createScenicController from "./scenic/Scenic.controller";
 import createTrailController from "./trail/Trail.controller";
@@ -64,7 +65,7 @@ async function startServer() {
   app.use(globalLimiter);
   app.use(express.json({ limit: "5mb" }));
   app.use(express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 }));
-  app.disable('x-powered-by');
+  app.disable("x-powered-by");
 
   // Initialize database
   const db = await initializeDatabase();
@@ -82,13 +83,19 @@ async function startServer() {
   app.use("/api/img", [RestRequestLogger], createTgImageGetController(db));
   app.use("/api/img", [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db));
   app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
-  app.use("/api/douyin", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter], createDouyinController(db));
-app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
-  app.use("/api/expense", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createExpenseController(db));
-  app.use("/api/wedding", [RestRequestLogger, RequestHeaderFilter], createWeddingController(db));
+  app.use(
+    "/api/douyin",
+    [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter],
+    createDouyinController(db),
+  );
+  app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
   app.use("/api/sleep", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createSleepController(db));
   app.use("/api/telegram", [RestRequestLogger, MandatoryTokenFilter], createTelegramUploadController(db));
-  app.use("/api/telegram", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createTelegramController(db));
+  app.use(
+    "/api/telegram",
+    [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter],
+    createTelegramController(db),
+  );
   app.post("/api/telegram/webhook", createTelegramWebhookHandler(db));
   app.use("/api/scenic", [RestRequestLogger, RequestHeaderFilter], createScenicController(db));
   app.use("/api/trail", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createTrailController(db));
@@ -97,12 +104,8 @@ app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeC
   app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
-    initTelegramBot(db).catch((err) =>
-      LoggingUtilities.service.error("TelegramBot", err?.message ?? String(err))
-    );
-    initTgImageBot(db).catch((err) =>
-      LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err))
-    );
+    initTelegramBot(db).catch((err) => LoggingUtilities.service.error("TelegramBot", err?.message ?? String(err)));
+    initTgImageBot(db).catch((err) => LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err)));
   });
 }
 
