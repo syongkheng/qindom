@@ -1,5 +1,5 @@
 import { parse, HTMLElement } from "node-html-parser";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { CoordinateService } from "./Coordinate.service";
 import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";

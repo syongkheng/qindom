@@ -14,7 +14,7 @@ export default function createSleepController(db: KnexSqlUtilities): Router {
   const featureSvc = new FeatureService(db);
 
   router.get("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { from, to } = req.query as { from?: string; to?: string };
       const logs = await svc.getLogs(getUser(req).username, from, to);
@@ -25,7 +25,7 @@ export default function createSleepController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const body = SleepValidator.validateCreateRequest(req);
       const log = await svc.createLog(getUser(req).username, body);
@@ -36,7 +36,7 @@ export default function createSleepController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/update", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { id, body } = SleepValidator.validateUpdateRequest(req);
       const updated = await svc.updateLog(getUser(req).username, id, body);
@@ -48,7 +48,7 @@ export default function createSleepController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/delete", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { id } = SleepValidator.validateIdRequest(req);
       const deleted = await svc.deleteLog(getUser(req).username, id);
@@ -60,7 +60,7 @@ export default function createSleepController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/parse-screenshot", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
       const hasRole = user.roles.includes("SLP_R5") || user.roles.includes("SYSTEM_R5");
@@ -78,7 +78,7 @@ export default function createSleepController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/bulk", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const entries = SleepValidator.validateBulkRequest(req);
       const count = await svc.bulkUpsert(getUser(req).username, entries);

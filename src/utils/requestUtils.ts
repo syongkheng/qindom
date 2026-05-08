@@ -4,7 +4,7 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { BaseExceptions } from "../exceptions/BaseException";
 import { UnauthorizedAccessException } from "../exceptions/UnauthorizedAccessException";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { LoggingUtilities } from "./LoggingUtilities";
+import { LoggingUtilities } from "./logging/LoggingUtilities";
 import { toMessage } from "./errorUtils";
 
 export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {

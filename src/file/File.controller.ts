@@ -12,7 +12,7 @@ export default function createFileController(db: KnexSqlUtilities): Router {
   const svc = new FileService(db);
 
   router.post("/tg", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { uuid, agendaId, tgShortCode, mimeType, name, sizeInBytes } = req.body;
       if (!uuid || !agendaId || !tgShortCode || !mimeType) throw new Exceptions.InvalidRequest("uuid|agendaId|tgShortCode|mimeType");
@@ -24,7 +24,7 @@ export default function createFileController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/delete", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { fileIds } = FileValidator.validateDeleteRequest(req);
       const deleted = await svc.deleteByUuids(getUser(req).username, fileIds);

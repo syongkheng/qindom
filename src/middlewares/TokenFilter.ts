@@ -1,6 +1,6 @@
-import { NextFunction, Request, Response } from "express";
+import { NextFunction, Response } from "express";
 import jwt from "jsonwebtoken";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { IDecodedTokenUser } from "../token/Token.service";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
@@ -9,7 +9,7 @@ export const MandatoryTokenFilter = (req: RequestWithUserInfo, res: Response, ne
   /**
    * Token validity is 1 year as configured in Token.service.ts
    */
-  const response = new ControllerResponse(res);
+  const response = new ControllerResponse(req, res);
   const jwtSecret = process.env.JWT_SECRET;
 
   try {

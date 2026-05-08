@@ -1,5 +1,6 @@
 import { Knex } from "knex";
-import { LoggingUtilities } from "./LoggingUtilities";
+import { LoggingUtilities } from "./logging/LoggingUtilities";
+import { IRequestLogContext } from "../models/IRequestLogContext";
 import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop";
 import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info";
 import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station";
@@ -16,14 +17,23 @@ class KnexSqlUtilities {
     };
   }
 
+  private sqlEvent(logContext: IRequestLogContext | undefined, label: string, durationMs: number): void {
+    if (logContext) {
+      LoggingUtilities.request.branch(logContext, "SQL", label, undefined, durationMs);
+    }
+  }
+
   // CREATE
-  async insert<T = any, R = T>(table: string, data: Partial<T>): Promise<R> {
+  async insert<T = any, R = T>(table: string, data: Partial<T>, logContext?: IRequestLogContext): Promise<R> {
     try {
-      const query = this.knex(table).insert(data);
-      const [id] = await query;
-      // Fetch the inserted row manually if needed
-      LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
+      const t0 = Date.now();
+      const [id] = await this.knex(table).insert(data);
       const [row] = await this.knex(table).where({ id }).select("*");
+      if (logContext) {
+        this.sqlEvent(logContext, `${table}.insert()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug("KnexSqlUtilities.insert", `Inserted into ${table} id=${id}`);
+      }
       return row as R;
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.insert", `Insert error: ${toMessage(error)}`);
@@ -35,12 +45,19 @@ class KnexSqlUtilities {
   async findOne<T = any>(
     table: string,
     whereClause: Partial<T> = {},
-    columns: readonly string[] = ["*"]
+    columns: readonly string[] = ["*"],
+    logContext?: IRequestLogContext,
   ): Promise<T | undefined> {
     try {
       const query = this.knex(table).select(columns).where(whereClause).first();
-      LoggingUtilities.service.debug("KnexSqlUtilities.findOne", `Executing query - [ ${query.toQuery()} ]`);
-      return (await query) as T | undefined;
+      const t0 = Date.now();
+      const result = await query;
+      if (logContext) {
+        this.sqlEvent(logContext, `${table}.findOne()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug("KnexSqlUtilities.findOne", `Executing query - [ ${query.toQuery()} ]`);
+      }
+      return result as T | undefined;
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.findOne", `Find one error: ${toMessage(error)}`);
       throw new Error(`Find one failed: ${toMessage(error)}`);
@@ -57,26 +74,28 @@ class KnexSqlUtilities {
       orderBy?: string;
       orderDirection?: "asc" | "desc";
       columns?: readonly string[];
-      extraWhere?: (queryBuilder: Knex.QueryBuilder) => void; // 👈 NEW
-    } = {}
+      extraWhere?: (queryBuilder: Knex.QueryBuilder) => void;
+    } = {},
+    logContext?: IRequestLogContext,
   ): Promise<T[]> {
     try {
       let query = this.knex(table).where(whereClause);
 
-      // Apply additional complex conditions if provided
-      if (options.extraWhere) {
-        options.extraWhere(query);
-      }
-
+      if (options.extraWhere) options.extraWhere(query);
       if (options.limit) query = query.limit(options.limit);
       if (options.offset) query = query.offset(options.offset);
       if (options.orderBy) query = query.orderBy(options.orderBy, options.orderDirection || "asc");
-
       query = options.columns ? query.select(options.columns) : query.select("*");
 
-      LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
+      const t0 = Date.now();
+      const result = await query;
+      if (logContext) {
+        this.sqlEvent(logContext, `${table}.find()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
+      }
 
-      return (await query) as T[];
+      return result as T[];
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.find", `Find error: ${toMessage(error)}`);
       throw new Error(`Find failed: ${toMessage(error)}`);
@@ -84,12 +103,21 @@ class KnexSqlUtilities {
   }
 
   // UPDATE
-  async update<T = any, R = T>(table: string, whereClause: Partial<T>, data: Partial<T>): Promise<R[]> {
+  async update<T = any, R = T>(
+    table: string,
+    whereClause: Partial<T>,
+    data: Partial<T>,
+    logContext?: IRequestLogContext,
+  ): Promise<R[]> {
     try {
-      const query = this.knex(table).where(whereClause).update(data);
-      LoggingUtilities.service.debug("KnexSqlUtilities.update", `Executing query - [ ${query.toQuery()} ]`);
-      await query;
+      const t0 = Date.now();
+      await this.knex(table).where(whereClause).update(data);
       const rows = await this.knex(table).where(whereClause).select("*");
+      if (logContext) {
+        this.sqlEvent(logContext, `${table}.update()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug("KnexSqlUtilities.update", `Updated ${table}`);
+      }
       return rows as R[];
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.update", `Update error: ${toMessage(error)}`);
@@ -98,12 +126,16 @@ class KnexSqlUtilities {
   }
 
   // DELETE
-  async delete<T = any>(table: string, whereClause: Partial<T>): Promise<number> {
+  async delete<T = any>(table: string, whereClause: Partial<T>, logContext?: IRequestLogContext): Promise<number> {
     try {
-      const query = this.knex(table).where(whereClause).delete();
-      LoggingUtilities.service.debug("KnexSqlUtilities.delete", `Executing query - [ ${query.toQuery()} ]`);
-      const result = await query;
-      return result; // returns number of deleted rows
+      const t0 = Date.now();
+      const result = await this.knex(table).where(whereClause).delete();
+      if (logContext) {
+        this.sqlEvent(logContext, `${table}.delete()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug("KnexSqlUtilities.delete", `Deleted from ${table}`);
+      }
+      return result;
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.delete", `Delete error: ${toMessage(error)}`);
       throw new Error(`Delete failed: ${toMessage(error)}`);
@@ -124,11 +156,16 @@ class KnexSqlUtilities {
   }
 
   // COUNT
-  async count<T = any>(table: string, whereClause: Partial<T> = {}): Promise<number> {
+  async count<T = any>(table: string, whereClause: Partial<T> = {}, logContext?: IRequestLogContext): Promise<number> {
     try {
       const query = this.knex(table).where(whereClause).count<{ count: number }[]>({ count: "*" });
-      LoggingUtilities.service.debug("KnexSqlUtilities.count", `Executing query - [ ${query.toQuery()} ]`);
+      const t0 = Date.now();
       const result = await query;
+      if (logContext) {
+        this.sqlEvent(logContext, `${table}.count()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug("KnexSqlUtilities.count", `Executing query - [ ${query.toQuery()} ]`);
+      }
       return Number(result[0]?.count || 0);
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.count", `Count error: ${toMessage(error)}`);
@@ -314,16 +351,22 @@ class KnexSqlUtilities {
     }
   }
 
-  async upsert<T = any>(table: string, data: Partial<T>, conflictKey: string, updateData?: Partial<T>): Promise<void> {
+  async upsert<T = any>(
+    table: string,
+    data: Partial<T>,
+    conflictKey: string,
+    updateData?: Partial<T>,
+    logContext?: IRequestLogContext,
+  ): Promise<void> {
     try {
-      const query = this.knex(table)
-        .insert(data)
-        .onConflict(conflictKey)
-        .merge(updateData ?? data);
-
-      LoggingUtilities.service.debug("KnexSqlUtilities.upsert", `Executing query - [ ${query.toQuery()} ]`);
-
+      const query = this.knex(table).insert(data).onConflict(conflictKey).merge(updateData ?? data);
+      const t0 = Date.now();
       await query;
+      if (logContext) {
+        this.sqlEvent(logContext, `${table}.upsert()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug("KnexSqlUtilities.upsert", `Executing query - [ ${query.toQuery()} ]`);
+      }
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.upsert", `Upsert error: ${toMessage(error)}`);
       throw new Error(`Upsert failed: ${toMessage(error)}`);

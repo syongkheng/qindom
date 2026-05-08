@@ -10,7 +10,7 @@ export default function createLtaController(db: KnexSqlUtilities) {
   const svc = new LtaService(db);
 
   router.get("/timing", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { busStopCode } = req.query;
       if (!busStopCode) throw new Exceptions.InvalidRequest("busStopCode");
@@ -21,7 +21,7 @@ export default function createLtaController(db: KnexSqlUtilities) {
   });
 
   router.post("/bus/services", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { busStopCode } = req.body as { busStopCode: string };
       return cr.ok(await svc.retrieveBusServicesByBusStopCode(busStopCode));

@@ -1,6 +1,6 @@
 import { Exceptions } from "../exceptions/AppExceptions";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import jwt from "jsonwebtoken";
 
 export interface IDecodedTokenUser {

@@ -3,7 +3,7 @@ import { Knex } from "knex";
 import dotenv from "dotenv";
 import path from "path";
 import KnexSqlUtilities from "../../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../../utils/LoggingUtilities";
+import { LoggingUtilities } from "../../utils/logging/LoggingUtilities";
 
 // Load environment variables from .env file
 dotenv.config();

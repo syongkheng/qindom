@@ -3,7 +3,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ITB_TRAIL_SESSION } from "../models/databases/tb_trail_session";
 import { ITB_TRAIL_SPLIT } from "../models/databases/tb_trail_split";
 import { ITB_TRAIL_CUSTOM } from "../models/databases/tb_trail_custom";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 
 const TB_TRAIL_SESSION = "tb_trail_session";
 const TB_TRAIL_SPLIT   = "tb_trail_split";

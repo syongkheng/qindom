@@ -17,7 +17,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   const svc = new ItineraryService(db);
 
   router.get("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const myTrips = await svc.listTrips(getUser(req).username);
       return cr.ok({ myTrips, sharedTrips: [] });
@@ -27,7 +27,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   router.post("/delete/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       await svc.deleteTrip(getUser(req).username, req.params.sessionId);
       return cr.ok({ deleted: true });
@@ -37,7 +37,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   router.post("/challenge", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { shortCode, challenge } = ItineraryValidator.validateChallengeRequest(req);
       const result = await svc.verifyChallenge(shortCode, challenge);
@@ -49,11 +49,11 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   router.post("/add-collaborator", async (_req: Request, res: Response) => {
-    return new ControllerResponse(res).ok({ added: false, message: "Not yet implemented" });
+    return new ControllerResponse(_req, res).ok({ added: false, message: "Not yet implemented" });
   });
 
   router.post("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const body = ItineraryValidator.validateCreateRequest(req);
       const result = await svc.create(getUser(req).username, body);
@@ -64,7 +64,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   router.get("/v/:shortCode", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const result = await svc.getByShortCode(req.params.shortCode);
       if (!("hasChallenge" in result)) {
@@ -77,7 +77,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   router.get("/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const result = await svc.getBySessionId(getUser(req).username, req.params.sessionId);
       return cr.ok(result);
@@ -87,7 +87,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   });
 
   router.post("/edit/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const body = ItineraryValidator.validateEditRequest(req);
       const result = await svc.edit(getUser(req).username, req.params.sessionId, body);

@@ -8,7 +8,7 @@ dotenv.config({ path: envFile });
 
 import express, { Application } from "express";
 import cors from "cors";
-import { LoggingUtilities } from "./utils/LoggingUtilities";
+import { LoggingUtilities } from "./utils/logging/LoggingUtilities";
 import { initializeDatabase } from "./config/db/mysql";
 import { RestRequestLogger } from "./middlewares/RestRequestLogger";
 

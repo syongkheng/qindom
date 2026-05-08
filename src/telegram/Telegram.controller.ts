@@ -10,7 +10,7 @@ import { TelegramService } from "./Telegram.service";
 import { TelegramValidator } from "./Telegram.validator";
 import { getUser, handleException } from "../utils/requestUtils";
 import { getTelegramBot } from "./Telegram.bot";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -20,7 +20,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // Check if the authenticated user's Telegram account is linked
   router.get("/link-status", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const result = await svc.getLinkStatus(getUser(req).username);
       return cr.ok(result);
@@ -31,7 +31,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // Generate a one-time link token for account linking
   router.post("/link-token", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const result = await svc.generateLinkToken(getUser(req).username);
       return cr.ok(result);
@@ -42,7 +42,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // List all media uploaded by the authenticated user
   router.get("/media", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const media = await svc.listMedia(getUser(req).username);
       return cr.ok(media);
@@ -53,7 +53,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // Get metadata for a single media item
   router.get("/media/:id", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { id } = TelegramValidator.validateIdParam(req);
       const media = await svc.getMedia(id, getUser(req).username);
@@ -65,7 +65,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // Proxy-download a file — bot token and CDN URL never leave the server
   router.get("/media/:id/download", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { id } = TelegramValidator.validateIdParam(req);
       const { stream, contentType, filename, contentLength } = await svc.proxyDownload(id, getUser(req).username);
@@ -80,7 +80,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // Serve a JPEG preview — routes HEIC/HEIF through heic-convert, others through sharp
   router.get("/media/:id/preview", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { id } = TelegramValidator.validateIdParam(req);
       const { stream, contentType, filename } = await svc.proxyDownload(id, getUser(req).username);
@@ -111,7 +111,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // Soft-delete a media item
   router.post("/media/:id/delete", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { id } = TelegramValidator.validateIdParam(req);
       await svc.deleteMedia(id, getUser(req).username);
@@ -123,7 +123,7 @@ export default function createTelegramController(db: KnexSqlUtilities): Router {
 
   // Set or update expiry (days=0 means never)
   router.post("/media/:id/expire", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { id } = TelegramValidator.validateIdParam(req);
       const { days } = TelegramValidator.validateSetExpiry(req);
@@ -143,7 +143,7 @@ export function createTelegramUploadController(db: KnexSqlUtilities): Router {
   const svc = new TelegramService(db);
 
   router.post("/media/upload", upload.single("file"), async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       if (!req.file) throw new Error("No file attached");
       const result = await svc.uploadMedia({

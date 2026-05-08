@@ -1,5 +1,5 @@
 import TelegramBot from "node-telegram-bot-api";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { TelegramService } from "./Telegram.service";
 import { extractMedia } from "./Telegram.utils";

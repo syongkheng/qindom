@@ -1,4 +1,4 @@
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { ITB_HDB_PPHS_COORDINATE } from "../models/databases/tb_hdb_pphs_coordinate";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { toMessage } from "../utils/errorUtils";

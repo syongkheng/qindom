@@ -13,7 +13,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
 
   // List sessions
   router.get("/sessions", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const sessions = await svc.getSessions(getUser(req).username);
       return cr.ok(sessions);
@@ -24,7 +24,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
 
   // Create session
   router.post("/sessions", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const body = TrailValidator.validateCreateSession(req);
       const session = await svc.createSession(getUser(req).username, body);
@@ -36,7 +36,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
 
   // Get session by id
   router.get("/sessions/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const session = await svc.getSessionById(req.params.sessionId, getUser(req).username);
       return cr.ok(session);
@@ -47,7 +47,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
 
   // Complete session
   router.post("/sessions/:sessionId/complete", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const body = TrailValidator.validateCompleteSession(req);
       const session = await svc.completeSession(req.params.sessionId, getUser(req).username, body);
@@ -59,7 +59,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
 
   // Delete session (soft)
   router.post("/sessions/:sessionId/delete", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       await svc.deleteSession(req.params.sessionId, getUser(req).username);
       return cr.ok({ deleted: true });
@@ -70,7 +70,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
 
   // List custom trails
   router.get("/custom", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const trails = await svc.getCustomTrails(getUser(req).username);
       return cr.ok(trails);
@@ -81,7 +81,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
 
   // Create custom trail
   router.post("/custom", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const body = TrailValidator.validateCreateCustomTrail(req);
       const trail = await svc.createCustomTrail(getUser(req).username, body);

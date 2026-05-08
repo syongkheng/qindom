@@ -6,7 +6,7 @@ import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinera
 import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking";
 import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item";
 import { Exceptions } from "../exceptions/AppExceptions";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { toMessage } from "../utils/errorUtils";
 import { file } from "googleapis/build/src/apis/file";
 

@@ -11,7 +11,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
   const pfpService = new PfpService(db);
 
   router.get("/user/country", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, system } = getUser(req);
       return cr.ok(await pfpService.getCountry(`${username}_${system}`));
@@ -21,7 +21,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
   });
 
   router.post("/user/country", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, system } = getUser(req);
       const { country } = req.body;
@@ -32,7 +32,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
   });
 
   router.get("/user/photo", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, system } = getUser(req);
       return cr.ok(await pfpService.getProfilePhoto(`${username}_${system}`));
@@ -42,7 +42,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
   });
 
   router.post("/user/photo", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, system } = getUser(req);
       const { blobString } = req.body;
@@ -53,7 +53,7 @@ export default function createPfpController(db: KnexSqlUtilities) {
   });
 
   router.post("/user/username", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, system } = getUser(req);
       const { newUsername } = req.body;

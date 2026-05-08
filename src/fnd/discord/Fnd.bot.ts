@@ -1,7 +1,7 @@
 import { ChannelType, Client, GatewayIntentBits, Message } from "discord.js";
 import fs from "fs";
 import path from "path";
-import { LoggingUtilities } from "../../utils/LoggingUtilities";
+import { LoggingUtilities } from "../../utils/logging/LoggingUtilities";
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 

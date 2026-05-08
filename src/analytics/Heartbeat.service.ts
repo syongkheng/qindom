@@ -1,5 +1,5 @@
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { ITB_ANALYTIC_USER_ACTIVITY } from "../models/databases/tb_analytic_user_activity";
 import { toMessage } from "../utils/errorUtils";

@@ -11,8 +11,8 @@ export default function createScenicController(db: KnexSqlUtilities): Router {
   const svc = new ScenicService(db);
 
   // GET /api/scenic — public, returns full list of 5A scenic spots
-  router.get("/", async (_req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+  router.get("/", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(req, res);
     try {
       const spots = await svc.getAll();
       return cr.ok({ spots });
@@ -23,7 +23,7 @@ export default function createScenicController(db: KnexSqlUtilities): Router {
 
   // GET /api/scenic/checklist — auth required, returns user's visited scenic IDs
   router.get("/checklist", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const checklist = await svc.getUserChecklist(getUser(req).username);
       return cr.ok({ checklist });
@@ -34,7 +34,7 @@ export default function createScenicController(db: KnexSqlUtilities): Router {
 
   // POST /api/scenic/checklist — auth required, upsert a check { scenicId, visited }
   router.post("/checklist", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { scenicId, visited } = req.body;
       if (typeof scenicId !== "number" || typeof visited !== "boolean") {

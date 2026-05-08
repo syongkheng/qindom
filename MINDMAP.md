@@ -15,7 +15,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── CORS (ALLOWED_ORIGINS env var)
 │   ├── globalLimiter (100 req/min per IP)
 │   ├── express.json (5MB)
-│   ├── RestRequestLogger (logs all requests; redacts password/blob/token)
+│   ├── RestRequestLogger (logs all requests; redacts password/blob/token/email)
 │   ├── RequestHeaderFilter (POST must have Content-Type: application/json)
 │   ├── MandatoryTokenFilter (JWT required → 401 if missing)
 │   └── OptionalTokenFilter (JWT attached if present)
@@ -126,7 +126,15 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── URLs: hyphens, not underscores
 │   ├── Envelope: { code, status: "Ok"/"Ko", data }
 │   ├── Controller factory: createXyzController(db) → Router
-│   └── Exceptions: always throw, never return error strings
+│   ├── Exceptions: always throw, never return error strings
+│   └── Request tree logging pattern:
+│       ├── KnexSqlUtilities accepts optional logContext (4th/last param)
+│       │     — auto-emits timed SQL events when logContext provided
+│       ├── Service methods accept logContext?: IRequestLogContext
+│       │     — emit AUTH events via LoggingUtilities.request.branch()
+│       │     — use pending-event pattern: branch() returns event ref,
+│       │       set .detail after the async result is known
+│       └── Controllers pass req.logContext to service calls
 │
 └── ENVIRONMENTS
     ├── Dev: .env.dev, Telegram polling, port 3000

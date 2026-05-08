@@ -8,8 +8,8 @@ export default function createConnectivityController(db: KnexSqlUtilities) {
   const router = Router();
   const svc = new ConnectivityService(db);
 
-  router.get("/", async (_req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+  router.get("/", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(req, res);
     try {
       return cr.ok(await svc.statistics());
     } catch (err) {

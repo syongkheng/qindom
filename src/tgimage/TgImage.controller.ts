@@ -14,7 +14,7 @@ export function createTgImageGetController(db: KnexSqlUtilities): Router {
   const svc = new TgImageService(db);
 
   router.get("/:shortCode", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const record = await svc.getByShortCode(req.params.shortCode);
       if (!record) throw new Exceptions.NotFound();
@@ -32,7 +32,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
   const svc = new TgImageService(db);
 
   router.post("/upload", upload.single("file"), async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       if (!req.file) return cr.badRequest("No file provided");
       const username = getUser(req).username;
@@ -52,8 +52,8 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
     }
   });
 
-  router.get("/admin/list", async (_req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+  router.get("/admin/list", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(req, res);
     try {
       return cr.ok(await svc.listAdmins());
     } catch (err) {
@@ -62,7 +62,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/admin/add", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const telegramUserId = Number(req.body?.telegramUserId);
       if (!telegramUserId || isNaN(telegramUserId)) return cr.badRequest("telegramUserId required");
@@ -74,7 +74,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
   });
 
   router.post("/admin/remove", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const telegramUserId = Number(req.body?.telegramUserId);
       if (!telegramUserId || isNaN(telegramUserId)) return cr.badRequest("telegramUserId required");

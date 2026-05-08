@@ -1,7 +1,7 @@
 import axios from "axios";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { Exceptions } from "../exceptions/AppExceptions";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { generateUniqueSlug, generateLinkToken, extractMedia, type MediaType } from "./Telegram.utils";
 
 const TB_TELEGRAM_MEDIA      = "tb_telegram_media";

@@ -11,8 +11,8 @@ export default function createFeatureController(db: KnexSqlUtilities) {
   const router = Router();
   const svc = new FeatureService(db);
 
-  router.get("/", async (_req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+  router.get("/", async (req: Request, res: Response) => {
+    const cr = new ControllerResponse(req, res);
     try {
       return cr.ok(await svc.getAllFlags());
     } catch (err) {
@@ -21,7 +21,7 @@ export default function createFeatureController(db: KnexSqlUtilities) {
   });
 
   router.get("/admin", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
       if (!user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
@@ -32,7 +32,7 @@ export default function createFeatureController(db: KnexSqlUtilities) {
   });
 
   router.post("/create", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
       if (!user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
@@ -47,7 +47,7 @@ export default function createFeatureController(db: KnexSqlUtilities) {
   });
 
   router.post("/:key/update", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
       if (!user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
@@ -60,7 +60,7 @@ export default function createFeatureController(db: KnexSqlUtilities) {
   });
 
   router.post("/:key/toggle", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
       if (!user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();

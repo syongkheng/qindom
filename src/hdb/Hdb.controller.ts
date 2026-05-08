@@ -14,7 +14,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   const coordinateSvc = new CoordinateService(db);
 
   router.post("/pphs", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { batch } = req.body as { batch: string };
       return cr.ok(await hdbSvc.retrieveListOfPphsWithCoordinates(batch));
@@ -24,7 +24,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   });
 
   router.post("/pphs/update", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
       if (!user.roles.includes("PPHS_R5") && !user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
@@ -38,7 +38,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   });
 
   router.post("/pphs/clear-coordinates", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
       if (!user.roles.includes("PPHS_R5") && !user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
@@ -51,7 +51,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   });
 
   router.post("/pphs/geocode-options", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { address } = req.body as { address: string };
       return cr.ok(await hdbSvc.getAllCoordinateOptions(address));
@@ -61,7 +61,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   });
 
   router.post("/pphs/refresh", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { address } = req.body as { address: string };
       return cr.ok(await hdbSvc.refreshCoordinatesOfAddress(address));
@@ -71,7 +71,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   });
 
   router.post("/pphs/busstops", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { lat, lng, radius } = req.body as { lat: string; lng: string; radius: number };
       return cr.ok(await hdbSvc.retrieveBusstopWithinRadiusOfLatLng(lat, lng, radius));
@@ -81,7 +81,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   });
 
   router.post("/pphs/mrt", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { lat, lng, limit } = req.body as { lat: string; lng: string; limit?: number };
       return cr.ok(await hdbSvc.retrieveNearestMrtStationsOfLatLng(lat, lng, limit));

@@ -12,7 +12,7 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
   const svc = new HeartbeatService(db);
 
   router.post("/heartbeat", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { sessionId } = req.body;
       if (!sessionId) throw new Exceptions.InvalidRequest("sessionId");

@@ -1,5 +1,5 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
-import { LoggingUtilities } from "../../../utils/LoggingUtilities";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
 import { firestoreDB } from "../../../config/db/firebase";
 import { currentTimestampMs, mapStoveLevel, signPayload } from "./Register.command";
 import { toMessage } from "../../../utils/errorUtils";

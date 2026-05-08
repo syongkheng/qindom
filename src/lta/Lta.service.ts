@@ -1,7 +1,7 @@
 import { Exceptions } from "../exceptions/AppExceptions";
 import { UnknownException } from "../exceptions/UnknownException";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import dotenv from "dotenv";
 import { toMessage } from "../utils/errorUtils";
 

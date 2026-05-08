@@ -1,7 +1,8 @@
 import crypto from "crypto";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
+import { IRequestLogContext } from "../models/IRequestLogContext";
 import bcrypt from "bcrypt";
 import { TokenService } from "../token/Token.service";
 import { Exceptions } from "../exceptions/AppExceptions";
@@ -30,20 +31,27 @@ export class AuthService {
   async checkIfEmailExistsWithinSystem({
     email,
     system,
+    logContext,
   }: {
     email: string;
     system: string;
+    logContext?: IRequestLogContext;
   }): Promise<{ exist: boolean; nextStep: "register" | "login" }> {
-    LoggingUtilities.service.debug(
-      "AuthService.checkIfEmailExistsWithinSystem",
-      `Finding email: ${email} in system: ${system}`,
-    );
-    const existing = await this.db.find<ITB_AA_USER>("tb_aa_user", { email, system, record_status: "A" }, { limit: 1 });
+    const authEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "AUTH", "Checking account existence")
+      : null;
 
-    if (existing.length > 0) {
-      return { exist: true, nextStep: "login" };
-    }
-    return { exist: false, nextStep: "register" };
+    const existing = await this.db.find<ITB_AA_USER>(
+      "tb_aa_user",
+      { email, system, record_status: "A" },
+      { limit: 1 },
+      logContext,
+    );
+
+    const found = existing.length > 0;
+    if (authEvent) authEvent.detail = found ? "email found" : "email not found";
+
+    return found ? { exist: true, nextStep: "login" } : { exist: false, nextStep: "register" };
   }
 
   async createNewUser({
@@ -51,26 +59,37 @@ export class AuthService {
     email,
     password,
     system,
+    logContext,
   }: {
     username: string;
     email: string;
     password: string;
     system: string;
+    logContext?: IRequestLogContext;
   }): Promise<{ requiresVerification: true; email: string }> {
-    LoggingUtilities.service.info(
-      "AuthService.createNewUser",
-      `Creating user: ${username} (${email}) for system: ${system}`,
-    );
+    const authEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "AUTH", "Registering new user")
+      : null;
 
-    // Reject if email already registered in this system
-    const existing = await this.db.find<ITB_AA_USER>("tb_aa_user", { email, system, record_status: "A" }, { limit: 1 });
+    const existing = await this.db.find<ITB_AA_USER>(
+      "tb_aa_user",
+      { email, system, record_status: "A" },
+      { limit: 1 },
+      logContext,
+    );
     if (existing.length > 0) {
+      if (authEvent) authEvent.detail = "email already registered";
       throw new Exceptions.EmailAlreadyRegistered();
     }
 
-    // Reject if username already taken in this system
-    const existingUsername = await this.db.find<ITB_AA_USER>("tb_aa_user", { username_system: `${username}_${system}`, record_status: "A" }, { limit: 1 });
+    const existingUsername = await this.db.find<ITB_AA_USER>(
+      "tb_aa_user",
+      { username_system: `${username}_${system}`, record_status: "A" },
+      { limit: 1 },
+      logContext,
+    );
     if (existingUsername.length > 0) {
+      if (authEvent) authEvent.detail = "username already taken";
       throw new Exceptions.UsernameAlreadyTaken();
     }
 
@@ -82,22 +101,26 @@ export class AuthService {
     const expiresAt = Date.now() + VERIFY_CODE_TTL_MS;
 
     try {
-      await this.db.insert<ITB_AA_USER>("tb_aa_user", {
-        username,
-        email,
-        email_verified: 0,
-        verify_code: codeHash,
-        verify_code_expires_at: expiresAt,
-        verify_attempts: 0,
-        password: hashedPassword,
-        system,
-        roles: "[]",
-        username_system: `${username}_${system}`,
-        state: "REGISTER",
-        created_dt: Date.now(),
-        created_by: "SYSTEM",
-        record_status: "A",
-      });
+      await this.db.insert<ITB_AA_USER>(
+        "tb_aa_user",
+        {
+          username,
+          email,
+          email_verified: 0,
+          verify_code: codeHash,
+          verify_code_expires_at: expiresAt,
+          verify_attempts: 0,
+          password: hashedPassword,
+          system,
+          roles: "[]",
+          username_system: `${username}_${system}`,
+          state: "REGISTER",
+          created_dt: Date.now(),
+          created_by: "SYSTEM",
+          record_status: "A",
+        },
+        logContext,
+      );
 
       await MailerUtilities.sendMail({
         to: email,
@@ -111,7 +134,7 @@ export class AuthService {
         `,
       });
 
-      LoggingUtilities.service.info("AuthService.createNewUser", `Verification code sent to ${email}`);
+      if (authEvent) authEvent.detail = "user created, verification email sent";
 
       return { requiresVerification: true, email };
     } catch (error) {
@@ -124,51 +147,57 @@ export class AuthService {
     email,
     system,
     code,
+    logContext,
   }: {
     email: string;
     system: string;
     code: string;
+    logContext?: IRequestLogContext;
   }): Promise<{ token: string; username: string; roles: string[] }> {
-    LoggingUtilities.service.info("AuthService.verifyEmail", `Verifying code for ${email}_${system}`);
+    const authEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "AUTH", "Verifying email OTP")
+      : null;
 
-    const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
-      email,
-      system,
-      record_status: "A",
-    });
+    const user = await this.db.findOne<ITB_AA_USER>(
+      "tb_aa_user",
+      { email, system, record_status: "A" },
+      ["*"],
+      logContext,
+    );
 
     if (!user) {
+      if (authEvent) authEvent.detail = "user not found";
       throw new Exceptions.InvalidLoginCredentials();
     }
 
     if (user.email_verified === 1) {
-      // Already verified — just issue a token (resent-code edge case)
-      return this._issueToken(user);
+      if (authEvent) authEvent.detail = "already verified, issuing token";
+      return this._issueToken(user, logContext);
     }
 
-    // Brute-force guard
     if ((user.verify_attempts ?? 0) >= MAX_VERIFY_ATTEMPTS) {
+      if (authEvent) authEvent.detail = "max attempts exceeded";
       LoggingUtilities.service.warn("AuthService.verifyEmail", `Max attempts exceeded for ${email}`);
       throw new Exceptions.MaxVerifyAttempts();
     }
 
-    // Expiry check
     if (!user.verify_code_expires_at || Date.now() > user.verify_code_expires_at) {
+      if (authEvent) authEvent.detail = "OTP expired";
       throw new Exceptions.VerifyCodeExpired();
     }
 
     const incoming = hashCode(code);
     if (incoming !== user.verify_code) {
-      // Increment attempt counter
       await this.db.update<ITB_AA_USER>(
         "tb_aa_user",
         { email, system, record_status: "A" },
         { verify_attempts: (user.verify_attempts ?? 0) + 1 },
+        logContext,
       );
+      if (authEvent) authEvent.detail = "invalid OTP";
       throw new Exceptions.InvalidLoginCredentials();
     }
 
-    // Success — mark verified and clear OTP fields
     await this.db.update<ITB_AA_USER>(
       "tb_aa_user",
       { email, system, record_status: "A" },
@@ -179,18 +208,28 @@ export class AuthService {
         verify_attempts: 0,
         state: "ACTIVE",
       },
+      logContext,
     );
 
-    LoggingUtilities.service.info("AuthService.verifyEmail", `Email verified for ${email}`);
-    return this._issueToken(user);
+    if (authEvent) authEvent.detail = "email verified";
+    return this._issueToken(user, logContext);
   }
 
-  async resendVerifyCode({ email, system }: { email: string; system: string }): Promise<void> {
-    const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
-      email,
-      system,
-      record_status: "A",
-    });
+  async resendVerifyCode({
+    email,
+    system,
+    logContext,
+  }: {
+    email: string;
+    system: string;
+    logContext?: IRequestLogContext;
+  }): Promise<void> {
+    const user = await this.db.findOne<ITB_AA_USER>(
+      "tb_aa_user",
+      { email, system, record_status: "A" },
+      ["*"],
+      logContext,
+    );
 
     if (!user || user.email_verified === 1) return; // silently ignore
 
@@ -206,6 +245,7 @@ export class AuthService {
         verify_code_expires_at: expiresAt,
         verify_attempts: 0,
       },
+      logContext,
     );
 
     await MailerUtilities.sendMail({
@@ -225,37 +265,49 @@ export class AuthService {
     email,
     password,
     system,
+    logContext,
   }: {
     email: string;
     password: string;
     system: string;
+    logContext?: IRequestLogContext;
   }): Promise<{ token: string; username: string; roles: string[] }> {
-    LoggingUtilities.service.info("AuthService.login", `Login attempt for ${email}_${system}`);
+    const authEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "AUTH", "Authenticating user")
+      : null;
 
-    const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
-      email,
-      system,
-      record_status: "A",
-    });
+    const user = await this.db.findOne<ITB_AA_USER>(
+      "tb_aa_user",
+      { email, system, record_status: "A" },
+      ["*"],
+      logContext,
+    );
 
     if (!user) {
+      if (authEvent) authEvent.detail = "user not found";
       throw new Exceptions.InvalidLoginCredentials();
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
+      if (authEvent) authEvent.detail = "invalid password";
       throw new Exceptions.InvalidLoginCredentials();
     }
 
     if (user.email_verified !== 1) {
+      if (authEvent) authEvent.detail = "email not verified";
       LoggingUtilities.service.warn("AuthService.login", `Unverified login attempt for ${email}`);
       throw new Exceptions.EmailNotVerified();
     }
 
-    return this._issueToken(user);
+    if (authEvent) authEvent.detail = "authenticated";
+    return this._issueToken(user, logContext);
   }
 
-  private async _issueToken(user: ITB_AA_USER): Promise<{ token: string; username: string; roles: string[] }> {
+  private async _issueToken(
+    user: ITB_AA_USER,
+    logContext?: IRequestLogContext,
+  ): Promise<{ token: string; username: string; roles: string[] }> {
     let parsedRoles: string[] = [];
     try {
       const parsed = JSON.parse(user.roles ?? "[]");
@@ -279,27 +331,37 @@ export class AuthService {
         last_logged_in_dt: Date.now(),
         state: "ACTIVE",
       },
+      logContext,
     );
 
-    LoggingUtilities.service.info("AuthService.login", `Token issued for ${user.email} as ${user.username}`);
     return { token: generatedToken, username: user.username, roles: parsedRoles };
   }
 
-  async authenticateToken(token: string): Promise<{ username: string; roles: string[]; exist: boolean }> {
+  async authenticateToken(
+    token: string,
+    logContext?: IRequestLogContext,
+  ): Promise<{ username: string; roles: string[]; exist: boolean }> {
     const decodedToken = await this.tokenService.decodeToken(token);
     const existing = await this.db.find<ITB_AA_USER>(
       "tb_aa_user",
       { username: decodedToken.username, system: decodedToken.system, record_status: "A" },
       { limit: 1 },
+      logContext,
     );
     return { username: decodedToken.username, roles: decodedToken.roles ?? [], exist: existing.length > 0 };
   }
 
-  async validatePassword(username_system: string, password: string): Promise<{ isValid: boolean }> {
-    const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
-      username_system,
-      record_status: "A",
-    });
+  async validatePassword(
+    username_system: string,
+    password: string,
+    logContext?: IRequestLogContext,
+  ): Promise<{ isValid: boolean }> {
+    const user = await this.db.findOne<ITB_AA_USER>(
+      "tb_aa_user",
+      { username_system, record_status: "A" },
+      ["*"],
+      logContext,
+    );
 
     if (!user) throw new Exceptions.InvalidLoginCredentials();
 
@@ -307,11 +369,17 @@ export class AuthService {
     return { isValid };
   }
 
-  async updatePassword(username_system: string, newPassword: string): Promise<void> {
-    const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
-      username_system,
-      record_status: "A",
-    });
+  async updatePassword(
+    username_system: string,
+    newPassword: string,
+    logContext?: IRequestLogContext,
+  ): Promise<void> {
+    const user = await this.db.findOne<ITB_AA_USER>(
+      "tb_aa_user",
+      { username_system, record_status: "A" },
+      ["*"],
+      logContext,
+    );
 
     const saltRounds = 10;
     try {
@@ -320,6 +388,7 @@ export class AuthService {
         "tb_aa_user",
         { username_system, record_status: "A" },
         { password: hashedPassword },
+        logContext,
       );
     } catch (error) {
       throw new Exceptions.EntityUpdate("Password");

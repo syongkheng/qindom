@@ -10,7 +10,7 @@ export default function createGeocodeController(db: KnexSqlUtilities) {
   const svc = new GeocodeService(db);
 
   router.get("/", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const q = String(req.query.q ?? "").trim();
       if (!q) throw new Exceptions.InvalidRequest("q");

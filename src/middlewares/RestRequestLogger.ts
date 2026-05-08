@@ -1,35 +1,34 @@
+import crypto from "crypto";
 import { NextFunction, Request, Response } from "express";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 
-export const RestRequestLogger = function (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  const sanitisedMessage = (message: string) => {
-    return message
-      .replace(/"password"\s*:\s*".*?"/gi, '"password":"[REDACTED]"')
-      .replace(/"blob"\s*:\s*"[^"]*"/gi, '"blob":"[REDACTED]"')
-      .replace(/"blobString"\s*:\s*"[^"]*"/gi, '"blobString":"[REDACTED]"')
-      .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"[REDACTED]"');
-  };
-
-  const message =
-    req.method === "GET"
-      ? JSON.stringify(req.query)
-      : sanitisedMessage(JSON.stringify(req.body) ?? "");
+export const RestRequestLogger = function (req: Request, res: Response, next: NextFunction) {
+  const payload = req.method === "GET" ? req.query : JSON.parse(LoggingUtilities.sanitise(JSON.stringify(req.body ?? {})));
 
   const ipAddress = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown");
 
+  // ======================================================
+  // CREATE REQUEST TREE CONTEXT
+  // ======================================================
+
+  req.logContext = {
+    requestId: "req_" + crypto.randomUUID().replace(/-/g, "").substring(0, 5),
+    startTime: Date.now(),
+    method: req.method,
+    path: req.originalUrl,
+    ip: ipAddress,
+    payload,
+    events: [],
+  };
+
+  // ======================================================
+  // FLUSH TREE AFTER REQUEST ENDS
+  // ======================================================
+
   res.on("finish", () => {
-    LoggingUtilities.controller.access(
-      ipAddress,
-      req.method,
-      req.originalUrl,
-      req.httpVersion,
-      res.statusCode,
-      message
-    );
+    req.logContext.statusCode = res.statusCode;
+
+    LoggingUtilities.request.flush(req.logContext);
   });
 
   next();

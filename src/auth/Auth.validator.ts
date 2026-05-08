@@ -1,6 +1,6 @@
 import { Request } from "express";
 import { InvalidRequestException } from "../exceptions/InvalidRequestException";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

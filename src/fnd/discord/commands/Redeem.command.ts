@@ -2,7 +2,7 @@ import { Message, ChannelType, EmbedBuilder } from "discord.js";
 import axios from "axios";
 import { firestoreDB as db } from "../../../config/db/firebase";
 import { signPayload } from "./Register.command";
-import { LoggingUtilities } from "../../../utils/LoggingUtilities";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
 import { toMessage } from "../../../utils/errorUtils";
 
 const ALLOWED_REDEEMER_IDS = ["340529865952460800", "383607274624778241"];

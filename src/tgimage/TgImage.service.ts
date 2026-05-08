@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { Exceptions } from "../exceptions/AppExceptions";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 
 const TABLE = "tb_tg_image";
 const TABLE_WHITELIST = "tb_tg_stats_whitelist";

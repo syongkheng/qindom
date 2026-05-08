@@ -20,7 +20,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // GET /admin/users — list all users (SYSTEM_R5 only)
   router.get("/admin/users", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       if (!hasSystemR5(getUser(req).roles)) return cr.result(403, "Forbidden", "Insufficient permissions");
       const users = await db.find<ITB_AA_USER>("tb_aa_user", { record_status: "A" }, {
@@ -45,7 +45,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // POST /admin/users/:id/roles — update a user's roles (SYSTEM_R5 only)
   router.post("/admin/users/:id/roles", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       if (!hasSystemR5(getUser(req).roles)) return cr.result(403, "Forbidden", "Insufficient permissions");
       const id = Number(req.params.id);
@@ -60,10 +60,10 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // POST /preflight — check if email exists (routes to login or register)
   router.post("/preflight", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { email, system } = AuthValidator.validatePreflightRequest(req);
-      return cr.ok(await svc.checkIfEmailExistsWithinSystem({ email, system }));
+      return cr.ok(await svc.checkIfEmailExistsWithinSystem({ email, system, logContext: req.logContext }));
     } catch (error) {
       if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
@@ -72,10 +72,10 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // POST /login — authenticate with email + password
   router.post("/login", [loginLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { email, password, system } = AuthValidator.validateLoginRequest(req);
-      return cr.ok(await svc.login({ email, password, system }));
+      return cr.ok(await svc.login({ email, password, system, logContext: req.logContext }));
     } catch (error) {
       if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
@@ -84,10 +84,10 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // POST /register — create account and send verification email
   router.post("/register", [registerLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, email, password, system } = AuthValidator.validateRegisterRequest(req);
-      return cr.ok(await svc.createNewUser({ username, email, password, system }));
+      return cr.ok(await svc.createNewUser({ username, email, password, system, logContext: req.logContext }));
     } catch (error) {
       if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
@@ -96,10 +96,10 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // POST /verify-email — submit 6-digit OTP, returns JWT on success
   router.post("/verify-email", [verifyEmailLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { email, system, code } = AuthValidator.validateEmailVerifyRequest(req);
-      return cr.ok(await svc.verifyEmail({ email, system, code }));
+      return cr.ok(await svc.verifyEmail({ email, system, code, logContext: req.logContext }));
     } catch (error) {
       if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
@@ -108,10 +108,10 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // POST /resend-verify — resend a new verification code
   router.post("/resend-verify", [resendVerifyLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { email, system } = AuthValidator.validatePreflightRequest(req);
-      await svc.resendVerifyCode({ email, system });
+      await svc.resendVerifyCode({ email, system, logContext: req.logContext });
       return cr.ok({ sent: true }); // Always respond 200 to avoid leaking whether the email is registered
     } catch {
       return cr.ok({ sent: true }); // intentionally swallow errors
@@ -120,10 +120,10 @@ export default function createAuthController(db: KnexSqlUtilities) {
 
   // POST /verification — validate a JWT token
   router.post("/verification", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { token } = AuthValidator.validateValidateTokenRequest(req);
-      return cr.ok(await svc.authenticateToken(token));
+      return cr.ok(await svc.authenticateToken(token, req.logContext));
     } catch (error) {
       if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
@@ -131,11 +131,11 @@ export default function createAuthController(db: KnexSqlUtilities) {
   });
 
   router.post("/password/validate", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, system } = getUser(req);
       const { password } = AuthValidator.validatePasswordValidateRequest(req);
-      return cr.ok(await svc.validatePassword(`${username}_${system}`, password));
+      return cr.ok(await svc.validatePassword(`${username}_${system}`, password, req.logContext));
     } catch (error) {
       if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
@@ -143,11 +143,11 @@ export default function createAuthController(db: KnexSqlUtilities) {
   });
 
   router.post("/password/update", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { username, system } = getUser(req);
       const { newPassword } = AuthValidator.validatePasswordUpdateRequest(req);
-      return cr.ok(await svc.updatePassword(`${username}_${system}`, newPassword));
+      return cr.ok(await svc.updatePassword(`${username}_${system}`, newPassword, req.logContext));
     } catch (error) {
       if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));

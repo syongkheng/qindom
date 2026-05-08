@@ -10,7 +10,7 @@ export default function createDouyinController(db: KnexSqlUtilities) {
   const svc = new DouyinService(db);
 
   router.get("/live", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { userId } = DouyinValidator.validateLiveStatusRequest(req);
       return cr.ok(await svc.checkLiveStatus(userId));
@@ -20,7 +20,7 @@ export default function createDouyinController(db: KnexSqlUtilities) {
   });
 
   router.get("/ranklist", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(res);
+    const cr = new ControllerResponse(req, res);
     try {
       const { roomId, anchorId } = DouyinValidator.validateRankListRequest(req);
       return cr.ok(await svc.getRankList(roomId, anchorId));

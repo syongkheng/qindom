@@ -1,4 +1,4 @@
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { ITB_GEOCODE_CACHE } from "../models/databases/tb_geocode_cache";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { toMessage } from "../utils/errorUtils";

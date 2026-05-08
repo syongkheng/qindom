@@ -1,6 +1,6 @@
 import { Exceptions } from "../exceptions/AppExceptions";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { toMessage } from "../utils/errorUtils";
 
 interface DouyinLiveResult {
