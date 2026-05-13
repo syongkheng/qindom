@@ -109,47 +109,62 @@ export class LoggingUtilities {
      */
     static flush(context: IRequestLogContext): void {
       const duration = Date.now() - context.startTime;
+      const lines: string[] = [];
 
-      console.log(`\n[${LoggingUtilities.timestamp()}] HTTP ${context.method} ${context.path}`);
-      console.log(`${LoggingUtilities.INDENT}RequestId : ${context.requestId}`);
-      console.log(`${LoggingUtilities.INDENT}IP        : ${context.ip}`);
+      lines.push(`\n[${LoggingUtilities.timestamp()}] HTTP ${context.method} ${context.path}`);
+      lines.push(`${LoggingUtilities.INDENT}RequestId : ${context.requestId}`);
+      lines.push(`${LoggingUtilities.INDENT}IP        : ${context.ip}`);
 
       if (context.payload) {
-        console.log(`${LoggingUtilities.INDENT}Payload   : ${JSON.stringify(context.payload, null, 0)}`);
+        lines.push(`${LoggingUtilities.INDENT}Payload   : ${JSON.stringify(context.payload, null, 0)}`);
       }
 
-      console.log("");
+      lines.push("");
 
       for (const event of context.events) {
         const icon = event.level === "ERROR" ? "✖" : LoggingUtilities.BRANCH;
-        console.log(`  ${icon} ${LoggingUtilities.col(event.type, 8)} ${event.message}`);
+        lines.push(`  ${icon} ${LoggingUtilities.col(event.type, 8)} ${event.message}`);
 
         const hasDetail = event.detail !== undefined;
         const hasDuration = event.durationMs !== undefined;
 
         if (hasDetail && hasDuration) {
-          console.log(`  ${LoggingUtilities.INDENT} ├─ ${event.detail}`);
-          console.log(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.durationMs}ms`);
+          lines.push(`  ${LoggingUtilities.INDENT} ├─ ${event.detail}`);
+          lines.push(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.durationMs}ms`);
         } else if (hasDetail) {
-          console.log(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.detail}`);
+          lines.push(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.detail}`);
         } else if (hasDuration) {
-          console.log(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.durationMs}ms`);
+          lines.push(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.durationMs}ms`);
         }
 
-        console.log("");
+        lines.push("");
       }
 
-      console.log(`${LoggingUtilities.END} RESPONSE ${context.statusCode}`);
+      lines.push(`${LoggingUtilities.END} RESPONSE ${context.statusCode}`);
 
       if (context.response !== undefined) {
-        const lines = JSON.stringify(context.response, null, 2).split("\n");
-        console.log(`   ${LoggingUtilities.END} ${lines[0]}`);
-        for (let i = 1; i < lines.length; i++) {
-          console.log(`   ${lines[i]}`);
+        const respLines = JSON.stringify(context.response, null, 2).split("\n");
+        lines.push(`   ${LoggingUtilities.END} ${respLines[0]}`);
+        for (let i = 1; i < respLines.length; i++) {
+          lines.push(`   ${respLines[i]}`);
         }
       }
 
-      console.log(`\nDuration: ${duration}ms\n`);
+      lines.push(`\nDuration: ${duration}ms\n`);
+
+      const text = lines.join("\n");
+      lines.forEach((line) => console.log(line));
+
+      const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID;
+      if (token && chatId) {
+        const payload = text.length > 4096 ? text.slice(0, 4090) + "\n[…]" : text;
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text: payload }),
+        }).catch(() => {});
+      }
     }
   };
 
