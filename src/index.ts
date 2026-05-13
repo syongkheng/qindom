@@ -32,9 +32,10 @@ import createTelegramController, {
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller";
 import createScenicController from "./scenic/Scenic.controller";
 import createTrailController from "./trail/Trail.controller";
+import createLogController from "./log/Log.controller";
 import { initTelegramBot } from "./telegram/Telegram.bot";
 import { initTgImageBot } from "./tgimage/TgImage.bot";
-import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
+import { globalLimiter, featureLimiter, douyinLimiter, logLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
 async function startServer() {
@@ -99,6 +100,7 @@ async function startServer() {
   app.post("/api/telegram/webhook", createTelegramWebhookHandler(db));
   app.use("/api/scenic", [RestRequestLogger, RequestHeaderFilter], createScenicController(db));
   app.use("/api/trail", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createTrailController(db));
+  app.use("/api/log", [RestRequestLogger, RequestHeaderFilter, logLimiter], createLogController(db));
 
   // Start server
   app.listen(port, () => {
