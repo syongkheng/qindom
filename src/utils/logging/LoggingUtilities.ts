@@ -10,6 +10,12 @@ export class LoggingUtilities {
   private static readonly BRANCH = "├─";
   private static readonly END = "└─";
 
+  private static logSender: ((text: string) => void) | null = null;
+
+  static setLogSender(fn: (text: string) => void): void {
+    LoggingUtilities.logSender = fn;
+  }
+
   constructor() {
     if (!LoggingUtilities.appEnv || LoggingUtilities.appEnv === "unknown") {
       console.log(`Current Environment: ${LoggingUtilities.appEnv}`);
@@ -155,16 +161,7 @@ export class LoggingUtilities {
       const text = lines.join("\n");
       lines.forEach((line) => console.log(line));
 
-      const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
-      const chatId = process.env.TELEGRAM_CHAT_ID;
-      if (token && chatId) {
-        const payload = text.length > 4096 ? text.slice(0, 4090) + "\n[…]" : text;
-        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, text: payload }),
-        }).catch(() => {});
-      }
+      if (LoggingUtilities.logSender) LoggingUtilities.logSender(text);
     }
   };
 

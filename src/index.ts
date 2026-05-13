@@ -33,6 +33,7 @@ import { createTgImageGetController, createTgImageController } from "./tgimage/T
 import createScenicController from "./scenic/Scenic.controller";
 import createTrailController from "./trail/Trail.controller";
 import { initTelegramBot } from "./telegram/Telegram.bot";
+import { TgImageService } from "./tgimage/TgImage.service";
 import { initTgImageBot } from "./tgimage/TgImage.bot";
 import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
@@ -105,7 +106,22 @@ async function startServer() {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
     initTelegramBot(db).catch((err) => LoggingUtilities.service.error("TelegramBot", err?.message ?? String(err)));
-    initTgImageBot(db).catch((err) => LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err)));
+    initTgImageBot(db)
+      .then(async () => {
+        const chatId = await new TgImageService(db).getStorageChatId();
+        const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
+        if (chatId && token) {
+          LoggingUtilities.setLogSender((text) => {
+            const payload = text.length > 4096 ? text.slice(0, 4090) + "\n[…]" : text;
+            fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: chatId, text: payload }),
+            }).catch(() => {});
+          });
+        }
+      })
+      .catch((err) => LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err)));
   });
 }
 
