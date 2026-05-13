@@ -59,15 +59,6 @@ export const douyinLimiter = rateLimit({
   message: rateLimitResponse("Too many Douyin requests. Please slow down."),
 });
 
-/** POST /api/log — 10 req/sec */
-export const logLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute
-  limit: 600,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: rateLimitResponse("Too many log events. Please slow down."),
-});
-
 /** GET /api/feature */
 export const featureLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,       // 1 minute
