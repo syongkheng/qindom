@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { ITB_SLEEP_LOG } from "../models/databases/tb_sleep_log";
+import { FeatureService } from "../feature/Feature.service";
+import { Exceptions } from "../exceptions/AppExceptions";
 
 const TB_SLEEP_LOG = "tb_sleep_log";
 
@@ -159,6 +161,9 @@ export class SleepService {
   // ─── Screenshot parsing ───────────────────────────────────────────────────────
 
   async parseScreenshot(image: string, mimeType: string, date?: string): Promise<Record<string, unknown>> {
+    const flags = await new FeatureService(this.db).getAllFlags();
+    if (!flags["sleep-screenshot-parsing"]) throw new Exceptions.ForbiddenAccess();
+
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const base64 = image.replace(/^data:[^;]+;base64,/, "");
 

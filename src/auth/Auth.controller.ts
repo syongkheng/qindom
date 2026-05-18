@@ -4,55 +4,38 @@ import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { AuthService } from "./Auth.service";
 import { BaseExceptions } from "../exceptions/BaseException";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
-import { loginLimiter, registerLimiter, verifyEmailLimiter, resendVerifyLimiter } from "../middlewares/RateLimiter";
+import { loginLimiter, registerLimiter, verifyEmailLimiter, resendVerifyLimiter, adminLimiter } from "../middlewares/RateLimiter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { AuthValidator } from "./Auth.validator";
 import { Exceptions } from "../exceptions/AppExceptions";
-import { ITB_AA_USER } from "../models/databases/tb_aa_user";
 import { toMessage } from "../utils/errorUtils";
-import { getUser, handleException } from "../utils/requestUtils";
+import { getUser, handleException, hasRole } from "../utils/requestUtils";
 
 export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();
   const svc = new AuthService(db);
 
-  const hasSystemR5 = (roles?: string[]): boolean => roles?.includes("SYSTEM_R5") ?? false;
-
   // GET /admin/users — list all users (SYSTEM_R5 only)
-  router.get("/admin/users", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+  router.get("/admin/users", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasSystemR5(getUser(req).roles)) return cr.result(403, "Forbidden", "Insufficient permissions");
-      const users = await db.find<ITB_AA_USER>("tb_aa_user", { record_status: "A" }, {
-        columns: ["id", "username", "email", "system", "roles", "state", "last_logged_in_dt", "created_dt"],
-        orderBy: "created_dt",
-        orderDirection: "asc",
-      });
-      return cr.ok(users.map((u) => ({
-        id:            u.id,
-        username:      u.username,
-        email:         u.email,
-        system:        u.system,
-        roles:         (() => { try { return JSON.parse(u.roles || "[]"); } catch { return []; } })(),
-        state:         u.state,
-        lastLoggedInDt: u.last_logged_in_dt,
-        createdDt:     u.created_dt,
-      })));
+      if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+      return cr.ok(await svc.listUsers());
     } catch (err) {
       return handleException(err, cr, "AuthController.GET /admin/users", "Failed to load users");
     }
   });
 
   // POST /admin/users/:id/roles — update a user's roles (SYSTEM_R5 only)
-  router.post("/admin/users/:id/roles", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/admin/users/:id/roles", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasSystemR5(getUser(req).roles)) return cr.result(403, "Forbidden", "Insufficient permissions");
+      if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
       const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) return cr.result(400, "Bad Request", "Invalid ID");
       const { roles } = req.body;
       if (!Array.isArray(roles)) throw new Exceptions.InvalidRequest("roles");
-      await db.update<ITB_AA_USER>("tb_aa_user", { id }, { roles: JSON.stringify(roles) });
-      return cr.ok({ updated: true });
+      return cr.ok(await svc.updateUserRoles(id, roles));
     } catch (err) {
       return handleException(err, cr, "AuthController.POST /admin/users/:id/roles", "Failed to update roles");
     }

@@ -12,6 +12,10 @@ export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {
   return req.user;
 }
 
+export function hasRole(req: RequestWithUserInfo, ...roles: string[]): boolean {
+  return roles.some((r) => req.user?.roles?.includes(r) ?? false);
+}
+
 export function handleException(
   err: unknown,
   cr: ControllerResponse,

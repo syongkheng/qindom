@@ -5,13 +5,11 @@ import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { SleepService } from "./Sleep.service";
 import { SleepValidator } from "./Sleep.validator";
-import { FeatureService } from "../feature/Feature.service";
-import { getUser, handleException } from "../utils/requestUtils";
+import { getUser, handleException, hasRole } from "../utils/requestUtils";
 
 export default function createSleepController(db: KnexSqlUtilities): Router {
   const router = Router();
   const svc = new SleepService(db);
-  const featureSvc = new FeatureService(db);
 
   router.get("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
@@ -62,12 +60,7 @@ export default function createSleepController(db: KnexSqlUtilities): Router {
   router.post("/parse-screenshot", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const user = getUser(req);
-      const hasRole = user.roles.includes("SLP_R5") || user.roles.includes("SYSTEM_R5");
-      if (!hasRole) return cr.result(403, "Forbidden", "Insufficient permissions");
-
-      const flags = await featureSvc.getAllFlags();
-      if (!flags["sleep-screenshot-parsing"]) return cr.result(403, "Forbidden", "Screenshot parsing is not enabled");
+      if (!hasRole(req, "SLP_R5", "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
 
       const { image, mimeType, date } = SleepValidator.validateParseScreenshotRequest(req);
       const parsed = await svc.parseScreenshot(image, mimeType, date);

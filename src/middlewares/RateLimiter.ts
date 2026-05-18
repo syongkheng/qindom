@@ -59,6 +59,15 @@ export const douyinLimiter = rateLimit({
   message: rateLimitResponse("Too many Douyin requests. Please slow down."),
 });
 
+/** GET|POST /api/auth/admin/* */
+export const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,      // 15 minutes
+  limit: 60,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many admin requests. Please slow down."),
+});
+
 /** GET /api/feature */
 export const featureLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,       // 1 minute

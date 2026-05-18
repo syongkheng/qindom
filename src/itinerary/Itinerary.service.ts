@@ -438,13 +438,16 @@ export class ItineraryService {
         }
       }
 
-      for (const b of bookings) {
-        await trx(TB_TRAVEL_ITINERARY_BOOKING).insert(this._bookingInsertRow(itineraryId, b, now));
+      if (bookings.length > 0) {
+        await trx(TB_TRAVEL_ITINERARY_BOOKING).insert(
+          bookings.map((b: any) => this._bookingInsertRow(itineraryId, b, now)),
+        );
       }
 
-      for (let i = 0; i < packingItems.length; i++) {
-        const p = packingItems[i];
-        await trx(TB_TRAVEL_PACKING_ITEM).insert(this._packingInsertRow(itineraryId, p, i, now));
+      if (packingItems.length > 0) {
+        await trx(TB_TRAVEL_PACKING_ITEM).insert(
+          packingItems.map((p: any, i: number) => this._packingInsertRow(itineraryId, p, i, now)),
+        );
       }
 
       return map;
@@ -506,9 +509,9 @@ export class ItineraryService {
           pax_names: paxNames !== undefined ? (paxNames?.length ? JSON.stringify(paxNames) : null) : undefined,
         });
 
-      for (const agendaId of _agendaIdsToDelete) {
+      if (_agendaIdsToDelete.length > 0) {
         await trx(TB_TRAVEL_AGENDA_ITEM)
-          .where({ id: Number(agendaId) })
+          .whereIn("id", _agendaIdsToDelete.map(Number))
           .update({ record_status: "D" });
       }
 
@@ -603,9 +606,9 @@ export class ItineraryService {
         }
       }
 
-      for (const bookingId of _bookingIdsToDelete) {
+      if (_bookingIdsToDelete.length > 0) {
         await trx(TB_TRAVEL_ITINERARY_BOOKING)
-          .where({ id: Number(bookingId) })
+          .whereIn("id", _bookingIdsToDelete.map(Number))
           .update({ record_status: "D" });
       }
 
@@ -619,9 +622,9 @@ export class ItineraryService {
         }
       }
 
-      for (const packingId of _packingIdsToDelete) {
+      if (_packingIdsToDelete.length > 0) {
         await trx(TB_TRAVEL_PACKING_ITEM)
-          .where({ id: Number(packingId) })
+          .whereIn("id", _packingIdsToDelete.map(Number))
           .update({ record_status: "D" });
       }
 

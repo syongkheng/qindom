@@ -6,7 +6,7 @@ import { CoordinateService } from "./Coordinate.service";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { Exceptions } from "../exceptions/AppExceptions";
-import { getUser, handleException } from "../utils/requestUtils";
+import { getUser, handleException, hasRole } from "../utils/requestUtils";
 
 export default function createHdbController(db: KnexSqlUtilities) {
   const router = Router();
@@ -27,7 +27,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
-      if (!user.roles.includes("PPHS_R5") && !user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
+      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
       const { address, lat, lng, formedUrl } = req.body as {
         address: string; lat: string; lng: string; formedUrl: string;
       };
@@ -40,8 +40,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   router.post("/pphs/clear-coordinates", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const user = getUser(req);
-      if (!user.roles.includes("PPHS_R5") && !user.roles.includes("SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
+      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
       const { address } = req.body as { address: string };
       await hdbSvc.clearCoordinatesOfAddress(address);
       return cr.ok(true);

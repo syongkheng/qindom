@@ -12,7 +12,7 @@ export interface IDecodedTokenUser {
 
 export class TokenService {
   private readonly jwtSecret: string;
-  private readonly jwtExpiration = "1y";
+  private readonly jwtExpiration = "30d";
 
   constructor(private db: KnexSqlUtilities) {
     this.jwtSecret = process.env.JWT_SECRET!;

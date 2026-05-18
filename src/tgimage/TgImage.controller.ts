@@ -18,7 +18,10 @@ export function createTgImageGetController(db: KnexSqlUtilities): Router {
     try {
       const record = await svc.getByShortCode(req.params.shortCode);
       if (!record) throw new Exceptions.NotFound();
-      await svc.streamToResponse(record.telegram_file_id, record.mime_type ?? "image/jpeg", res);
+      const { stream, contentType } = await svc.resolveStream(record.telegram_file_id, record.mime_type ?? "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.setHeader("Content-Type", contentType);
+      stream.pipe(res);
     } catch (err) {
       return handleException(err, cr, "TgImageController.GET /:shortCode", "Failed to stream image");
     }

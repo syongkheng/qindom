@@ -1,7 +1,6 @@
 import axios from "axios";
 import crypto from "crypto";
 import sharp from "sharp";
-import { Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
@@ -115,13 +114,13 @@ export class TgImageService {
     ]);
   }
 
-  async streamToResponse(telegramFileId: string, mimeType: string, res: Response): Promise<void> {
+  async resolveStream(telegramFileId: string, mimeType: string): Promise<{ stream: NodeJS.ReadableStream; contentType: string }> {
     const fileInfo = await axios.get(
       `https://api.telegram.org/bot${this.botToken}/getFile?file_id=${telegramFileId}`,
     );
 
     if (!fileInfo.data?.ok || !fileInfo.data?.result?.file_path) {
-      LoggingUtilities.service.error("TgImageService.streamToResponse", "Telegram getFile failed");
+      LoggingUtilities.service.error("TgImageService.resolveStream", "Telegram getFile failed");
       throw new Exceptions.ExternalRequest("Telegram");
     }
 
@@ -131,15 +130,10 @@ export class TgImageService {
       { responseType: "stream" },
     );
 
-    res.setHeader("Cache-Control", "public, max-age=86400");
-
     if (mimeType === "image/svg+xml") {
-      res.setHeader("Content-Type", "image/svg+xml");
-      fileResponse.data.pipe(res);
-    } else {
-      res.setHeader("Content-Type", "image/jpeg");
-      fileResponse.data.pipe(sharp().jpeg({ quality: 80 })).pipe(res);
+      return { stream: fileResponse.data, contentType: "image/svg+xml" };
     }
+    return { stream: fileResponse.data.pipe(sharp().jpeg({ quality: 80 })), contentType: "image/jpeg" };
   }
 
   async listAdmins(): Promise<{ id: number; telegram_user_id: number; added_dt: number }[]> {

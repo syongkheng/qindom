@@ -7,7 +7,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── Runtime: Node 22 / TypeScript 5.9.3
 │   ├── Framework: Express 5.1.0
 │   ├── Database: MySQL (db: wuxi) via Knex.js
-│   ├── Auth: JWT (1-year, Bearer token)
+│   ├── Auth: JWT (30-day, Bearer token)
 │   ├── Deploy: AWS EC2 ap-southeast-1 — port 3000
 │   └── Process manager: PM2 (ecosystem.config.js)
 │
@@ -126,6 +126,8 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── URLs: hyphens, not underscores
 │   ├── Envelope: { code, status: "Ok"/"Ko", data }
 │   ├── Controller factory: createXyzController(db) → Router
+│   ├── Role guard: hasRole(req, ...roles) from requestUtils — use in controllers for HTTP-layer auth
+│   ├── Feature flag gate: check inside service method, throw Exceptions.ForbiddenAccess if off
 │   ├── Exceptions: always throw, never return error strings
 │   └── Request tree logging pattern:
 │       ├── KnexSqlUtilities accepts optional logContext (4th/last param)

@@ -369,6 +369,32 @@ export class AuthService {
     return { isValid };
   }
 
+  async listUsers(): Promise<{
+    id: number; username: string; email: string | undefined; system: string;
+    roles: string[]; state: string; lastLoggedInDt: number | null; createdDt: number;
+  }[]> {
+    const rows = await this.db.find<ITB_AA_USER>("tb_aa_user", { record_status: "A" }, {
+      columns: ["id", "username", "email", "system", "roles", "state", "last_logged_in_dt", "created_dt"],
+      orderBy: "created_dt",
+      orderDirection: "asc",
+    });
+    return rows.map((u) => ({
+      id:            u.id!,
+      username:      u.username,
+      email:         u.email,
+      system:        u.system,
+      roles:         (() => { try { return JSON.parse(u.roles || "[]"); } catch { return []; } })(),
+      state:         u.state,
+      lastLoggedInDt: u.last_logged_in_dt ?? null,
+      createdDt:     u.created_dt,
+    }));
+  }
+
+  async updateUserRoles(id: number, roles: string[]): Promise<{ updated: boolean }> {
+    await this.db.update<ITB_AA_USER>("tb_aa_user", { id }, { roles: JSON.stringify(roles) });
+    return { updated: true };
+  }
+
   async updatePassword(
     username_system: string,
     newPassword: string,
