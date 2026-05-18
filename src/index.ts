@@ -40,7 +40,7 @@ import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
 async function startServer() {
   const app: Application = express();
-  const port: number = 3000;
+  const port: number = Number(process.env.PORT) || 3000;
 
   // CORS — must come before rate limiter so preflight OPTIONS requests are not blocked
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
@@ -61,6 +61,17 @@ async function startServer() {
   };
   app.use(cors(corsOptions));
   app.options("/{*path}", cors(corsOptions)); // handle preflight for all routes
+
+  // Security headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    if (process.env.NODE_ENV === "prd") {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+    next();
+  });
 
   // Middleware
   app.use(globalLimiter);

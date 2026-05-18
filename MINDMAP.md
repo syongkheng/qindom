@@ -142,3 +142,115 @@ qindom (Express 5 + TypeScript + MySQL)
     ├── Dev: .env.dev, Telegram polling, port 3000
     └── Prod: .env (NODE_ENV=prd), Telegram webhook, AWS EC2
 ```
+
+---
+
+## LAYER ARCHITECTURE
+
+### Request flow across all three systems
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                           QINDOM — THREE ENTRY SYSTEMS                           │
+│                                                                                  │
+│  ① REST API                ② Telegram Bot           ③ Discord Bot               │
+│  HTTP Clients              polling / webhook         prefix ! cmds               │
+└───────────┬──────────────────────────┬───────────────────────┬───────────────────┘
+            │                          │                        │
+            ▼                          │                        │
+┌───────────────────────┐              │                        │
+│    MIDDLEWARE STACK    │              │                        │
+│  (applied per-route)  │              │                        │
+│                       │              │                        │
+│  RestRequestLogger    │              │                        │
+│  RequestHeaderFilter  │              │                        │
+│  RateLimiter          │              │                        │
+│  MandatoryToken /     │              │                        │
+│  OptionalTokenFilter  │              │                        │
+└───────────┬───────────┘              │                        │
+            │                          │                        │
+            ▼                          ▼                        ▼
+┌───────────────────────┐  ┌───────────────────────┐  ┌──────────────────────┐
+│      CONTROLLER        │  │     BOT HANDLER        │  │   DISCORD COMMAND    │
+│   createXyzController  │  │  Telegram.bot.ts       │  │   *.command.ts       │
+│   returns Router       │  │  TgImage.bot.ts        │  │   Fnd.bot.ts         │
+│                        │  │                        │  │                      │
+│  • Parse req fields    │  │  • Parse bot message   │  │  • Parse cmd args    │
+│  • hasRole() guard     │  │  • No Validator layer  │  │  • No Validator      │
+│  • Call Validator      │  │  • Direct svc call     │  │  • Direct svc / DB   │
+│  • Call Service        │  │                        │  │                      │
+│  • ControllerResponse  │  │                        │  │                      │
+└───────────┬────────────┘  └───────────┬────────────┘  └──────────┬───────────┘
+            │                           │                           │
+            ▼                           │                           │
+┌───────────────────────┐               │                           │
+│      VALIDATOR         │               │                           │
+│   *.validator.ts       │               │                           │
+│                        │               │                           │
+│  • Field presence      │               │                           │
+│  • Type coercion       │               │                           │
+│  • Format (regex, len) │               │                           │
+│  • Throws              │               │                           │
+│    InvalidRequest      │               │                           │
+└───────────┬────────────┘               │                           │
+            │                            │                           │
+            └────────────────────────────┴───────────────────────────┘
+                                                    │
+                                                    ▼
+                         ┌──────────────────────────────────────────────┐
+                         │               SERVICE LAYER                   │
+                         │             *.service.ts                      │
+                         │                                               │
+                         │  • Business / domain logic                    │
+                         │  • Feature flag gates (internal)              │
+                         │  • Calls sibling services where needed        │
+                         │  • Calls KnexSqlUtilities for all DB ops      │
+                         │  • Calls External APIs directly               │
+                         │  • Throws typed domain exceptions             │
+                         └────────────────┬──────────────────────────────┘
+                                          │
+                         ┌────────────────┴──────────────────┐
+                         │                                    │
+                         ▼                                    ▼
+            ┌────────────────────────┐        ┌──────────────────────────┐
+            │    KnexSqlUtilities    │        │      External APIs        │
+            │  src/utils/Knex...ts   │        │                          │
+            │                        │        │  Google Geocoding         │
+            │  insert / findOne      │        │  LTA DataMall            │
+            │  find / update         │        │  Telegram Bot API        │
+            │  delete / upsert       │        │  Douyin webcast          │
+            │  raw / count           │        │  Anthropic Claude        │
+            │  transaction           │        │  Firebase / Firestore    │
+            └───────────┬────────────┘        │  Nodemailer SMTP         │
+                        │                     └──────────────────────────┘
+                        ▼
+                  ┌───────────┐
+                  │   MySQL   │
+                  │  (wuxi)   │
+                  └───────────┘
+```
+
+### Exception flow
+
+```
+  Service (or Validator) throws a typed exception
+          │
+          │  all extend BaseExceptions
+          ▼
+  InvalidRequestException   EntityNotFoundException   ForbiddenAccessException  ...
+          │
+          │  bubbles up to Controller catch block
+          ▼
+  handleException(err, cr, label, fallback)     ←  src/utils/requestUtils.ts
+          │
+          ├─ instanceof BaseExceptions?
+          │   └─ YES → cr.result(err.httpStatus, err.name, err.clientMessage)
+          │              e.g. 400 / 401 / 403 / 404 with structured JSON
+          │
+          └─ NO (unexpected error)
+              └─ LoggingUtilities.service.error(label, message)
+                 cr.ko(fallback)   →  500 with generic fallback message
+
+  All responses use the same envelope:
+  { code: <httpStatus>, status: "Ok" | "Ko", data: <payload | error message> }
+```

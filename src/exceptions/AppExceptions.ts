@@ -17,6 +17,7 @@ import { ForbiddenAccessException } from "./ForbiddenAccessException";
 import { UnauthorizedAccessException } from "./UnauthorizedAccessException";
 import { UnknownException } from "./UnknownException";
 import { VerifyCodeExpiredException } from "./VerifyCodeExpiredException";
+import { WeakPasswordException } from "./WeakPasswordException";
 
 export const Exceptions = {
   ExternalRequest: ExternalRequestException,
@@ -38,6 +39,7 @@ export const Exceptions = {
   Unknown: UnknownException,
   UsernameAlreadyTaken: UsernameAlreadyTakenException,
   VerifyCodeExpired: VerifyCodeExpiredException,
+  WeakPassword: WeakPasswordException,
 } as const;
 
 export type ExceptionsType = typeof Exceptions;

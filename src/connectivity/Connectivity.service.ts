@@ -14,12 +14,13 @@ export class ConnectivityService {
     status: string;
     message: string;
     timestamp: string;
+    environment: string;
   }> {
-    // Simple query to check database connectivity
     return {
       status: "ok",
       message: "Server is connected",
       timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV ?? "unknown",
     };
   }
 }

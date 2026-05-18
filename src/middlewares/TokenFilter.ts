@@ -4,11 +4,10 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { IDecodedTokenUser } from "../token/Token.service";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
+import { ITB_AA_USER } from "../models/databases/tb_aa_user";
+import db from "../config/db/mysql";
 
-export const MandatoryTokenFilter = (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
-  /**
-   * Token validity is 1 year as configured in Token.service.ts
-   */
+export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);
   const jwtSecret = process.env.JWT_SECRET;
 
@@ -25,6 +24,16 @@ export const MandatoryTokenFilter = (req: RequestWithUserInfo, res: Response, ne
 
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, jwtSecret) as IDecodedTokenUser;
+
+    // Verify the token matches the one stored in the DB — enables single-session revocation
+    const user = await db.findOne<ITB_AA_USER>(
+      "tb_aa_user",
+      { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
+      ["token"],
+    );
+    if (!user || user.token !== token) {
+      return res.status(401).json({ message: "Token revoked or invalid" });
+    }
 
     req.user = decoded;
     next();

@@ -4,6 +4,7 @@ import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { ScenicService } from "./Scenic.service";
+import { ScenicValidator } from "./Scenic.validator";
 import { getUser, handleException } from "../utils/requestUtils";
 
 export default function createScenicController(db: KnexSqlUtilities): Router {
@@ -36,10 +37,7 @@ export default function createScenicController(db: KnexSqlUtilities): Router {
   router.post("/checklist", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { scenicId, visited } = req.body;
-      if (typeof scenicId !== "number" || typeof visited !== "boolean") {
-        return cr.badRequest("Invalid request: scenicId (number) and visited (boolean) are required");
-      }
+      const { scenicId, visited } = ScenicValidator.validateChecklistUpsert(req);
       await svc.upsertCheck(getUser(req).username, scenicId, visited);
       return cr.ok(null);
     } catch (err) {

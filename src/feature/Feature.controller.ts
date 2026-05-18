@@ -6,6 +6,7 @@ import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { getUser, handleException, hasRole } from "../utils/requestUtils";
+import { FeatureValidator } from "./Feature.validator";
 
 export default function createFeatureController(db: KnexSqlUtilities) {
   const router = Router();
@@ -35,10 +36,8 @@ export default function createFeatureController(db: KnexSqlUtilities) {
     try {
       const user = getUser(req);
       if (!hasRole(req, "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
-      const { key, label, remarks } = req.body;
-      if (!key || typeof key !== "string" || !key.trim()) throw new Exceptions.InvalidRequest("key");
-      if (!label || typeof label !== "string" || !label.trim()) throw new Exceptions.InvalidRequest("label");
-      const flag = await svc.createFlag({ key: key.trim(), label: label.trim(), remarks: remarks || null }, user.username);
+      const { key, label, remarks } = FeatureValidator.validateCreateRequest(req);
+      const flag = await svc.createFlag({ key, label, remarks }, user.username);
       return cr.ok(flag);
     } catch (err) {
       return handleException(err, cr, "FeatureController.POST /create", "Failed to create feature flag");

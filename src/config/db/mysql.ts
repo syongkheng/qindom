@@ -53,9 +53,13 @@ export async function initializeDatabase() {
 
     LoggingUtilities.service.info("init_db", "Database connection established");
 
-    // Apply any pending migrations automatically
-    await knexInstance.migrate.latest();
-    LoggingUtilities.service.info("init_db", "Migrations applied");
+    // Migrations must be opted in via RUN_MIGRATIONS=true to prevent accidental schema changes on prod boot
+    if (process.env.RUN_MIGRATIONS === "true") {
+      await knexInstance.migrate.latest();
+      LoggingUtilities.service.info("init_db", "Migrations applied");
+    } else {
+      LoggingUtilities.service.info("init_db", "Migrations skipped (set RUN_MIGRATIONS=true to apply)");
+    }
 
     return db;
   } catch (error) {

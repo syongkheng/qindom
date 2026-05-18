@@ -1,5 +1,6 @@
 import { Request } from "express";
 import { InvalidRequestException } from "../exceptions/InvalidRequestException";
+import { WeakPasswordException } from "../exceptions/WeakPasswordException";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -44,6 +45,9 @@ export class AuthValidator {
     if (!password || typeof password !== "string") {
       throw new InvalidRequestException("password");
     }
+    if (this._validatePasswordStrength(password).valid === false) {
+      throw new WeakPasswordException();
+    }
     if (!system || typeof system !== "string") {
       throw new InvalidRequestException("system");
     }
@@ -86,7 +90,7 @@ export class AuthValidator {
       throw new InvalidRequestException("newPassword");
     }
     if (this._validatePasswordStrength(newPassword).valid === false) {
-      throw new InvalidRequestException("newPassword");
+      throw new WeakPasswordException();
     }
     return { newPassword };
   };
