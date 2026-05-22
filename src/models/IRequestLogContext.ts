@@ -1,6 +1,7 @@
 export interface IRequestLogContext {
   requestId: string;
   startTime: number;
+  protocol?: string;
   method: string;
   path: string;
   ip: string;

@@ -1,7 +1,8 @@
-import { ChannelType, Client, GatewayIntentBits, Message } from "discord.js";
+import { ChannelType, Client, GatewayIntentBits, Message, TextChannel } from "discord.js";
 import fs from "fs";
 import path from "path";
 import { LoggingUtilities } from "../../utils/logging/LoggingUtilities";
+import { executeRedemption } from "./commands/Redeem.command";
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
@@ -10,6 +11,14 @@ const ALLOWED_CHANNEL_IDS = [
   "1456263588267294788", // PRD -- FND Legends #secretary
   "1456198333197586607", // DEV -- [Fnd] Kingshot 236 #debug-discord-dumps
 ];
+
+// Channels to watch for gift code announcements (bot/webhook messages included)
+const GIFT_CODE_WATCH_CHANNEL_IDS = [
+  "1277590118164598845", // KingShot gift code announcements channel
+  "1456198333197586607", // DEV -- [Fnd] Kingshot 236 #debug-discord-dumps
+];
+
+const GIFT_CODE_REGEX = /Gift Code:\s*`([^`]+)`/i;
 
 /**
  * Represents a Discord bot command with its metadata and execution logic
@@ -72,7 +81,27 @@ export async function startDiscordBot(): Promise<void> {
    * Event: Message Create
    */
   client.on("messageCreate", async (message: Message) => {
-    // Ignore messages from other bots to prevent infinite loops and self-triggering
+    // Auto gift-code watcher — processes all messages in watch channels (including bots/webhooks),
+    // but skips the bot's own messages to prevent loops
+    if (GIFT_CODE_WATCH_CHANNEL_IDS.includes(message.channel.id)) {
+      if (message.author.id === client.user?.id) return;
+      const match = message.content.match(GIFT_CODE_REGEX);
+      if (match) {
+        const giftCode = match[1].trim();
+        LoggingUtilities.service.info(
+          `Fndiscord.Bot`,
+          `Auto-detected gift code "${giftCode}" from ${message.author.tag} in channel ${message.channel.id}`
+        );
+        const resultChannel = ALLOWED_CHANNEL_IDS.includes(message.channel.id)
+          ? (message.channel as TextChannel)
+          : (client.channels.cache.get(ALLOWED_CHANNEL_IDS[0]) as TextChannel | undefined) ??
+            (message.channel as TextChannel);
+        await executeRedemption(giftCode, resultChannel, `auto (${message.author.tag})`);
+      }
+      return;
+    }
+
+    // Ignore messages from bots for command processing
     if (message.author.bot) return;
 
     const prefix = "!"; // Command prefix

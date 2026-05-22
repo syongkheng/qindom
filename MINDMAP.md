@@ -86,6 +86,10 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── Discord Bot (prefix !)
 │   │       ├── Commands: hello, ping, help, register, deregister,
 │   │       │             list, redeem, remind, stalk
+│   │       ├── Auto gift-code watcher: monitors GIFT_CODE_WATCH_CHANNEL_IDS
+│   │       │   for "Gift Code: `CODE`" pattern (bots/webhooks included),
+│   │       │   extracts code and calls executeRedemption() automatically,
+│   │       │   posts results to PRD #secretary channel
 │   │       └── Discord user ↔ governor ID via Firestore
 │   │
 │   ├── DOUYIN  /api/douyin  [AUTH REQUIRED]

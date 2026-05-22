@@ -117,7 +117,7 @@ export class LoggingUtilities {
       const duration = Date.now() - context.startTime;
       const lines: string[] = [];
 
-      lines.push(`\n[${LoggingUtilities.timestamp()}] HTTP ${context.method} ${context.path}`);
+      lines.push(`\n[${LoggingUtilities.timestamp()}] ${context.protocol ?? "HTTP"} ${context.method} ${context.path}`);
       lines.push(`${LoggingUtilities.INDENT}RequestId : ${context.requestId}`);
       lines.push(`${LoggingUtilities.INDENT}IP        : ${context.ip}`);
 
