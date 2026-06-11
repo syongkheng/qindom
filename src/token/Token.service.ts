@@ -2,13 +2,7 @@ import { Exceptions } from "../exceptions/AppExceptions";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import jwt from "jsonwebtoken";
-
-export interface IDecodedTokenUser {
-  username: string;
-  system: string;
-  roles: string[];
-  lastLoggedInDt: number;
-}
+import { IDecodedTokenUser } from "../models/IDecodedTokenUser";
 
 export class TokenService {
   private readonly jwtSecret: string;

@@ -1,6 +1,7 @@
 import { Request } from "express";
-import { IDecodedTokenUser } from "../../token/Token.service";
+import { IDecodedTokenUser } from "../IDecodedTokenUser";
 
 export interface RequestWithUserInfo extends Request {
-  user?: IDecodedTokenUser;
+  user?:         IDecodedTokenUser;
+  isPublicKey?:  boolean;
 }

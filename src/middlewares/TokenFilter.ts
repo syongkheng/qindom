@@ -2,7 +2,7 @@ import { NextFunction, Response } from "express";
 import jwt from "jsonwebtoken";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { IDecodedTokenUser } from "../token/Token.service";
+import { IDecodedTokenUser } from "../models/IDecodedTokenUser";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user";
 import db from "../config/db/mysql";

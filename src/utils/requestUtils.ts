@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { IDecodedTokenUser } from "../token/Token.service";
+import { IDecodedTokenUser } from "../models/IDecodedTokenUser";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { BaseExceptions } from "../exceptions/BaseException";
 import { UnauthorizedAccessException } from "../exceptions/UnauthorizedAccessException";

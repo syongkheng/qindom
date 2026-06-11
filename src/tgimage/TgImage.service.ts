@@ -4,29 +4,11 @@ import sharp from "sharp";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
+import { ITbTgImage } from "../models/databases/tb_tg_image";
+import { ITbTgStatsWhitelist } from "../models/databases/tb_tg_stats_whitelist";
 
 const TABLE = "tb_tg_image";
 const TABLE_WHITELIST = "tb_tg_stats_whitelist";
-
-interface ITbTgImage {
-  id?: number;
-  short_code: string;
-  uuid?: string;
-  telegram_file_id: string;
-  mime_type?: string;
-  file_name?: string;
-  size_in_bytes?: number;
-  created_dt: number;
-  record_status: string;
-}
-
-interface ITbTgStatsWhitelist {
-  id?: number;
-  telegram_user_id: number;
-  telegram_chat_id?: number | null;
-  added_dt: number;
-  record_status: string;
-}
 
 export class TgImageService {
   private readonly botToken: string;

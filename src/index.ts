@@ -18,24 +18,15 @@ import createHdbController from "./hdb/Hdb.controller";
 import createLtaController from "./lta/Lta.controller";
 import createAuthController from "./auth/Auth.controller";
 import createPfpController from "./profile/Pfp.controller";
-import createHeartbeatController from "./analytics/Heartbeat.controller";
 import createItineraryController from "./itinerary/Itinerary.controller";
 import createFileController from "./file/File.controller";
-import createFeatureController from "./feature/Feature.controller";
 import createDouyinController from "./douyin/Douyin.controller";
 import createGeocodeController from "./geocode/Geocode.controller";
-import createSleepController from "./sleep/Sleep.controller";
-import createTelegramController, {
-  createTelegramUploadController,
-  createTelegramWebhookHandler,
-} from "./telegram/Telegram.controller";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller";
-import createScenicController from "./scenic/Scenic.controller";
 import createTrailController from "./trail/Trail.controller";
-import { initTelegramBot } from "./telegram/Telegram.bot";
 import { TgImageService } from "./tgimage/TgImage.service";
 import { initTgImageBot } from "./tgimage/TgImage.bot";
-import { globalLimiter, featureLimiter, douyinLimiter } from "./middlewares/RateLimiter";
+import { globalLimiter, douyinLimiter } from "./middlewares/RateLimiter";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
 
 async function startServer() {
@@ -89,34 +80,26 @@ async function startServer() {
   app.use("/api/lta", [RestRequestLogger, RequestHeaderFilter], createLtaController(db));
   app.use("/api/auth", [RestRequestLogger, RequestHeaderFilter], createAuthController(db));
   app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
-  app.use("/api/analytics", [RestRequestLogger, RequestHeaderFilter], createHeartbeatController(db));
   app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
   app.use("/api/file", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createFileController(db));
   app.use("/api/img", [RestRequestLogger], createTgImageGetController(db));
   app.use("/api/img", [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db));
-  app.use("/api/feature", [RestRequestLogger, RequestHeaderFilter, featureLimiter], createFeatureController(db));
   app.use(
     "/api/douyin",
     [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter],
     createDouyinController(db),
   );
   app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
-  app.use("/api/sleep", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createSleepController(db));
-  app.use("/api/telegram", [RestRequestLogger, MandatoryTokenFilter], createTelegramUploadController(db));
-  app.use(
-    "/api/telegram",
-    [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter],
-    createTelegramController(db),
-  );
-  app.post("/api/telegram/webhook", createTelegramWebhookHandler(db));
-  app.use("/api/scenic", [RestRequestLogger, RequestHeaderFilter], createScenicController(db));
+  // app.post("/api/telegram/webhook", createTelegramWebhookHandler(db));
   app.use("/api/trail", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createTrailController(db));
+
+  // LLM
+  app.use("/v1/llm", [RestRequestLogger, RequestHeaderFilter], createLlmControllerV1(db));
 
   // Start server
   app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
-    initTelegramBot(db).catch((err) => LoggingUtilities.service.error("TelegramBot", err?.message ?? String(err)));
     initTgImageBot(db)
       .then(async () => {
         const chatId = await new TgImageService(db).getStorageChatId();
@@ -142,4 +125,5 @@ startServer();
 // Start Discord Bot
 import { startDiscordBot } from "./fnd/discord/Fnd.bot";
 import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter";
+import createLlmControllerV1 from "./llm/Llm.controller";
 startDiscordBot().catch((err) => LoggingUtilities.service.error("Discord", err?.message ?? String(err)));

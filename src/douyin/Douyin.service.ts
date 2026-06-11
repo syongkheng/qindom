@@ -228,7 +228,7 @@ export class DouyinService {
     }
 
     if (!state) {
-      throw new Exceptions.ExternalRequest("Could not find roomStore in __pace_f data");
+      throw new Error("Could not find roomStore in __pace_f data");
     }
 
     const roomInfo = state.roomStore?.roomInfo;

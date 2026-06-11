@@ -1,5 +1,5 @@
 import "express";
-import { IDecodedTokenUser } from "../../token/Token.service";
+import { IDecodedTokenUser } from "../../models/IDecodedTokenUser";
 import { IRequestLogContext } from "../../models/IRequestLogContext";
 
 declare global {

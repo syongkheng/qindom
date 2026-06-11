@@ -68,11 +68,26 @@ export const adminLimiter = rateLimit({
   message: rateLimitResponse("Too many admin requests. Please slow down."),
 });
 
-/** GET /api/feature */
-export const featureLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute
-  limit: 60,
+/** POST /api/llm/trial/chat — 20 req/hour per IP, always applied */
+export const publicTrialLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: rateLimitResponse("Too many requests."),
+  keyGenerator: (req) => req.ip ?? "unknown",
+  message: rateLimitResponse("Trial limit reached. Please create an API key to continue."),
+});
+
+/** POST /api/llm/chat — keyed by X-API-Key when present, IP otherwise */
+export const chatLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,       // 1 minute
+  limit: 20,                      // 20 messages per minute per key / per IP
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const key = req.headers["x-api-key"];
+    if (typeof key === "string" && key) return `apikey:${key}`;
+    return req.ip ?? "unknown";
+  },
+  message: rateLimitResponse("Too many chat requests. Please slow down."),
 });

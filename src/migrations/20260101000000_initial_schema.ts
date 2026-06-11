@@ -28,23 +28,6 @@ export async function up(knex: Knex): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
-  await knex.raw(`
-    CREATE TABLE IF NOT EXISTS tb_aa_feature_flag (
-      id            BIGINT       NOT NULL AUTO_INCREMENT,
-      feature_key   VARCHAR(64)  NOT NULL,
-      label         VARCHAR(128) NOT NULL,
-      is_enabled    TINYINT(1)   NOT NULL DEFAULT 1,
-      remarks       VARCHAR(512) NULL,
-      updated_dt    BIGINT       NULL,
-      updated_by    VARCHAR(64)  NULL,
-      created_dt    BIGINT       NOT NULL,
-      created_by    VARCHAR(64)  NOT NULL,
-      record_status VARCHAR(1)   NOT NULL DEFAULT 'A',
-      PRIMARY KEY (id),
-      UNIQUE KEY uq_feature_key (feature_key)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
   // ── FND (Notices & Events) ─────────────────────────────────────────────────
   await knex.raw(`
     CREATE TABLE IF NOT EXISTS tb_fnd_notice (
@@ -359,36 +342,6 @@ export async function up(knex: Knex): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
-  // ── Sleep Tracker ──────────────────────────────────────────────────────────
-  await knex.raw(`
-    CREATE TABLE IF NOT EXISTS tb_sleep_log (
-      id                      BIGINT       PRIMARY KEY AUTO_INCREMENT,
-      date                    VARCHAR(10)  NOT NULL,
-      source                  VARCHAR(16)  NOT NULL DEFAULT 'garmin',
-      bedtime                 VARCHAR(5)   NULL,
-      wake_time               VARCHAR(5)   NULL,
-      total_sleep_min         INT          NULL,
-      deep_min                INT          NULL,
-      light_min               INT          NULL,
-      rem_min                 INT          NULL,
-      awake_min               INT          NULL,
-      deep_pct                TINYINT      NULL,
-      light_pct               TINYINT      NULL,
-      rem_pct                 TINYINT      NULL,
-      resting_hr_bpm          TINYINT      NULL,
-      body_battery_change     TINYINT      NULL,
-      avg_spo2_pct            TINYINT      NULL,
-      lowest_spo2_pct         TINYINT      NULL,
-      avg_respiration_brpm    TINYINT      NULL,
-      lowest_respiration_brpm TINYINT      NULL,
-      notes                   TEXT         NULL,
-      created_by              VARCHAR(128) NOT NULL,
-      created_dt              BIGINT       NOT NULL,
-      record_status           VARCHAR(1)   NOT NULL DEFAULT 'A',
-      UNIQUE KEY uq_sleep_date_user (date, created_by)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
   // ── Wedding Date Picker ────────────────────────────────────────────────────
   await knex.raw(`
     CREATE TABLE IF NOT EXISTS tb_wedding_session (
@@ -513,17 +466,6 @@ export async function up(knex: Knex): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
-  // ── Feature flag seed data ─────────────────────────────────────────────────
-  await knex.raw(`
-    INSERT INTO tb_aa_feature_flag
-      (feature_key, label, is_enabled, remarks, created_dt, created_by, record_status)
-    VALUES
-      ('registration',     'User Registration',            1, 'Controls whether new users can register an account',        UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-      ('pphs',             'PPHS Module',                  1, 'Controls visibility of the PPHS module on the workbench',   UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-      ('travel',           'Travel Module',                1, 'Controls visibility of the Travel module on the workbench', UNIX_TIMESTAMP() * 1000, 'system', 'A'),
-      ('flat_analysis',    'Flat Analysis Module',         1, 'Controls visibility of the Flat Analysis module',           UNIX_TIMESTAMP() * 1000, 'system', 'A')
-    ON DUPLICATE KEY UPDATE label = VALUES(label)
-  `);
 }
 
 export async function down(knex: Knex): Promise<void> {
@@ -537,7 +479,6 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists("tb_wedding_guest");
   await knex.schema.dropTableIfExists("tb_wedding_table");
   await knex.schema.dropTableIfExists("tb_wedding_event");
-  await knex.schema.dropTableIfExists("tb_sleep_log");
   await knex.schema.dropTableIfExists("tb_expense_balance");
   await knex.schema.dropTableIfExists("tb_expense_card");
   await knex.schema.dropTableIfExists("tb_expense_transaction");
@@ -558,6 +499,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists("tb_fnd_event");
   await knex.schema.dropTableIfExists("tb_fnd_notice_view");
   await knex.schema.dropTableIfExists("tb_fnd_notice");
-  await knex.schema.dropTableIfExists("tb_aa_feature_flag");
   await knex.schema.dropTableIfExists("tb_aa_user");
 }

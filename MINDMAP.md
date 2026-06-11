@@ -33,10 +33,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── Get/update profile, avatar upload
 │   │   └── DB: tb_aa_user
 │   │
-│   ├── FEATURE FLAGS  /api/feature
-│   │   ├── Get all flags, toggle flag
-│   │   └── DB: tb_aa_feature_flag
-│   │
 │   ├── ANALYTICS  /api/analytics
 │   │   ├── Heartbeat pings (session + IP + user-agent)
 │   │   └── DB: tb_analytic_user_activity
@@ -55,10 +51,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── FILE UPLOAD  /api/file  [AUTH REQUIRED]
 │   │   ├── Upload base64 files for itinerary items
 │   │   └── DB: tb_travel_agenda_file
-│   │
-│   ├── SLEEP TRACKER  /api/sleep  [AUTH REQUIRED]
-│   │   ├── Sleep log entries (date range queries)
-│   │   └── DB: tb_sleep_log
 │   │
 │   ├── EXPENSE TRACKER  /api/expense  [AUTH REQUIRED]
 │   │   ├── Transactions (income/expense)
@@ -99,12 +91,24 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── Rate limit: 15 req/min
 │   │
 │   ├── TELEGRAM STORAGE  /api/telegram  [AUTH REQUIRED]
-│       ├── Link qindom account to Telegram (ephemeral 10-min token)
-│       ├── Upload / list / delete / expire media via bot
-│       ├── Stores telegram_file_id only (no binary)
-│       ├── Telegram Bot: /start /help /link /get /list /delete /expire
-│       └── DB: tb_telegram_link, tb_telegram_media,
-│               tb_telegram_link_token
+│   │   ├── Link qindom account to Telegram (ephemeral 10-min token)
+│   │   ├── Upload / list / delete / expire media via bot
+│   │   ├── Stores telegram_file_id only (no binary)
+│   │   ├── Telegram Bot: /start /help /link /get /list /delete /expire
+│   │   └── DB: tb_telegram_link, tb_telegram_media,
+│   │           tb_telegram_link_token
+│   │
+│   └── LLM MARKETPLACE  /api/marketplace  [AUTH REQUIRED]
+│       ├── Wallet: get balance, mock top-up (cash in cents)
+│       │   └── TODO: real payment gateway (Stripe/PayNow)
+│       ├── API Key: per-user internal API key (32-byte hex), rotate
+│       │   └── TODO: X-API-Key header auth middleware, per-token billing
+│       ├── Chat: POST /chat (mock replies per model), session history
+│       │   └── TODO: real Anthropic/OpenAI/Google SDK call, provider key cycling
+│       ├── Sessions: list / get messages / soft-delete
+│       └── DB: tb_marketplace_wallet, tb_marketplace_topup,
+│               tb_marketplace_api_key, tb_marketplace_session,
+│               tb_marketplace_message, tb_marketplace_provider_key
 │   
 
 │
@@ -124,9 +128,29 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── Audit: created_by / updated_by (username)
 │   └── Username uniqueness: composite index username_system
 │
+├── MODELS  src/models/
+│   ├── IDecodedTokenUser.ts — JWT payload shape (used by auth middleware, requestUtils)
+│   ├── IRequestLogContext.ts — request log context shape
+│   ├── databases/ — DB row interfaces (ITB_* / ITb*)
+│   │   ├── tb_aa_user, tb_scenic_*, tb_trail_*, tb_travel_*, etc.
+│   │   ├── tb_telegram_media, tb_telegram_link, tb_telegram_link_token
+│   │   └── tb_tg_image, tb_tg_stats_whitelist
+│   ├── dtos/ — service response shapes (XyzDto suffix)
+│   │   ├── DouyinDto.ts — DouyinRankUser
+│   │   ├── SleepDto.ts — SleepLogDto
+│   │   ├── ScenicDto.ts — ScenicSpotDto, ScenicCheckDto
+│   │   └── TelegramDto.ts — MediaType, MediaDto, LinkTokenDto, MediaUrlDto
+│   ├── requests/ — request body shapes (XyzBody suffix)
+│   │   ├── RequestWithUserInfo.ts — Express Request + user field
+│   │   ├── RequestWithLogContext.ts
+│   │   └── SleepBody.ts — CreateSleepLogBody
+│   └── responses/
+│       └── ControllerResponse.ts
+│
 ├── CODE CONVENTIONS
-│   ├── Response interfaces: XyzDto suffix
-│   ├── Request bodies: XyzBody suffix
+│   ├── Response interfaces: XyzDto suffix → src/models/dtos/
+│   ├── Request bodies: XyzBody suffix → src/models/requests/
+│   ├── DB row interfaces: ITB_* or ITb* → src/models/databases/
 │   ├── URLs: hyphens, not underscores
 │   ├── Envelope: { code, status: "Ok"/"Ko", data }
 │   ├── Controller factory: createXyzController(db) → Router
