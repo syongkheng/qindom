@@ -85,6 +85,28 @@ export class ControllerResponse {
   }
 
   // =========================================================
+  // 400 BAD AUTHORIZATION
+  // =========================================================
+
+  badAuthorization(data: unknown): Response {
+    const responseBody = {
+      code: 401,
+      status: "Ko",
+      data,
+    };
+
+    LoggingUtilities.request.branch(this.req.logContext, "ERROR", "Bad authorization returned");
+
+    LoggingUtilities.request.response(
+      this.req.logContext,
+      401,
+      JSON.parse(LoggingUtilities.sanitise(JSON.stringify(responseBody))),
+    );
+
+    return this.res.status(401).json(responseBody);
+  }
+
+  // =========================================================
   // Generic Response
   // =========================================================
 

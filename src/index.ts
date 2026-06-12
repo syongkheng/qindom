@@ -23,6 +23,9 @@ import createFileController from "./file/File.controller";
 import createDouyinController from "./douyin/Douyin.controller";
 import createGeocodeController from "./geocode/Geocode.controller";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller";
+
+import createLlmControllerV1 from "./llm/Llm.v1.controller";
+
 import createTrailController from "./trail/Trail.controller";
 import { TgImageService } from "./tgimage/TgImage.service";
 import { initTgImageBot } from "./tgimage/TgImage.bot";
@@ -94,7 +97,7 @@ async function startServer() {
   app.use("/api/trail", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createTrailController(db));
 
   // LLM
-  app.use("/v1/llm", [RestRequestLogger, RequestHeaderFilter], createLlmControllerV1(db));
+  app.use("/v1/llm", [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter], createLlmControllerV1(db));
 
   // Start server
   app.listen(port, () => {
@@ -106,11 +109,20 @@ async function startServer() {
         const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
         if (chatId && token) {
           LoggingUtilities.setLogSender((text) => {
-            const payload = text.length > 4096 ? text.slice(0, 4090) + "\n[…]" : text;
+            const payload = text.length > 3900 ? text.slice(0, 3890) + "\n[...]" : text;
+
+            const escaped = payload.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
             fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: chatId, text: payload }),
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                chat_id: chatId,
+                parse_mode: "HTML",
+                text: `<pre>${escaped}</pre>`,
+              }),
             }).catch(() => {});
           });
         }
@@ -125,5 +137,6 @@ startServer();
 // Start Discord Bot
 import { startDiscordBot } from "./fnd/discord/Fnd.bot";
 import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter";
-import createLlmControllerV1 from "./llm/Llm.controller";
+import { RequestApiKeyFilter } from "./middlewares/ApiKeyFilter";
+
 startDiscordBot().catch((err) => LoggingUtilities.service.error("Discord", err?.message ?? String(err)));

@@ -30,7 +30,7 @@ export class HeartbeatService {
   }): Promise<void> {
     LoggingUtilities.service.debug(
       "HeartbeatService.insertHeartbeatRecord",
-      `${username} - ${ipAddress} - ${userAgent}`
+      `${username} - ${ipAddress} - ${userAgent}`,
     );
 
     try {
@@ -49,12 +49,12 @@ export class HeartbeatService {
           ip_address: ipAddress,
           user_agent: userAgent,
           ...(username ? { user_id: username } : {}),
-        }
+        },
       );
     } catch (error) {
       LoggingUtilities.service.error(
         "HeartbeatService.insertHeartbeatRecord",
-        `Error inserting heartbeat record: ${toMessage(error)}`
+        `Error inserting heartbeat record: ${toMessage(error)}`,
       );
       throw new Exceptions.EntityCreation("Heartbeat");
     }

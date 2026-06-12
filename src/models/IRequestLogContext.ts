@@ -9,6 +9,7 @@ export interface IRequestLogContext {
   payload?: unknown;
   response?: unknown;
   statusCode?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export type LogEventType =
@@ -22,7 +23,8 @@ export type LogEventType =
   | "TELEGRAM"
   | "SYSTEM"
   | "ERROR"
-  | "WARN";
+  | "WARN"
+  | "VALIDATION";
 
 export interface IRequestLogEvent {
   /**
@@ -46,11 +48,12 @@ export interface IRequestLogEvent {
    */
   detail?: string;
 
+  children: string[];
+
   /**
    * Optional structured metadata.
    * Useful for debugging / JSON logs.
    */
-  metadata?: Record<string, unknown>;
 
   /**
    * Time spent for this operation.

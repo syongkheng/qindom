@@ -83,6 +83,7 @@ export class LoggingUtilities {
         durationMs,
         timestamp: Date.now(),
         level: "DEBUG",
+        children: [],
       };
       context.events.push(event);
       return event;
@@ -96,6 +97,7 @@ export class LoggingUtilities {
         type: "ERROR",
         message,
         detail,
+        children: [],
         timestamp: Date.now(),
         level: "ERROR",
         success: false,
@@ -128,19 +130,26 @@ export class LoggingUtilities {
       lines.push("");
 
       for (const event of context.events) {
-        const icon = event.level === "ERROR" ? "✖" : LoggingUtilities.BRANCH;
-        lines.push(`  ${icon} ${LoggingUtilities.col(event.type, 8)} ${event.message}`);
+        const icon = event.level === "ERROR" ? "✖" : "├─";
 
-        const hasDetail = event.detail !== undefined;
-        const hasDuration = event.durationMs !== undefined;
+        lines.push(`${icon} ${LoggingUtilities.col(event.type, 10)} ${event.message}`);
 
-        if (hasDetail && hasDuration) {
-          lines.push(`  ${LoggingUtilities.INDENT} ├─ ${event.detail}`);
-          lines.push(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.durationMs}ms`);
-        } else if (hasDetail) {
-          lines.push(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.detail}`);
-        } else if (hasDuration) {
-          lines.push(`  ${LoggingUtilities.INDENT} ${LoggingUtilities.END} ${event.durationMs}ms`);
+        if (event.children?.length) {
+          event.children.forEach((child, index) => {
+            const childPrefix =
+              index === event.children.length - 1 && !event.detail && event.durationMs === undefined ? "└─" : "├─";
+
+            lines.push(`│  ${childPrefix} ${child}`);
+          });
+        }
+
+        if (event.detail) {
+          const prefix = event.durationMs === undefined ? "└─" : "├─";
+          lines.push(`│  ${prefix} ${event.detail}`);
+        }
+
+        if (event.durationMs !== undefined) {
+          lines.push(`│  └─ ${event.durationMs}ms`);
         }
 
         lines.push("");

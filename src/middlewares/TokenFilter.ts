@@ -6,15 +6,27 @@ import { IDecodedTokenUser } from "../models/IDecodedTokenUser";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user";
 import db from "../config/db/mysql";
+import { IRequestLogContext } from "../models/IRequestLogContext";
+import { HeaderValidationUtilities } from "../utils/HeaderValidationUtilities";
 
 export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);
   const jwtSecret = process.env.JWT_SECRET;
 
+  const logContext: IRequestLogContext = req.logContext;
+
+  const requestHeaderValidationLoggingEvent = logContext
+    ? LoggingUtilities.request.branch(logContext, "VALIDATION", "JWT")
+    : undefined;
+
   try {
-    const authHeader = req.headers.authorization;
+    const authHeader = HeaderValidationUtilities.required(
+      req.headers,
+      "authorization",
+      requestHeaderValidationLoggingEvent,
+    );
     if (!authHeader?.startsWith("Bearer ")) {
-      return response.badRequest("Invalid Header - Authorization");
+      return response.badAuthorization("Invalid Header - Authorization");
     }
 
     if (!jwtSecret) {
@@ -32,17 +44,17 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
       ["token"],
     );
     if (!user || user.token !== token) {
-      return res.status(401).json({ message: "Token revoked or invalid" });
+      return response.badAuthorization("Token revoked or invalid");
     }
 
     req.user = decoded;
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ message: "Token expired" });
+      return response.badAuthorization("Token expired");
     }
 
-    return res.status(401).json({ message: "Invalid token" });
+    return response.badAuthorization("Invalid token");
   }
 };
 
