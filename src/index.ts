@@ -100,7 +100,7 @@ async function startServer() {
   app.use("/v1/llm", [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter], createLlmControllerV1(db));
 
   // Siri Shortcuts
-  app.use("/v1/ss", [RestRequestLogger, RequestHeaderFilter], createSsBabyControllerV1(db));
+  app.use("/v1/ss", [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter], createSsBabyControllerV1(db));
 
   // Start server
   app.listen(port, () => {

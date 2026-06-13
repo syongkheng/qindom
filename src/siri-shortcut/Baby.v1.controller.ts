@@ -13,7 +13,7 @@ export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
   const router = Router();
   const ssBabyServiceV1 = new SsBabyV1Service(db);
 
-  router.post("/baby/feeding", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/baby/feeding", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;
@@ -37,6 +37,22 @@ export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
       return cr.ok(serviceResponse);
     } catch (err) {
       return handleException(err, cr, "LlmControllerV1.POST /message", "Failed to record message");
+    }
+  });
+
+  router.get("/baby/feeding", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const logContext: IRequestLogContext = req.logContext;
+
+      console.log("Username from API key: ", logContext.metadata?.username);
+
+      // Calling of service
+      // const serviceResponse = await ssBabyServiceV1.getFeedingRecords(logContext);
+
+      return cr.ok({ test: "Ok" });
+    } catch (err) {
+      return handleException(err, cr, "LlmControllerV1.GET /message", "Failed to retrieve message");
     }
   });
 
