@@ -6,9 +6,9 @@ export async function up(knex: Knex): Promise<void> {
     table.string("timing").nullable();
     table.string("qty").nullable();
     table.string("record_status").notNullable().defaultTo("A");
-    table.timestamp("created_dt").notNullable().defaultTo(knex.fn.now());
+    table.bigint("created_dt").notNullable();
     table.string("created_by").notNullable();
-    table.timestamp("updated_dt").nullable();
+    table.bigint("updated_dt").nullable();
     table.string("updated_by").nullable();
   });
 }
