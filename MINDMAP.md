@@ -52,12 +52,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── Upload base64 files for itinerary items
 │   │   └── DB: tb_travel_agenda_file
 │   │
-│   ├── EXPENSE TRACKER  /api/expense  [AUTH REQUIRED]
-│   │   ├── Transactions (income/expense)
-│   │   ├── Credit card management (cycle/due day)
-│   │   ├── Balance tracking (upserted)
-│   │   └── DB: tb_expense_transaction, tb_expense_card,
-│   │           tb_expense_balance
 │   │
 │   ├── GEOCODE  /api/geocode
 │   │   ├── Google Geocoding API wrapper
@@ -91,26 +85,14 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── Rate limit: 15 req/min
 │   │
 │   ├── TELEGRAM STORAGE  /api/telegram  [AUTH REQUIRED]
-│   │   ├── Link qindom account to Telegram (ephemeral 10-min token)
-│   │   ├── Upload / list / delete / expire media via bot
-│   │   ├── Stores telegram_file_id only (no binary)
-│   │   ├── Telegram Bot: /start /help /link /get /list /delete /expire
-│   │   └── DB: tb_telegram_link, tb_telegram_media,
-│   │           tb_telegram_link_token
-│   │
-│   └── LLM MARKETPLACE  /api/marketplace  [AUTH REQUIRED]
-│       ├── Wallet: get balance, mock top-up (cash in cents)
-│       │   └── TODO: real payment gateway (Stripe/PayNow)
-│       ├── API Key: per-user internal API key (32-byte hex), rotate
-│       │   └── TODO: X-API-Key header auth middleware, per-token billing
-│       ├── Chat: POST /chat (mock replies per model), session history
-│       │   └── TODO: real Anthropic/OpenAI/Google SDK call, provider key cycling
-│       ├── Sessions: list / get messages / soft-delete
-│       └── DB: tb_marketplace_wallet, tb_marketplace_topup,
-│               tb_marketplace_api_key, tb_marketplace_session,
-│               tb_marketplace_message, tb_marketplace_provider_key
-│   
-
+│       ├── Link qindom account to Telegram (ephemeral 10-min token)
+│       ├── Upload / list / delete / expire media via bot
+│       ├── Stores telegram_file_id only (no binary)
+│       ├── Telegram Bot: /start /help /link /get /list /delete /expire
+│       └── DB: tb_telegram_link, tb_telegram_media,
+│              tb_telegram_link_token
+│
+│
 │
 ├── EXTERNAL SERVICES
 │   ├── MySQL (wuxi DB)
@@ -169,93 +151,6 @@ qindom (Express 5 + TypeScript + MySQL)
 └── ENVIRONMENTS
     ├── Dev: .env.dev, Telegram polling, port 3000
     └── Prod: .env (NODE_ENV=prd), Telegram webhook, AWS EC2
-```
-
----
-
-## LAYER ARCHITECTURE
-
-### Request flow across all three systems
-
-```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                           QINDOM — THREE ENTRY SYSTEMS                           │
-│                                                                                  │
-│  ① REST API                ② Telegram Bot           ③ Discord Bot               │
-│  HTTP Clients              polling / webhook         prefix ! cmds               │
-└───────────┬──────────────────────────┬───────────────────────┬───────────────────┘
-            │                          │                        │
-            ▼                          │                        │
-┌───────────────────────┐              │                        │
-│    MIDDLEWARE STACK    │              │                        │
-│  (applied per-route)  │              │                        │
-│                       │              │                        │
-│  RestRequestLogger    │              │                        │
-│  RequestHeaderFilter  │              │                        │
-│  RateLimiter          │              │                        │
-│  MandatoryToken /     │              │                        │
-│  OptionalTokenFilter  │              │                        │
-└───────────┬───────────┘              │                        │
-            │                          │                        │
-            ▼                          ▼                        ▼
-┌───────────────────────┐  ┌───────────────────────┐  ┌──────────────────────┐
-│      CONTROLLER        │  │     BOT HANDLER        │  │   DISCORD COMMAND    │
-│   createXyzController  │  │  Telegram.bot.ts       │  │   *.command.ts       │
-│   returns Router       │  │  TgImage.bot.ts        │  │   Fnd.bot.ts         │
-│                        │  │                        │  │                      │
-│  • Parse req fields    │  │  • Parse bot message   │  │  • Parse cmd args    │
-│  • hasRole() guard     │  │  • No Validator layer  │  │  • No Validator      │
-│  • Call Validator      │  │  • Direct svc call     │  │  • Direct svc / DB   │
-│  • Call Service        │  │                        │  │                      │
-│  • ControllerResponse  │  │                        │  │                      │
-└───────────┬────────────┘  └───────────┬────────────┘  └──────────┬───────────┘
-            │                           │                           │
-            ▼                           │                           │
-┌───────────────────────┐               │                           │
-│      VALIDATOR         │               │                           │
-│   *.validator.ts       │               │                           │
-│                        │               │                           │
-│  • Field presence      │               │                           │
-│  • Type coercion       │               │                           │
-│  • Format (regex, len) │               │                           │
-│  • Throws              │               │                           │
-│    InvalidRequest      │               │                           │
-└───────────┬────────────┘               │                           │
-            │                            │                           │
-            └────────────────────────────┴───────────────────────────┘
-                                                    │
-                                                    ▼
-                         ┌──────────────────────────────────────────────┐
-                         │               SERVICE LAYER                   │
-                         │             *.service.ts                      │
-                         │                                               │
-                         │  • Business / domain logic                    │
-                         │  • Feature flag gates (internal)              │
-                         │  • Calls sibling services where needed        │
-                         │  • Calls KnexSqlUtilities for all DB ops      │
-                         │  • Calls External APIs directly               │
-                         │  • Throws typed domain exceptions             │
-                         └────────────────┬──────────────────────────────┘
-                                          │
-                         ┌────────────────┴──────────────────┐
-                         │                                    │
-                         ▼                                    ▼
-            ┌────────────────────────┐        ┌──────────────────────────┐
-            │    KnexSqlUtilities    │        │      External APIs        │
-            │  src/utils/Knex...ts   │        │                          │
-            │                        │        │  Google Geocoding         │
-            │  insert / findOne      │        │  LTA DataMall            │
-            │  find / update         │        │  Telegram Bot API        │
-            │  delete / upsert       │        │  Douyin webcast          │
-            │  raw / count           │        │  Anthropic Claude        │
-            │  transaction           │        │  Firebase / Firestore    │
-            └───────────┬────────────┘        │  Nodemailer SMTP         │
-                        │                     └──────────────────────────┘
-                        ▼
-                  ┌───────────┐
-                  │   MySQL   │
-                  │  (wuxi)   │
-                  └───────────┘
 ```
 
 ### Exception flow

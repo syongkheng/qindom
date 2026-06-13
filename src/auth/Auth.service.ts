@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { IRequestLogContext } from "../models/IRequestLogContext";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext";
 import bcrypt from "bcrypt";
 import { TokenService } from "../token/Token.service";
 import { Exceptions } from "../exceptions/AppExceptions";
@@ -39,13 +39,13 @@ export class AuthService {
   }): Promise<{ exist: boolean; nextStep: "register" | "login" }> {
     const authEvent = logContext
       ? LoggingUtilities.request.branch(logContext, "AUTH", "Checking account existence")
-      : null;
+      : undefined;
 
     const existing = await this.db.find<ITB_AA_USER>(
       "tb_aa_user",
       { email, system, record_status: "A" },
       { limit: 1 },
-      logContext,
+      authEvent,
     );
 
     const found = existing.length > 0;
@@ -69,13 +69,13 @@ export class AuthService {
   }): Promise<{ requiresVerification: true; email: string }> {
     const authEvent = logContext
       ? LoggingUtilities.request.branch(logContext, "AUTH", "Registering new user")
-      : null;
+      : undefined;
 
     const existing = await this.db.find<ITB_AA_USER>(
       "tb_aa_user",
       { email, system, record_status: "A" },
       { limit: 1 },
-      logContext,
+      authEvent,
     );
     if (existing.length > 0) {
       if (authEvent) authEvent.detail = "email already registered";
@@ -86,7 +86,7 @@ export class AuthService {
       "tb_aa_user",
       { username_system: `${username}_${system}`, record_status: "A" },
       { limit: 1 },
-      logContext,
+      authEvent,
     );
     if (existingUsername.length > 0) {
       if (authEvent) authEvent.detail = "username already taken";
@@ -119,7 +119,7 @@ export class AuthService {
           created_by: "SYSTEM",
           record_status: "A",
         },
-        logContext,
+        authEvent,
       );
 
       await MailerUtilities.sendMail({
@@ -156,13 +156,13 @@ export class AuthService {
   }): Promise<{ token: string; username: string; roles: string[] }> {
     const authEvent = logContext
       ? LoggingUtilities.request.branch(logContext, "AUTH", "Verifying email OTP")
-      : null;
+      : undefined;
 
     const user = await this.db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { email, system, record_status: "A" },
       ["*"],
-      logContext,
+      authEvent,
     );
 
     if (!user) {
@@ -172,7 +172,7 @@ export class AuthService {
 
     if (user.email_verified === 1) {
       if (authEvent) authEvent.detail = "already verified, issuing token";
-      return this._issueToken(user, logContext);
+      return this._issueToken(user, authEvent);
     }
 
     if ((user.verify_attempts ?? 0) >= MAX_VERIFY_ATTEMPTS) {
@@ -192,7 +192,7 @@ export class AuthService {
         "tb_aa_user",
         { email, system, record_status: "A" },
         { verify_attempts: (user.verify_attempts ?? 0) + 1 },
-        logContext,
+        authEvent,
       );
       if (authEvent) authEvent.detail = "invalid OTP";
       throw new Exceptions.InvalidLoginCredentials();
@@ -208,11 +208,11 @@ export class AuthService {
         verify_attempts: 0,
         state: "ACTIVE",
       },
-      logContext,
+      authEvent,
     );
 
     if (authEvent) authEvent.detail = "email verified";
-    return this._issueToken(user, logContext);
+    return this._issueToken(user, authEvent);
   }
 
   async resendVerifyCode({
@@ -224,11 +224,15 @@ export class AuthService {
     system: string;
     logContext?: IRequestLogContext;
   }): Promise<void> {
+    const resendEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "AUTH", "Resending verification code")
+      : undefined;
+
     const user = await this.db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { email, system, record_status: "A" },
       ["*"],
-      logContext,
+      resendEvent,
     );
 
     if (!user || user.email_verified === 1) return; // silently ignore
@@ -245,7 +249,7 @@ export class AuthService {
         verify_code_expires_at: expiresAt,
         verify_attempts: 0,
       },
-      logContext,
+      resendEvent,
     );
 
     await MailerUtilities.sendMail({
@@ -274,13 +278,13 @@ export class AuthService {
   }): Promise<{ token: string; username: string; roles: string[] }> {
     const authEvent = logContext
       ? LoggingUtilities.request.branch(logContext, "AUTH", "Authenticating user")
-      : null;
+      : undefined;
 
     const user = await this.db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { email, system, record_status: "A" },
       ["*"],
-      logContext,
+      authEvent,
     );
 
     if (!user) {
@@ -301,12 +305,12 @@ export class AuthService {
     }
 
     if (authEvent) authEvent.detail = "authenticated";
-    return this._issueToken(user, logContext);
+    return this._issueToken(user, authEvent);
   }
 
   private async _issueToken(
     user: ITB_AA_USER,
-    logContext?: IRequestLogContext,
+    authEvent?: IRequestLogEvent,
   ): Promise<{ token: string; username: string; roles: string[] }> {
     let parsedRoles: string[] = [];
     try {
@@ -331,7 +335,7 @@ export class AuthService {
         last_logged_in_dt: Date.now(),
         state: "ACTIVE",
       },
-      logContext,
+      authEvent,
     );
 
     return { token: generatedToken, username: user.username, roles: parsedRoles };
@@ -339,14 +343,14 @@ export class AuthService {
 
   async authenticateToken(
     token: string,
-    logContext?: IRequestLogContext,
+    authEvent?: IRequestLogEvent,
   ): Promise<{ username: string; roles: string[]; exist: boolean }> {
     const decodedToken = await this.tokenService.decodeToken(token);
     const existing = await this.db.find<ITB_AA_USER>(
       "tb_aa_user",
       { username: decodedToken.username, system: decodedToken.system, record_status: "A" },
       { limit: 1 },
-      logContext,
+      authEvent,
     );
     return { username: decodedToken.username, roles: decodedToken.roles ?? [], exist: existing.length > 0 };
   }
@@ -354,13 +358,13 @@ export class AuthService {
   async validatePassword(
     username_system: string,
     password: string,
-    logContext?: IRequestLogContext,
+    authEvent?: IRequestLogEvent,
   ): Promise<{ isValid: boolean }> {
     const user = await this.db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { username_system, record_status: "A" },
       ["*"],
-      logContext,
+      authEvent,
     );
 
     if (!user) throw new Exceptions.InvalidLoginCredentials();
@@ -369,24 +373,42 @@ export class AuthService {
     return { isValid };
   }
 
-  async listUsers(): Promise<{
-    id: number; username: string; email: string | undefined; system: string;
-    roles: string[]; state: string; lastLoggedInDt: number | null; createdDt: number;
-  }[]> {
-    const rows = await this.db.find<ITB_AA_USER>("tb_aa_user", { record_status: "A" }, {
-      columns: ["id", "username", "email", "system", "roles", "state", "last_logged_in_dt", "created_dt"],
-      orderBy: "created_dt",
-      orderDirection: "asc",
-    });
+  async listUsers(): Promise<
+    {
+      id: number;
+      username: string;
+      email: string | undefined;
+      system: string;
+      roles: string[];
+      state: string;
+      lastLoggedInDt: number | null;
+      createdDt: number;
+    }[]
+  > {
+    const rows = await this.db.find<ITB_AA_USER>(
+      "tb_aa_user",
+      { record_status: "A" },
+      {
+        columns: ["id", "username", "email", "system", "roles", "state", "last_logged_in_dt", "created_dt"],
+        orderBy: "created_dt",
+        orderDirection: "asc",
+      },
+    );
     return rows.map((u) => ({
-      id:            u.id!,
-      username:      u.username,
-      email:         u.email,
-      system:        u.system,
-      roles:         (() => { try { return JSON.parse(u.roles || "[]"); } catch { return []; } })(),
-      state:         u.state,
+      id: u.id!,
+      username: u.username,
+      email: u.email,
+      system: u.system,
+      roles: (() => {
+        try {
+          return JSON.parse(u.roles || "[]");
+        } catch {
+          return [];
+        }
+      })(),
+      state: u.state,
       lastLoggedInDt: u.last_logged_in_dt ?? null,
-      createdDt:     u.created_dt,
+      createdDt: u.created_dt,
     }));
   }
 
@@ -395,16 +417,12 @@ export class AuthService {
     return { updated: true };
   }
 
-  async updatePassword(
-    username_system: string,
-    newPassword: string,
-    logContext?: IRequestLogContext,
-  ): Promise<void> {
+  async updatePassword(username_system: string, newPassword: string, authEvent?: IRequestLogEvent): Promise<void> {
     const user = await this.db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { username_system, record_status: "A" },
       ["*"],
-      logContext,
+      authEvent,
     );
 
     const saltRounds = 10;
@@ -414,7 +432,7 @@ export class AuthService {
         "tb_aa_user",
         { username_system, record_status: "A" },
         { password: hashedPassword },
-        logContext,
+        authEvent,
       );
     } catch (error) {
       throw new Exceptions.EntityUpdate("Password");
@@ -423,8 +441,12 @@ export class AuthService {
     // Send security notification (best-effort — do not throw if mail fails)
     if (user?.email) {
       const changedAt = new Date().toLocaleString("en-GB", {
-        day: "numeric", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZoneName: "short",
       });
       MailerUtilities.sendMail({
         to: user.email,
@@ -436,7 +458,10 @@ export class AuthService {
           <p>— no-reply-awense</p>
         `,
       }).catch(() => {
-        LoggingUtilities.service.warn("AuthService.updatePassword", `Failed to send password-change notification to ${user.email}`);
+        LoggingUtilities.service.warn(
+          "AuthService.updatePassword",
+          `Failed to send password-change notification to ${user.email}`,
+        );
       });
     }
   }

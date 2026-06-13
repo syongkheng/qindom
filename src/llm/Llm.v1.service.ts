@@ -7,7 +7,12 @@ import { LlmV1Validator } from "./Llm.v1.validator";
  * Service to handle LLM-related operations.
  */
 export class LlmServiceV1 {
-  constructor(private db: KnexSqlUtilities) {}
+  private readonly businessValidator: LlmV1Validator;
+
+  constructor(private readonly db: KnexSqlUtilities) {
+    this.businessValidator = new LlmV1Validator(db);
+  }
+
 
   /**
    * Simple JSON message to indicate server status.
@@ -25,14 +30,12 @@ export class LlmServiceV1 {
       ? LoggingUtilities.request.branch(loggingContext, "VALIDATION", "Business logic")
       : undefined;
 
-    model = LlmV1Validator.allowedModel(model, businessLogicValidationLoggingEvent);
-    message = LlmV1Validator.passThrough(message, businessLogicValidationLoggingEvent);
+    model = await this.businessValidator.allowedModel(model, businessLogicValidationLoggingEvent);
+    message = this.businessValidator.passThrough(message, businessLogicValidationLoggingEvent);
 
     const serviceProcessingLoggingEvent = loggingContext
       ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Calling LLM Provider")
       : undefined;
-
-    
 
     return {
       content: `Echo from model ${model}: ${message}`,

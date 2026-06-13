@@ -4,12 +4,19 @@ import { ControllerResponse } from "../models/responses/ControllerResponse";
 import { AuthService } from "./Auth.service";
 import { BaseExceptions } from "../exceptions/BaseException";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
-import { loginLimiter, registerLimiter, verifyEmailLimiter, resendVerifyLimiter, adminLimiter } from "../middlewares/RateLimiter";
+import {
+  loginLimiter,
+  registerLimiter,
+  verifyEmailLimiter,
+  resendVerifyLimiter,
+  adminLimiter,
+} from "../middlewares/RateLimiter";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { AuthValidator } from "./Auth.validator";
 import { Exceptions } from "../exceptions/AppExceptions";
 import { toMessage } from "../utils/errorUtils";
 import { getUser, handleException, hasRole } from "../utils/requestUtils";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 
 export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();
@@ -27,19 +34,23 @@ export default function createAuthController(db: KnexSqlUtilities) {
   });
 
   // POST /admin/users/:id/roles — update a user's roles (SYSTEM_R5 only)
-  router.post("/admin/users/:id/roles", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
-      const id = Number(req.params.id);
-      if (!Number.isInteger(id) || id <= 0) return cr.result(400, "Bad Request", "Invalid ID");
-      const { roles } = req.body;
-      if (!Array.isArray(roles)) throw new Exceptions.InvalidRequest("roles");
-      return cr.ok(await svc.updateUserRoles(id, roles));
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /admin/users/:id/roles", "Failed to update roles");
-    }
-  });
+  router.post(
+    "/admin/users/:id/roles",
+    [MandatoryTokenFilter, adminLimiter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const cr = new ControllerResponse(req, res);
+      try {
+        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return cr.result(400, "Bad Request", "Invalid ID");
+        const { roles } = req.body;
+        if (!Array.isArray(roles)) throw new Exceptions.InvalidRequest("roles");
+        return cr.ok(await svc.updateUserRoles(id, roles));
+      } catch (err) {
+        return handleException(err, cr, "AuthController.POST /admin/users/:id/roles", "Failed to update roles");
+      }
+    },
+  );
 
   // POST /preflight — check if email exists (routes to login or register)
   router.post("/preflight", async (req: Request, res: Response) => {
@@ -48,7 +59,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
       const { email, system } = AuthValidator.validatePreflightRequest(req);
       return cr.ok(await svc.checkIfEmailExistsWithinSystem({ email, system, logContext: req.logContext }));
     } catch (error) {
-      if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
+      if (error instanceof BaseExceptions)
+        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
     }
   });
@@ -60,7 +72,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
       const { email, password, system } = AuthValidator.validateLoginRequest(req);
       return cr.ok(await svc.login({ email, password, system, logContext: req.logContext }));
     } catch (error) {
-      if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
+      if (error instanceof BaseExceptions)
+        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
     }
   });
@@ -72,7 +85,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
       const { username, email, password, system } = AuthValidator.validateRegisterRequest(req);
       return cr.ok(await svc.createNewUser({ username, email, password, system, logContext: req.logContext }));
     } catch (error) {
-      if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
+      if (error instanceof BaseExceptions)
+        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
     }
   });
@@ -84,7 +98,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
       const { email, system, code } = AuthValidator.validateEmailVerifyRequest(req);
       return cr.ok(await svc.verifyEmail({ email, system, code, logContext: req.logContext }));
     } catch (error) {
-      if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
+      if (error instanceof BaseExceptions)
+        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
     }
   });
@@ -106,9 +121,13 @@ export default function createAuthController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const { token } = AuthValidator.validateValidateTokenRequest(req);
-      return cr.ok(await svc.authenticateToken(token, req.logContext));
+      const authenticateTokenLoggingEvent = req.logContext
+        ? LoggingUtilities.request.branch(req.logContext, "SERVICE", "Authenticating token")
+        : undefined;
+      return cr.ok(await svc.authenticateToken(token, authenticateTokenLoggingEvent));
     } catch (error) {
-      if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
+      if (error instanceof BaseExceptions)
+        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
     }
   });
@@ -118,9 +137,14 @@ export default function createAuthController(db: KnexSqlUtilities) {
     try {
       const { username, system } = getUser(req);
       const { password } = AuthValidator.validatePasswordValidateRequest(req);
-      return cr.ok(await svc.validatePassword(`${username}_${system}`, password, req.logContext));
+
+      const validatePasswordLoggingEvent = req.logContext
+        ? LoggingUtilities.request.branch(req.logContext, "SERVICE", "Validating password")
+        : undefined;
+      return cr.ok(await svc.validatePassword(`${username}_${system}`, password, validatePasswordLoggingEvent));
     } catch (error) {
-      if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
+      if (error instanceof BaseExceptions)
+        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
     }
   });
@@ -130,9 +154,13 @@ export default function createAuthController(db: KnexSqlUtilities) {
     try {
       const { username, system } = getUser(req);
       const { newPassword } = AuthValidator.validatePasswordUpdateRequest(req);
-      return cr.ok(await svc.updatePassword(`${username}_${system}`, newPassword, req.logContext));
+      const updatePasswordLoggingEvent = req.logContext
+        ? LoggingUtilities.request.branch(req.logContext, "SERVICE", "Updating password")
+        : undefined;
+      return cr.ok(await svc.updatePassword(`${username}_${system}`, newPassword, updatePasswordLoggingEvent));
     } catch (error) {
-      if (error instanceof BaseExceptions) return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
+      if (error instanceof BaseExceptions)
+        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
       return cr.ko(toMessage(error));
     }
   });

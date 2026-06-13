@@ -1,6 +1,6 @@
 import { Knex } from "knex";
 import { LoggingUtilities } from "./logging/LoggingUtilities";
-import { IRequestLogContext } from "../models/IRequestLogContext";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext";
 import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop";
 import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info";
 import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station";
@@ -17,20 +17,20 @@ class KnexSqlUtilities {
     };
   }
 
-  private sqlEvent(logContext: IRequestLogContext | undefined, label: string, durationMs: number): void {
-    if (logContext) {
-      LoggingUtilities.request.branch(logContext, "SQL", label, undefined, durationMs);
+  private sqlEvent(logEvent: IRequestLogEvent | undefined, label: string, durationMs: number): void {
+    if (logEvent) {
+      logEvent.children.push(`${label} - ${durationMs}ms`);
     }
   }
 
   // CREATE
-  async insert<T = any, R = T>(table: string, data: Partial<T>, logContext?: IRequestLogContext): Promise<R> {
+  async insert<T = any, R = T>(table: string, data: Partial<T>, logEvent?: IRequestLogEvent): Promise<R> {
     try {
       const t0 = Date.now();
       const [id] = await this.knex(table).insert(data);
       const [row] = await this.knex(table).where({ id }).select("*");
-      if (logContext) {
-        this.sqlEvent(logContext, `${table}.insert()`, Date.now() - t0);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.insert()`, Date.now() - t0);
       } else {
         LoggingUtilities.service.debug("KnexSqlUtilities.insert", `Inserted into ${table} id=${id}`);
       }
@@ -46,7 +46,7 @@ class KnexSqlUtilities {
     table: string,
     whereClause: Partial<T> = {},
     columns: readonly string[] = ["*"],
-    logContext?: IRequestLogContext,
+    logContext?: IRequestLogEvent,
   ): Promise<T | undefined> {
     try {
       const query = this.knex(table).select(columns).where(whereClause).first();
@@ -76,7 +76,7 @@ class KnexSqlUtilities {
       columns?: readonly string[];
       extraWhere?: (queryBuilder: Knex.QueryBuilder) => void;
     } = {},
-    logContext?: IRequestLogContext,
+    logEvent?: IRequestLogEvent,
   ): Promise<T[]> {
     try {
       let query = this.knex(table).where(whereClause);
@@ -89,8 +89,8 @@ class KnexSqlUtilities {
 
       const t0 = Date.now();
       const result = await query;
-      if (logContext) {
-        this.sqlEvent(logContext, `${table}.find()`, Date.now() - t0);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.find(${JSON.stringify(whereClause)})`, Date.now() - t0);
       } else {
         LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
       }
@@ -107,14 +107,14 @@ class KnexSqlUtilities {
     table: string,
     whereClause: Partial<T>,
     data: Partial<T>,
-    logContext?: IRequestLogContext,
+    logEvent?: IRequestLogEvent,
   ): Promise<R[]> {
     try {
       const t0 = Date.now();
       await this.knex(table).where(whereClause).update(data);
       const rows = await this.knex(table).where(whereClause).select("*");
-      if (logContext) {
-        this.sqlEvent(logContext, `${table}.update()`, Date.now() - t0);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.update()`, Date.now() - t0);
       } else {
         LoggingUtilities.service.debug("KnexSqlUtilities.update", `Updated ${table}`);
       }
@@ -126,12 +126,12 @@ class KnexSqlUtilities {
   }
 
   // DELETE
-  async delete<T = any>(table: string, whereClause: Partial<T>, logContext?: IRequestLogContext): Promise<number> {
+  async delete<T = any>(table: string, whereClause: Partial<T>, logEvent?: IRequestLogEvent): Promise<number> {
     try {
       const t0 = Date.now();
       const result = await this.knex(table).where(whereClause).delete();
-      if (logContext) {
-        this.sqlEvent(logContext, `${table}.delete()`, Date.now() - t0);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.delete()`, Date.now() - t0);
       } else {
         LoggingUtilities.service.debug("KnexSqlUtilities.delete", `Deleted from ${table}`);
       }
@@ -156,13 +156,13 @@ class KnexSqlUtilities {
   }
 
   // COUNT
-  async count<T = any>(table: string, whereClause: Partial<T> = {}, logContext?: IRequestLogContext): Promise<number> {
+  async count<T = any>(table: string, whereClause: Partial<T> = {}, logEvent?: IRequestLogEvent): Promise<number> {
     try {
       const query = this.knex(table).where(whereClause).count<{ count: number }[]>({ count: "*" });
       const t0 = Date.now();
       const result = await query;
-      if (logContext) {
-        this.sqlEvent(logContext, `${table}.count()`, Date.now() - t0);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.count()`, Date.now() - t0);
       } else {
         LoggingUtilities.service.debug("KnexSqlUtilities.count", `Executing query - [ ${query.toQuery()} ]`);
       }
@@ -195,7 +195,7 @@ class KnexSqlUtilities {
     findBusStopsWithinRadiusOfLatLng: (
       pphsLat: string,
       pphsLng: string,
-      radiusInMeters: number
+      radiusInMeters: number,
     ) => Promise<{
       rows: (ITB_LTA_BUSSTOP & { distance_m: number })[];
       count: number;
@@ -203,7 +203,7 @@ class KnexSqlUtilities {
     findMrtStationsWithinRadiusOfLatLng: (
       pphsLat: string,
       pphsLng: string,
-      numberOfStations: number
+      numberOfStations: number,
     ) => Promise<{
       rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
       count: number;
@@ -213,7 +213,7 @@ class KnexSqlUtilities {
   private async _findBusStopsWithinRadiusOfLatLng(
     pphsLat: string,
     pphsLng: string,
-    radiusInMeters: number
+    radiusInMeters: number,
   ): Promise<{
     rows: (ITB_LTA_BUSSTOP & { distance_m: number })[];
     count: number;
@@ -237,7 +237,7 @@ class KnexSqlUtilities {
 
       LoggingUtilities.service.debug(
         "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Executing raw query - [ ${query.toQuery()} ]`
+        `Executing raw query - [ ${query.toQuery()} ]`,
       );
 
       const [rows] = await query;
@@ -250,7 +250,10 @@ class KnexSqlUtilities {
 
       return { rows: resultRows, count };
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${toMessage(error)}`);
+      LoggingUtilities.service.error(
+        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
+        `Query error: ${toMessage(error)}`,
+      );
       throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
     }
   }
@@ -258,7 +261,7 @@ class KnexSqlUtilities {
   private async _findMrtStationsWithinRadiusOfLatLng(
     pphsLat: string,
     pphsLng: string,
-    numberOfStations: number
+    numberOfStations: number,
   ): Promise<{
     rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
     count: number;
@@ -280,7 +283,7 @@ class KnexSqlUtilities {
 
       LoggingUtilities.service.debug(
         "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Executing raw query - [ ${query.toQuery()} ]`
+        `Executing raw query - [ ${query.toQuery()} ]`,
       );
 
       const [rows] = await query;
@@ -291,7 +294,10 @@ class KnexSqlUtilities {
 
       return { rows: allRows, count };
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.lta.findBusStopsWithinRadius", `Query error: ${toMessage(error)}`);
+      LoggingUtilities.service.error(
+        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
+        `Query error: ${toMessage(error)}`,
+      );
       throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
     }
   }
@@ -331,7 +337,7 @@ class KnexSqlUtilities {
 
       LoggingUtilities.service.debug(
         "KnexSqlUtilities.lta.findBusServicesByBusStopCode",
-        `Executing raw query - [ ${query.toQuery()} ]`
+        `Executing raw query - [ ${query.toQuery()} ]`,
       );
 
       const [rows] = await query;
@@ -345,7 +351,7 @@ class KnexSqlUtilities {
     } catch (error) {
       LoggingUtilities.service.error(
         "KnexSqlUtilities.lta.findBusServicesByBusStopCode",
-        `Query error: ${toMessage(error)}`
+        `Query error: ${toMessage(error)}`,
       );
       throw new Error(`Failed to find bus services: ${toMessage(error)}`);
     }
@@ -356,14 +362,17 @@ class KnexSqlUtilities {
     data: Partial<T>,
     conflictKey: string,
     updateData?: Partial<T>,
-    logContext?: IRequestLogContext,
+    logEvent?: IRequestLogEvent,
   ): Promise<void> {
     try {
-      const query = this.knex(table).insert(data).onConflict(conflictKey).merge(updateData ?? data);
+      const query = this.knex(table)
+        .insert(data)
+        .onConflict(conflictKey)
+        .merge(updateData ?? data);
       const t0 = Date.now();
       await query;
-      if (logContext) {
-        this.sqlEvent(logContext, `${table}.upsert()`, Date.now() - t0);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.upsert()`, Date.now() - t0);
       } else {
         LoggingUtilities.service.debug("KnexSqlUtilities.upsert", `Executing query - [ ${query.toQuery()} ]`);
       }

@@ -2,12 +2,12 @@ import { NextFunction, Request, Response } from "express";
 import { IRequestLogContext } from "../models/IRequestLogContext";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { HeaderValidationUtilities } from "../utils/HeaderValidationUtilities";
+import { ControllerResponse } from "../models/responses/ControllerResponse";
 
 export const RequestHeaderFilter = function (req: Request, res: Response, next: NextFunction) {
+  const cr = new ControllerResponse(req, res);
   const contentType = req.headers["content-type"];
   const logContext: IRequestLogContext = req.logContext;
-
-  // Header Validation
 
   const requestHeaderValidationLoggingEvent = logContext
     ? LoggingUtilities.request.branch(logContext, "VALIDATION", "General headers")
@@ -22,6 +22,7 @@ export const RequestHeaderFilter = function (req: Request, res: Response, next: 
   const ipAddress = Array.isArray(rawIp) ? rawIp[0] : rawIp;
 
   logContext.metadata = {
+    ...logContext.metadata,
     userAgent,
     ipAddress,
   };
@@ -29,9 +30,7 @@ export const RequestHeaderFilter = function (req: Request, res: Response, next: 
   // Only enforce for requests that usually have a body
   if (["POST"].includes(req.method)) {
     if (!contentType || !contentType.includes("application/json")) {
-      return res.status(415).json({
-        message: "Unsupported Media Type. Only application/json is allowed.",
-      });
+      return cr.result(415, "Unsupported Media Type", "Content-Type must be application/json");
     }
   }
 
