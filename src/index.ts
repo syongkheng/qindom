@@ -99,6 +99,9 @@ async function startServer() {
   // LLM
   app.use("/v1/llm", [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter], createLlmControllerV1(db));
 
+  // Siri Shortcuts
+  app.use("/v1/ss", [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter], createSsBabyControllerV1(db));
+
   // Start server
   app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
@@ -138,5 +141,6 @@ startServer();
 import { startDiscordBot } from "./fnd/discord/Fnd.bot";
 import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter";
 import { RequestApiKeyFilter } from "./middlewares/ApiKeyFilter";
+import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller";
 
 startDiscordBot().catch((err) => LoggingUtilities.service.error("Discord", err?.message ?? String(err)));

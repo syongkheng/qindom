@@ -6,14 +6,14 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
 import { handleException } from "../utils/requestUtils";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
 import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities";
-import { LlmServiceV1 } from "./Llm.v1.service";
 import { IRequestLogContext } from "../models/IRequestLogContext";
+import { SsBabyV1Service } from "./Baby.v1.service";
 
-export default function createLlmControllerV1(db: KnexSqlUtilities) {
+export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
   const router = Router();
-  const llmServiceV1 = new LlmServiceV1(db);
+  const ssBabyServiceV1 = new SsBabyV1Service(db);
 
-  router.post("/message", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/baby/feeding", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;
@@ -23,16 +23,16 @@ export default function createLlmControllerV1(db: KnexSqlUtilities) {
       const requestBodyStructuralValidationLoggingEvent = logContext
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
         : undefined;
-      const { message, model } = req.body;
+      const { timing, qty } = req.body;
 
-      StructuralValidationUtilities.required(message, "message", requestBodyStructuralValidationLoggingEvent);
-      StructuralValidationUtilities.string(message, "message", requestBodyStructuralValidationLoggingEvent);
+      StructuralValidationUtilities.required(timing, "timing", requestBodyStructuralValidationLoggingEvent);
+      StructuralValidationUtilities.string(timing, "timing", requestBodyStructuralValidationLoggingEvent);
 
-      StructuralValidationUtilities.required(model, "model", requestBodyStructuralValidationLoggingEvent);
-      StructuralValidationUtilities.string(model, "model", requestBodyStructuralValidationLoggingEvent);
+      StructuralValidationUtilities.required(qty, "qty", requestBodyStructuralValidationLoggingEvent);
+      StructuralValidationUtilities.string(qty, "qty", requestBodyStructuralValidationLoggingEvent);
 
       // Calling of service
-      const serviceResponse = await llmServiceV1.sendMessage(message, model, logContext);
+      const serviceResponse = await ssBabyServiceV1.recordFeeding(timing, qty, logContext);
 
       return cr.ok(serviceResponse);
     } catch (err) {
