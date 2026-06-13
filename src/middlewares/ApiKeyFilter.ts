@@ -35,12 +35,12 @@ export const RequestApiKeyFilter = async function (req: Request, res: Response, 
         apiKeyValidationLoggingEvent,
       );
       if (!validKeys) {
-        apiKeyValidationLoggingEvent?.children?.push(`Key Validity:' ${LogEmoji.error} `);
+        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
         throw new Exceptions.InvalidRequest("Invalid API key");
       }
-      apiKeyValidationLoggingEvent?.children?.push(`Key Validity:' ${LogEmoji.success} `);
+      apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
       const user = await db.findOne<ITB_AA_USER>(
-        "tb_user",
+        "tb_aa_user",
         { id: validKeys.user_id },
         ["username"],
         apiKeyValidationLoggingEvent,
