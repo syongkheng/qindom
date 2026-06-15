@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 const rateLimitResponse = (message: string) => ({
   success: false,
@@ -74,7 +74,6 @@ export const publicTrialLimiter = rateLimit({
   limit: 20,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip ?? "unknown",
   message: rateLimitResponse("Trial limit reached. Please create an API key to continue."),
 });
 
@@ -87,7 +86,7 @@ export const chatLimiter = rateLimit({
   keyGenerator: (req) => {
     const key = req.headers["x-api-key"];
     if (typeof key === "string" && key) return `apikey:${key}`;
-    return req.ip ?? "unknown";
+    return ipKeyGenerator(req.ip ?? "unknown");
   },
   message: rateLimitResponse("Too many chat requests. Please slow down."),
 });
