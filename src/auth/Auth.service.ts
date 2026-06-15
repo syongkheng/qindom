@@ -321,6 +321,7 @@ export class AuthService {
     }
 
     const generatedToken = await this.tokenService.generateToken({
+      id: user.id!,
       username: user.username,
       system: user.system,
       roles: parsedRoles,

@@ -15,7 +15,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
   router.get("/sessions", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const sessions = await svc.getSessions(getUser(req).username);
+      const sessions = await svc.getSessions(getUser(req).id);
       return cr.ok(sessions);
     } catch (err) {
       return handleException(err, cr, "TrailController.GET /sessions", "Failed to load trail sessions");
@@ -27,7 +27,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const body = TrailValidator.validateCreateSession(req);
-      const session = await svc.createSession(getUser(req).username, body);
+      const session = await svc.createSession(getUser(req).id, body);
       return cr.ok(session);
     } catch (err) {
       return handleException(err, cr, "TrailController.POST /sessions", "Failed to create trail session");
@@ -38,7 +38,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
   router.get("/sessions/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const session = await svc.getSessionById(req.params.sessionId, getUser(req).username);
+      const session = await svc.getSessionById(req.params.sessionId, getUser(req).id);
       return cr.ok(session);
     } catch (err) {
       return handleException(err, cr, "TrailController.GET /sessions/:sessionId", "Failed to load trail session");
@@ -50,7 +50,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const body = TrailValidator.validateCompleteSession(req);
-      const session = await svc.completeSession(req.params.sessionId, getUser(req).username, body);
+      const session = await svc.completeSession(req.params.sessionId, getUser(req).id, body);
       return cr.ok(session);
     } catch (err) {
       return handleException(err, cr, "TrailController.POST /sessions/:sessionId/complete", "Failed to complete trail session");
@@ -61,7 +61,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
   router.post("/sessions/:sessionId/delete", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      await svc.deleteSession(req.params.sessionId, getUser(req).username);
+      await svc.deleteSession(req.params.sessionId, getUser(req).id);
       return cr.ok({ deleted: true });
     } catch (err) {
       return handleException(err, cr, "TrailController.POST /sessions/:sessionId/delete", "Failed to delete trail session");
@@ -72,7 +72,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
   router.get("/custom", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const trails = await svc.getCustomTrails(getUser(req).username);
+      const trails = await svc.getCustomTrails(getUser(req).id);
       return cr.ok(trails);
     } catch (err) {
       return handleException(err, cr, "TrailController.GET /custom", "Failed to load custom trails");
@@ -84,7 +84,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const body = TrailValidator.validateCreateCustomTrail(req);
-      const trail = await svc.createCustomTrail(getUser(req).username, body);
+      const trail = await svc.createCustomTrail(getUser(req).id, body);
       return cr.ok(trail);
     } catch (err) {
       return handleException(err, cr, "TrailController.POST /custom", "Failed to create custom trail");

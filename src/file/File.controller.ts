@@ -16,7 +16,7 @@ export default function createFileController(db: KnexSqlUtilities): Router {
     try {
       const { uuid, agendaId, tgShortCode, mimeType, name, sizeInBytes } = req.body;
       if (!uuid || !agendaId || !tgShortCode || !mimeType) throw new Exceptions.InvalidRequest("uuid|agendaId|tgShortCode|mimeType");
-      const result = await svc.uploadTg(getUser(req).username, uuid, Number(agendaId), tgShortCode, mimeType, name, sizeInBytes);
+      const result = await svc.uploadTg(getUser(req).id, uuid, Number(agendaId), tgShortCode, mimeType, name, sizeInBytes);
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "FileController.POST /tg", "Failed to link tg image");
@@ -27,7 +27,7 @@ export default function createFileController(db: KnexSqlUtilities): Router {
     const cr = new ControllerResponse(req, res);
     try {
       const { fileIds } = FileValidator.validateDeleteRequest(req);
-      const deleted = await svc.deleteByUuids(getUser(req).username, fileIds);
+      const deleted = await svc.deleteByUuids(getUser(req).id, fileIds);
       return cr.ok({ deleted });
     } catch (err) {
       return handleException(err, cr, "FileController.POST /delete", "Failed to delete files");

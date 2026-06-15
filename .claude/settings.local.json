@@ -12,7 +12,9 @@
       "Bash(npx tsc:*)",
       "Read(//dev/**)",
       "Bash(wait)",
-      "Bash(npx vue-tsc *)"
+      "Bash(npx vue-tsc *)",
+      "Read(//Users/rowense/Library/Application Support/Code/User/snippets/**)",
+      "Bash(code --list-extensions)"
     ]
   }
 }

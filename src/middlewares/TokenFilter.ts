@@ -41,13 +41,13 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
     const user = await db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
-      ["token"],
+      ["id", "token"],
     );
     if (!user || user.token !== token) {
       return response.badAuthorization("Token revoked or invalid");
     }
 
-    req.user = decoded;
+    req.user = { ...decoded, id: user.id! };
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {

@@ -21,11 +21,13 @@ export class TokenService {
   }
 
   async generateToken({
+    id,
     username,
     system,
     roles,
     lastLoggedInDt,
   }: {
+    id: number;
     username: string;
     system: string;
     roles: string[];
@@ -37,7 +39,7 @@ export class TokenService {
     );
     try {
       const token = jwt.sign(
-        { username, system, roles, lastLoggedInDt },
+        { id, username, system, roles, lastLoggedInDt },
         this.jwtSecret,
         { expiresIn: this.jwtExpiration }
       );

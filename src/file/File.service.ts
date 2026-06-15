@@ -12,7 +12,7 @@ export class FileService {
   constructor(private db: KnexSqlUtilities) {}
 
   async uploadTg(
-    username: string,
+    userId: number,
     uuid: string,
     agendaId: number,
     tgShortCode: string,
@@ -25,7 +25,7 @@ export class FileService {
 
     const itinerary = await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
       id: agendaItem.itinerary_id,
-      created_by: username,
+      created_by_id: userId,
       record_status: "A",
     });
     if (!itinerary) throw new Exceptions.ForbiddenAccess();
@@ -50,16 +50,16 @@ export class FileService {
     return { id: file.id!, uuid: file.uuid };
   }
 
-  async deleteByUuids(username: string, fileIds: string[]): Promise<number> {
+  async deleteByUuids(userId: number, fileIds: string[]): Promise<number> {
     await this.db.raw(
       `UPDATE ${TB_TRAVEL_AGENDA_FILE} af
          JOIN ${TB_TRAVEL_AGENDA_ITEM} ai ON af.agenda_item_id = ai.id
          JOIN ${TB_TRAVEL_ITINERARY}   it ON ai.itinerary_id   = it.id
        SET af.record_status = 'D'
        WHERE af.uuid IN (?)
-         AND it.created_by = ?
+         AND it.created_by_id = ?
          AND af.record_status = 'A'`,
-      [fileIds, username],
+      [fileIds, userId],
     );
     return fileIds.length;
   }

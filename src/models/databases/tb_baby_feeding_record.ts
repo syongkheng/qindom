@@ -4,7 +4,7 @@ export interface ITB_BABY_FEEDING_RECORD {
   qty?: string;
   record_status?: string;
   created_dt?: number;
-  created_by?: string;
+  created_by_id?: number;
   updated_dt?: number;
-  updated_by?: string;
+  updated_by_id?: number | null;
 }

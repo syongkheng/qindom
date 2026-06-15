@@ -1,3 +1,4 @@
+import { LogEmoji } from "../constants/LogEmoji";
 import { ITB_BABY_FEEDING_RECORD } from "../models/databases/tb_baby_feeding_record";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities";
@@ -35,13 +36,20 @@ export class SsBabyV1Service {
       ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Calling LLM Provider")
       : undefined;
 
+    const userIdFromApiKey: number = loggingContext?.metadata?.userId as number;
+
+    if (!userIdFromApiKey) {
+      serviceProcessingLoggingEvent?.children?.push(`Invalid userId from API key ${LogEmoji.error}`);
+      throw new Error("Invalid API key user");
+    }
+
     await this.db.insert<ITB_BABY_FEEDING_RECORD>(
       "tb_baby_feeding_record",
       {
         timing,
         qty,
         created_dt: Date.now(),
-        created_by: "system",
+        created_by_id: userIdFromApiKey,
       },
       serviceProcessingLoggingEvent,
     );
@@ -52,5 +60,27 @@ export class SsBabyV1Service {
         qty,
       },
     };
+  }
+
+  async getFeedingRecords(loggingContext?: IRequestLogContext): Promise<ITB_BABY_FEEDING_RECORD[]> {
+    const serviceProcessingLoggingEvent = loggingContext
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Retrieving feeding records")
+      : undefined;
+
+    const userIdFromApiKey: number = loggingContext?.metadata?.userId as number;
+
+    if (!userIdFromApiKey) {
+      serviceProcessingLoggingEvent?.children?.push(`Invalid userId from API key ${LogEmoji.error}`);
+      throw new Error("Invalid API key user");
+    }
+
+    const records = await this.db.find<ITB_BABY_FEEDING_RECORD>(
+      "tb_baby_feeding_record",
+      { created_by_id: userIdFromApiKey, record_status: "A" },
+      { orderBy: "created_dt", orderDirection: "desc" },
+      serviceProcessingLoggingEvent,
+    );
+
+    return records;
   }
 }

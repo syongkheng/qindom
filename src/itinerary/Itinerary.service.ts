@@ -190,10 +190,10 @@ export class ItineraryService {
 
   // ─── Queries ─────────────────────────────────────────────────────────────────
 
-  async listTrips(username: string): Promise<any[]> {
+  async listTrips(userId: number): Promise<any[]> {
     const trips = await this.db.find<ITB_ITINERARY>(
       TB_TRAVEL_ITINERARY,
-      { record_status: "A", created_by: username },
+      { record_status: "A", created_by_id: userId },
       {
         orderBy: "created_dt",
         orderDirection: "desc",
@@ -222,23 +222,23 @@ export class ItineraryService {
     }));
   }
 
-  async deleteTrip(username: string, sessionId: string): Promise<void> {
+  async deleteTrip(userId: number, sessionId: string): Promise<void> {
     const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
       session_id: sessionId,
       record_status: "A",
     })) as ITB_ITINERARY | undefined;
     if (!itinerary) throw new Exceptions.NotFound();
-    if (itinerary.created_by !== username) throw new Exceptions.ForbiddenAccess();
+    if (itinerary.created_by_id !== userId) throw new Exceptions.ForbiddenAccess();
     await this.db.update<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, { session_id: sessionId }, { record_status: "D" });
   }
 
-  async getBySessionId(username: string, sessionId: string): Promise<ReturnType<typeof buildItineraryResponse>> {
+  async getBySessionId(userId: number, sessionId: string): Promise<ReturnType<typeof buildItineraryResponse>> {
     const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
       session_id: sessionId,
       record_status: "A",
     })) as ITB_ITINERARY | undefined;
     if (!itinerary) throw new Exceptions.NotFound();
-    if (itinerary.created_by !== username) throw new Exceptions.ForbiddenAccess();
+    if (itinerary.created_by_id !== userId) throw new Exceptions.ForbiddenAccess();
 
     const agendaItems = (await this.db.find<ITB_AGENDA_ITEM>(
       TB_TRAVEL_AGENDA_ITEM,
@@ -330,7 +330,7 @@ export class ItineraryService {
     return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems);
   }
 
-  async create(username: string, body: any): Promise<{ shortCode: string; sessionId: string; agendaToFileMap: any[] }> {
+  async create(userId: number, body: any): Promise<{ shortCode: string; sessionId: string; agendaToFileMap: any[] }> {
     const {
       idempotencyKey,
       sessionTitle,
@@ -389,7 +389,7 @@ export class ItineraryService {
         challenge: challenge || undefined,
         pax_names: paxNames?.length ? JSON.stringify(paxNames) : undefined,
         created_dt: now,
-        created_by: username,
+        created_by_id: userId,
         record_status: "A",
       });
 
@@ -457,7 +457,7 @@ export class ItineraryService {
   }
 
   async edit(
-    username: string,
+    userId: number,
     sessionId: string,
     body: any,
   ): Promise<{ shortCode: string; sessionId: string; agendaToFileMap: any[] }> {
@@ -487,7 +487,7 @@ export class ItineraryService {
       record_status: "A",
     })) as ITB_ITINERARY | undefined;
     if (!itinerary) throw new Exceptions.NotFound();
-    if (itinerary.created_by !== username) throw new Exceptions.ForbiddenAccess();
+    if (itinerary.created_by_id !== userId) throw new Exceptions.ForbiddenAccess();
 
     const now = Date.now();
 

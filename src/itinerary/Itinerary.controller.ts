@@ -19,7 +19,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   router.get("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const myTrips = await svc.listTrips(getUser(req).username);
+      const myTrips = await svc.listTrips(getUser(req).id);
       return cr.ok({ myTrips, sharedTrips: [] });
     } catch (err) {
       return handleException(err, cr, "ItineraryController.GET /", "Failed to load itineraries");
@@ -29,7 +29,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   router.post("/delete/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      await svc.deleteTrip(getUser(req).username, req.params.sessionId);
+      await svc.deleteTrip(getUser(req).id, req.params.sessionId);
       return cr.ok({ deleted: true });
     } catch (err) {
       return handleException(err, cr, "ItineraryController.POST /delete/:sessionId", "Failed to delete itinerary");
@@ -56,7 +56,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const body = ItineraryValidator.validateCreateRequest(req);
-      const result = await svc.create(getUser(req).username, body);
+      const result = await svc.create(getUser(req).id, body);
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "ItineraryController.POST /", "Failed to create itinerary");
@@ -79,7 +79,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   router.get("/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const result = await svc.getBySessionId(getUser(req).username, req.params.sessionId);
+      const result = await svc.getBySessionId(getUser(req).id, req.params.sessionId);
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "ItineraryController.GET /:sessionId", "Failed to load itinerary");
@@ -90,7 +90,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const body = ItineraryValidator.validateEditRequest(req);
-      const result = await svc.edit(getUser(req).username, req.params.sessionId, body);
+      const result = await svc.edit(getUser(req).id, req.params.sessionId, body);
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "ItineraryController.POST /edit/:sessionId", "Failed to update itinerary");

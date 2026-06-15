@@ -45,12 +45,16 @@ export const RequestApiKeyFilter = async function (req: Request, res: Response, 
         ["username"],
         apiKeyValidationLoggingEvent,
       );
-      if (user) {
-        logContext.metadata = {
-          ...logContext.metadata,
-          username: user.username,
-        };
+      if (!user) {
+        apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.error} `);
+        throw new Exceptions.InvalidRequest("Invalid API key");
       }
+      apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.success} `);
+      logContext.metadata = {
+        ...logContext.metadata,
+        username: user.username,
+        userId: validKeys.user_id,
+      };
     }
 
     logContext.metadata = {

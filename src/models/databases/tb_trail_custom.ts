@@ -1,7 +1,7 @@
 export interface ITB_TRAIL_CUSTOM {
   id?: number;
   trail_id: string;
-  created_by: string;
+  created_by_id: number;
   name: string;
   country: string;
   total_km: number;

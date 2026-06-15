@@ -1,7 +1,7 @@
 export interface ITB_TRAIL_SESSION {
   id?: number;
   session_id: string;
-  created_by: string;
+  created_by_id: number;
   trail_id: string;
   trail_name: string;
   trail_type: "preset" | "custom";

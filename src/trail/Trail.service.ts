@@ -44,9 +44,9 @@ function safeJsonParse(value: any, fallback: any): any {
 export class TrailService {
   constructor(private db: KnexSqlUtilities) {}
 
-  async getSessions(username: string): Promise<any[]> {
+  async getSessions(userId: number): Promise<any[]> {
     const rows = await this.db.find<ITB_TRAIL_SESSION>(TB_TRAIL_SESSION, {
-      created_by: username, record_status: "A",
+      created_by_id: userId, record_status: "A",
     }, { orderBy: "started_at", orderDirection: "desc" });
 
     const sessionIds = rows.map((r) => r.id!).filter(Boolean);
@@ -61,9 +61,9 @@ export class TrailService {
     });
   }
 
-  async getSessionById(sessionId: string, username: string): Promise<any | null> {
+  async getSessionById(sessionId: string, userId: number): Promise<any | null> {
     const row = await this.db.findOne<ITB_TRAIL_SESSION>(TB_TRAIL_SESSION, {
-      session_id: sessionId, created_by: username, record_status: "A",
+      session_id: sessionId, created_by_id: userId, record_status: "A",
     });
     if (!row) return null;
 
@@ -74,7 +74,7 @@ export class TrailService {
     return buildSessionResponse(row, splits, true);
   }
 
-  async createSession(username: string, payload: {
+  async createSession(userId: number, payload: {
     trailId: string; trailName: string; trailType: string; status: string; startedAt: number;
   }): Promise<any> {
     const sessionId = crypto.randomUUID();
@@ -82,7 +82,7 @@ export class TrailService {
 
     await this.db.insert<ITB_TRAIL_SESSION>(TB_TRAIL_SESSION, {
       session_id:             sessionId,
-      created_by:             username,
+      created_by_id:          userId,
       trail_id:               payload.trailId,
       trail_name:             payload.trailName,
       trail_type:             payload.trailType as "preset" | "custom",
@@ -96,17 +96,17 @@ export class TrailService {
     });
 
     const created = await this.db.findOne<ITB_TRAIL_SESSION>(TB_TRAIL_SESSION, {
-      session_id: sessionId, created_by: username,
+      session_id: sessionId, created_by_id: userId,
     });
     return buildSessionResponse(created!, [], false);
   }
 
-  async completeSession(sessionId: string, username: string, payload: {
+  async completeSession(sessionId: string, userId: number, payload: {
     status: string; completedAt?: number; totalKm: number; totalSteps: number;
     totalDurationSeconds: number; checkpointsReached: string[]; splits: any[]; trackPoints: any[];
   }): Promise<any> {
     const existing = await this.db.findOne<ITB_TRAIL_SESSION>(TB_TRAIL_SESSION, {
-      session_id: sessionId, created_by: username, record_status: "A",
+      session_id: sessionId, created_by_id: userId, record_status: "A",
     });
     if (!existing) throw new Error("Session not found");
 
@@ -135,12 +135,12 @@ export class TrailService {
       }
     });
 
-    return this.getSessionById(sessionId, username);
+    return this.getSessionById(sessionId, userId);
   }
 
-  async deleteSession(sessionId: string, username: string): Promise<boolean> {
+  async deleteSession(sessionId: string, userId: number): Promise<boolean> {
     const existing = await this.db.findOne<ITB_TRAIL_SESSION>(TB_TRAIL_SESSION, {
-      session_id: sessionId, created_by: username, record_status: "A",
+      session_id: sessionId, created_by_id: userId, record_status: "A",
     });
     if (!existing) return false;
 
@@ -150,9 +150,9 @@ export class TrailService {
     return true;
   }
 
-  async getCustomTrails(username: string): Promise<any[]> {
+  async getCustomTrails(userId: number): Promise<any[]> {
     const rows = await this.db.find<ITB_TRAIL_CUSTOM>(TB_TRAIL_CUSTOM, {
-      created_by: username, record_status: "A",
+      created_by_id: userId, record_status: "A",
     }, { orderBy: "created_dt", orderDirection: "desc" });
 
     return rows.map((row) => ({
@@ -168,7 +168,7 @@ export class TrailService {
     }));
   }
 
-  async createCustomTrail(username: string, payload: {
+  async createCustomTrail(userId: number, payload: {
     name: string; country: string; totalKm: number;
     difficulty: string; estimatedDays: number; description?: string;
   }): Promise<any> {
@@ -177,7 +177,7 @@ export class TrailService {
 
     await this.db.insert<ITB_TRAIL_CUSTOM>(TB_TRAIL_CUSTOM, {
       trail_id:      trailId,
-      created_by:    username,
+      created_by_id: userId,
       name:          payload.name,
       country:       payload.country,
       total_km:      payload.totalKm,

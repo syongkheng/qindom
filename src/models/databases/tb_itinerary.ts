@@ -16,6 +16,6 @@ export interface ITB_ITINERARY {
   challenge?: string;
   pax_names?: string;
   created_dt: number;
-  created_by: string;
+  created_by_id: number;
   record_status: string;
 }

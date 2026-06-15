@@ -114,6 +114,7 @@ export class PfpService {
     })();
 
     const token = await this.tokenService.generateToken({
+      id: user.id!,
       username: newUsername,
       system,
       roles: parsedRoles,
