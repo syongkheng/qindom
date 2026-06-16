@@ -1,8 +1,8 @@
-import { UnknownException } from "../exceptions/UnknownException";
-import { UsernameAlreadyTakenException } from "../exceptions/UsernameAlreadyTakenException";
-import { ITB_AA_USER } from "../models/databases/tb_aa_user";
-import { TokenService } from "../token/Token.service";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
+import { UnknownException } from "../exceptions/UnknownException.js";
+import { UsernameAlreadyTakenException } from "../exceptions/UsernameAlreadyTakenException.js";
+import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
+import { TokenService } from "../token/Token.service.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 
 export class PfpService {
   private tokenService: TokenService;

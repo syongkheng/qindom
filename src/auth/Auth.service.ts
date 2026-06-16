@@ -1,12 +1,12 @@
 import crypto from "crypto";
-import { ITB_AA_USER } from "../models/databases/tb_aa_user";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext";
+import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import bcrypt from "bcrypt";
-import { TokenService } from "../token/Token.service";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { MailerUtilities } from "../utils/MailerUtilities";
+import { TokenService } from "../token/Token.service.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { MailerUtilities } from "../utils/MailerUtilities.js";
 
 const VERIFY_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_VERIFY_ATTEMPTS = 5;

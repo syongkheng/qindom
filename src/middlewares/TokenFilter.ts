@@ -1,13 +1,13 @@
 import { NextFunction, Response } from "express";
 import jwt from "jsonwebtoken";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { ITB_AA_USER } from "../models/databases/tb_aa_user";
-import db from "../config/db/mysql";
-import { IRequestLogContext } from "../models/IRequestLogContext";
-import { HeaderValidationUtilities } from "../utils/HeaderValidationUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
+import db from "../config/db/mysql.js";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { HeaderValidationUtilities } from "../utils/HeaderValidationUtilities.js";
 
 export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);

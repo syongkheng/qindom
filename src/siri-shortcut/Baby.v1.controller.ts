@@ -1,12 +1,12 @@
 import { Router, Response } from "express";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { handleException } from "../utils/requestUtils";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities";
-import { IRequestLogContext } from "../models/IRequestLogContext";
-import { SsBabyV1Service } from "./Baby.v1.service";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { handleException } from "../utils/requestUtils.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { SsBabyV1Service } from "./Baby.v1.service.js";
 
 export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
   const router = Router();

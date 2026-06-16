@@ -3,15 +3,16 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "NODE_ENV=dev nodemon src/index.ts",
-    "dev:log": "NODE_ENV=dev_log nodemon src/index.ts",
+    "dev": "NODE_ENV=dev tsx watch src/index.ts",
+    "dev:log": "NODE_ENV=dev_log tsx watch src/index.ts",
     "build": "rm -rf dist && npx tsc --build --verbose",
-    "migrate": "knex --knexfile knexfile.ts migrate:latest",
-    "migrate:rollback": "knex --knexfile knexfile.ts migrate:rollback",
-    "migrate:make": "knex --knexfile knexfile.ts migrate:make",
-    "migrate:status": "knex --knexfile knexfile.ts migrate:status"
+    "migrate": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:latest",
+    "migrate:rollback": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
+    "migrate:make": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make",
+    "migrate:status": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:status"
   },
   "keywords": [],
   "author": "",
@@ -34,7 +35,7 @@
     "multer": "^2.1.1",
     "mysql2": "^3.15.2",
     "node-html-parser": "^7.0.1",
-    "node-telegram-bot-api": "^0.66.0",
+    "node-telegram-bot-api": "^1.1.0",
     "nodemailer": "^8.0.1",
     "sharp": "^0.34.5"
   },
@@ -49,10 +50,8 @@
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node-telegram-bot-api": "^0.64.14",
     "@types/nodemailer": "^7.0.11",
-    "nodemon": "^3.1.10",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   }
 }

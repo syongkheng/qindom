@@ -1,4 +1,4 @@
-import { BaseExceptions } from "./BaseException";
+import { BaseExceptions } from "./BaseException.js";
 
 export class ExternalRequestException extends BaseExceptions {
   constructor(externalService: string) {

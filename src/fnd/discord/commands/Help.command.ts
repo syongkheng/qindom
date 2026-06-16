@@ -1,5 +1,5 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
 
 /**
  * Help command that displays a list of all available bot commands.

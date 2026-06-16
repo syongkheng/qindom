@@ -1,9 +1,9 @@
 import { Router, Request, Response } from "express";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { GeocodeService } from "./Geocode.service";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { handleException } from "../utils/requestUtils";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { GeocodeService } from "./Geocode.service.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { handleException } from "../utils/requestUtils.js";
 
 export default function createGeocodeController(db: KnexSqlUtilities) {
   const router = Router();

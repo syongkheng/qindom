@@ -1,11 +1,11 @@
 import axios from "axios";
 import crypto from "crypto";
 import sharp from "sharp";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { ITbTgImage } from "../models/databases/tb_tg_image";
-import { ITbTgStatsWhitelist } from "../models/databases/tb_tg_stats_whitelist";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { ITbTgImage } from "../models/databases/tb_tg_image.js";
+import { ITbTgStatsWhitelist } from "../models/databases/tb_tg_stats_whitelist.js";
 
 const TABLE = "tb_tg_image";
 const TABLE_WHITELIST = "tb_tg_stats_whitelist";

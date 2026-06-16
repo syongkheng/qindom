@@ -1,7 +1,7 @@
 import { Request } from "express";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException";
-import { WeakPasswordException } from "../exceptions/WeakPasswordException";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
+import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
+import { WeakPasswordException } from "../exceptions/WeakPasswordException.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

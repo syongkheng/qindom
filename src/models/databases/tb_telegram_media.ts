@@ -1,4 +1,4 @@
-import { MediaType } from "../dtos/TelegramDto";
+import { MediaType } from "../dtos/TelegramDto.js";
 
 export interface ITbTelegramMedia {
   id:               string;

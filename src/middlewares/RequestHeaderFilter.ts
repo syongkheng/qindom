@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from "express";
-import { IRequestLogContext } from "../models/IRequestLogContext";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { HeaderValidationUtilities } from "../utils/HeaderValidationUtilities";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { HeaderValidationUtilities } from "../utils/HeaderValidationUtilities.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 
 export const RequestHeaderFilter = function (req: Request, res: Response, next: NextFunction) {
   const cr = new ControllerResponse(req, res);

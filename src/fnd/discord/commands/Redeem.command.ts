@@ -1,11 +1,11 @@
 import { Message, ChannelType, EmbedBuilder, TextChannel } from "discord.js";
 import axios from "axios";
 import crypto from "crypto";
-import { firestoreDB as db } from "../../../config/db/firebase";
-import { IRequestLogContext } from "../../../models/IRequestLogContext";
-import { signPayload } from "./Register.command";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
-import { toMessage } from "../../../utils/errorUtils";
+import { firestoreDB as db } from "../../../config/db/firebase.js";
+import { IRequestLogContext } from "../../../models/IRequestLogContext.js";
+import { signPayload } from "./Register.command.js";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
+import { toMessage } from "../../../utils/errorUtils.js";
 import { DocumentReference } from "@google-cloud/firestore";
 
 const ALLOWED_REDEEMER_IDS = ["340529865952460800", "383607274624778241"];

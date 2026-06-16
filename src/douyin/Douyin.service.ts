@@ -1,7 +1,7 @@
-import { Exceptions } from "../exceptions/AppExceptions";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { toMessage } from "../utils/errorUtils";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { toMessage } from "../utils/errorUtils.js";
 
 interface DouyinLiveResult {
   userId: string;

@@ -1,23 +1,23 @@
-import { EntityCreationException } from "./EntityCreationException";
-import { EntityNotFoundException } from "./EntityNotFoundException";
-import { EntityRetrievalException } from "./EntityRetrievalException";
-import { EntityUpdateException } from "./EntityUpdateException";
-import { ExternalRequestException } from "./ExternalRequestException";
-import { EmailNotVerifiedException } from "./EmailNotVerifiedException";
-import { EmailAlreadyRegisteredException } from "./EmailAlreadyRegisteredException";
-import { UsernameAlreadyTakenException } from "./UsernameAlreadyTakenException";
-import { InvalidLoginCredentialsException } from "./InvalidLoginCredentialsException";
-import { InvalidRequestException } from "./InvalidRequestException";
-import { MaxVerifyAttemptsException } from "./MaxVerifyAttemptsException";
-import { ParseJsonException } from "./ParseJsonException";
-import { RegistrationException } from "./RegistrationException";
-import { TokenExpiredException } from "./TokenExpiredException";
-import { TokenFormatException } from "./TokenFormatException";
-import { ForbiddenAccessException } from "./ForbiddenAccessException";
-import { UnauthorizedAccessException } from "./UnauthorizedAccessException";
-import { UnknownException } from "./UnknownException";
-import { VerifyCodeExpiredException } from "./VerifyCodeExpiredException";
-import { WeakPasswordException } from "./WeakPasswordException";
+import { EntityCreationException } from "./EntityCreationException.js";
+import { EntityNotFoundException } from "./EntityNotFoundException.js";
+import { EntityRetrievalException } from "./EntityRetrievalException.js";
+import { EntityUpdateException } from "./EntityUpdateException.js";
+import { ExternalRequestException } from "./ExternalRequestException.js";
+import { EmailNotVerifiedException } from "./EmailNotVerifiedException.js";
+import { EmailAlreadyRegisteredException } from "./EmailAlreadyRegisteredException.js";
+import { UsernameAlreadyTakenException } from "./UsernameAlreadyTakenException.js";
+import { InvalidLoginCredentialsException } from "./InvalidLoginCredentialsException.js";
+import { InvalidRequestException } from "./InvalidRequestException.js";
+import { MaxVerifyAttemptsException } from "./MaxVerifyAttemptsException.js";
+import { ParseJsonException } from "./ParseJsonException.js";
+import { RegistrationException } from "./RegistrationException.js";
+import { TokenExpiredException } from "./TokenExpiredException.js";
+import { TokenFormatException } from "./TokenFormatException.js";
+import { ForbiddenAccessException } from "./ForbiddenAccessException.js";
+import { UnauthorizedAccessException } from "./UnauthorizedAccessException.js";
+import { UnknownException } from "./UnknownException.js";
+import { VerifyCodeExpiredException } from "./VerifyCodeExpiredException.js";
+import { WeakPasswordException } from "./WeakPasswordException.js";
 
 export const Exceptions = {
   ExternalRequest: ExternalRequestException,

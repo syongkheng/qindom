@@ -1,6 +1,6 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
 import axios from "axios";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
 
 /**
  * Ping command for testing server connectivity and API health.

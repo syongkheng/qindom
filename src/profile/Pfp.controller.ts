@@ -1,10 +1,10 @@
 import { Router, Response } from "express";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { PfpService } from "./Pfp.service";
-import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { getUser, handleException } from "../utils/requestUtils";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { PfpService } from "./Pfp.service.js";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { getUser, handleException } from "../utils/requestUtils.js";
 
 export default function createPfpController(db: KnexSqlUtilities) {
   const router = Router();

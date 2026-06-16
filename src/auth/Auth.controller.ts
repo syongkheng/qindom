@@ -1,22 +1,22 @@
 import { Router, Request, Response } from "express";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { AuthService } from "./Auth.service";
-import { BaseExceptions } from "../exceptions/BaseException";
-import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { AuthService } from "./Auth.service.js";
+import { BaseExceptions } from "../exceptions/BaseException.js";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import {
   loginLimiter,
   registerLimiter,
   verifyEmailLimiter,
   resendVerifyLimiter,
   adminLimiter,
-} from "../middlewares/RateLimiter";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { AuthValidator } from "./Auth.validator";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { toMessage } from "../utils/errorUtils";
-import { getUser, handleException, hasRole } from "../utils/requestUtils";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
+} from "../middlewares/RateLimiter.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { AuthValidator } from "./Auth.validator.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { toMessage } from "../utils/errorUtils.js";
+import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 
 export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();

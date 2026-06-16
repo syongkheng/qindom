@@ -8,29 +8,29 @@ dotenv.config({ path: envFile });
 
 import express, { Application } from "express";
 import cors from "cors";
-import { LoggingUtilities } from "./utils/logging/LoggingUtilities";
-import { initializeDatabase } from "./config/db/mysql";
-import { RestRequestLogger } from "./middlewares/RestRequestLogger";
+import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
+import { initializeDatabase } from "./config/db/mysql.js";
+import { RestRequestLogger } from "./middlewares/RestRequestLogger.js";
 
 // Controllers
-import createConnectivityController from "./connectivity/Connectivity.controller";
-import createHdbController from "./hdb/Hdb.controller";
-import createLtaController from "./lta/Lta.controller";
-import createAuthController from "./auth/Auth.controller";
-import createPfpController from "./profile/Pfp.controller";
-import createItineraryController from "./itinerary/Itinerary.controller";
-import createFileController from "./file/File.controller";
-import createDouyinController from "./douyin/Douyin.controller";
-import createGeocodeController from "./geocode/Geocode.controller";
-import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller";
+import createConnectivityController from "./connectivity/Connectivity.controller.js";
+import createHdbController from "./hdb/Hdb.controller.js";
+import createLtaController from "./lta/Lta.controller.js";
+import createAuthController from "./auth/Auth.controller.js";
+import createPfpController from "./profile/Pfp.controller.js";
+import createItineraryController from "./itinerary/Itinerary.controller.js";
+import createFileController from "./file/File.controller.js";
+import createDouyinController from "./douyin/Douyin.controller.js";
+import createGeocodeController from "./geocode/Geocode.controller.js";
+import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
 
-import createLlmControllerV1 from "./llm/Llm.v1.controller";
+import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
 
-import createTrailController from "./trail/Trail.controller";
-import { TgImageService } from "./tgimage/TgImage.service";
-import { initTgImageBot } from "./tgimage/TgImage.bot";
-import { globalLimiter, douyinLimiter } from "./middlewares/RateLimiter";
-import { MandatoryTokenFilter } from "./middlewares/TokenFilter";
+import createTrailController from "./trail/Trail.controller.js";
+import { TgImageService } from "./tgimage/TgImage.service.js";
+import { initTgImageBot } from "./tgimage/TgImage.bot.js";
+import { globalLimiter, douyinLimiter } from "./middlewares/RateLimiter.js";
+import { MandatoryTokenFilter } from "./middlewares/TokenFilter.js";
 
 async function startServer() {
   const app: Application = express();
@@ -138,9 +138,9 @@ async function startServer() {
 startServer();
 
 // Start Discord Bot
-import { startDiscordBot } from "./fnd/discord/Fnd.bot";
-import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter";
-import { RequestApiKeyFilter } from "./middlewares/ApiKeyFilter";
-import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller";
+import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
+import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter.js";
+import { RequestApiKeyFilter } from "./middlewares/ApiKeyFilter.js";
+import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller.js";
 
 startDiscordBot().catch((err) => LoggingUtilities.service.error("Discord", err?.message ?? String(err)));

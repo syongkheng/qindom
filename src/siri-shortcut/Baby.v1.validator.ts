@@ -1,7 +1,7 @@
-import { InvalidRequestException } from "../exceptions/InvalidRequestException";
-import { IRequestLogEvent } from "../models/IRequestLogContext";
-import { LogEmoji } from "../constants/LogEmoji";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
+import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
+import { IRequestLogEvent } from "../models/IRequestLogContext.js";
+import { LogEmoji } from "../constants/LogEmoji.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 
 export class SsBabyV1Validator {
   constructor(private readonly db: KnexSqlUtilities) {}

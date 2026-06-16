@@ -1,8 +1,8 @@
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file";
-import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
-import { ITB_ITINERARY } from "../models/databases/tb_itinerary";
-import { Exceptions } from "../exceptions/AppExceptions";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file.js";
+import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item.js";
+import { ITB_ITINERARY } from "../models/databases/tb_itinerary.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 
 const TB_TRAVEL_AGENDA_FILE = "tb_travel_agenda_file";
 const TB_TRAVEL_AGENDA_ITEM = "tb_travel_agenda_item";

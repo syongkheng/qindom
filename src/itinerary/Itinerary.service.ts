@@ -1,14 +1,13 @@
 import crypto from "crypto";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { ITB_ITINERARY } from "../models/databases/tb_itinerary";
-import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item";
-import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view";
-import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking";
-import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { toMessage } from "../utils/errorUtils";
-import { file } from "googleapis/build/src/apis/file";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { ITB_ITINERARY } from "../models/databases/tb_itinerary.js";
+import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item.js";
+import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view.js";
+import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking.js";
+import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { toMessage } from "../utils/errorUtils.js";
 
 const TB_TRAVEL_ITINERARY = "tb_travel_itinerary";
 const TB_TRAVEL_AGENDA_ITEM = "tb_travel_agenda_item";

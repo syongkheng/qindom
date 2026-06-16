@@ -1,6 +1,6 @@
 import "express";
-import { IDecodedTokenUser } from "../../models/IDecodedTokenUser";
-import { IRequestLogContext } from "../../models/IRequestLogContext";
+import { IDecodedTokenUser } from "../../models/IDecodedTokenUser.js";
+import { IRequestLogContext } from "../../models/IRequestLogContext.js";
 
 declare global {
   namespace Express {

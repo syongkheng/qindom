@@ -2,8 +2,12 @@ import knex from "knex";
 import { Knex } from "knex";
 import dotenv from "dotenv";
 import path from "path";
-import KnexSqlUtilities from "../../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../../utils/logging/LoggingUtilities";
+import { fileURLToPath } from "url";
+import KnexSqlUtilities from "../../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../../utils/logging/LoggingUtilities.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables from .env file
 dotenv.config();

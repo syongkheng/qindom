@@ -1,8 +1,8 @@
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { ITB_ANALYTIC_USER_ACTIVITY } from "../models/databases/tb_analytic_user_activity";
-import { toMessage } from "../utils/errorUtils";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { ITB_ANALYTIC_USER_ACTIVITY } from "../models/databases/tb_analytic_user_activity.js";
+import { toMessage } from "../utils/errorUtils.js";
 
 /**
  * Hearbeat service to handle tracking users that are currently on the webpage.

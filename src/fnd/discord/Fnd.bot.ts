@@ -1,8 +1,11 @@
 import { ChannelType, Client, GatewayIntentBits, Message, TextChannel } from "discord.js";
 import fs from "fs";
 import path from "path";
-import { LoggingUtilities } from "../../utils/logging/LoggingUtilities";
-import { executeRedemption } from "./commands/Redeem.command";
+import { fileURLToPath, pathToFileURL } from "url";
+import { LoggingUtilities } from "../../utils/logging/LoggingUtilities.js";
+import { executeRedemption } from "./commands/Redeem.command.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
@@ -61,8 +64,8 @@ export async function startDiscordBot(): Promise<void> {
 
   for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
-    // Dynamic import
-    const commandModule = await import(filePath);
+    // Dynamic import — must be a file:// URL under native ESM
+    const commandModule = await import(pathToFileURL(filePath).href);
     // Extract the default export or first export - command files should export a single Command object
     const command: Command = commandModule[Object.keys(commandModule)[0]];
     // Skip invalid commands

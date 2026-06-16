@@ -5,11 +5,19 @@ qindom (Express 5 + TypeScript + MySQL)
 │
 ├── INFRASTRUCTURE
 │   ├── Runtime: Node 22 / TypeScript 5.9.3
+│   ├── Module system: native ESM (package.json "type": "module";
+│   │     tsconfig "module"/"moduleResolution": "nodenext")
+│   │     — migrated Jun 2026 from CommonJS to unblock node-telegram-bot-api 1.x
+│   │     (ESM-only) and drop the `request`-based SSRF advisory chain
+│   │     — all relative imports require explicit .js extensions in source
+│   │     — dev runner: tsx watch (replaced ts-node + nodemon)
+│   │     — Knex CLI scripts run via `node --import tsx ...` (knexfile.ts ESM fix)
+│   │     — __dirname/__filename sites use fileURLToPath(import.meta.url)
 │   ├── Framework: Express 5.1.0
 │   ├── Database: MySQL (db: wuxi) via Knex.js
 │   ├── Auth: JWT (30-day, Bearer token)
 │   ├── Deploy: AWS EC2 ap-southeast-1 — port 3000
-│   └── Process manager: PM2 (ecosystem.config.js)
+│   └── Process manager: PM2 (ecosystem.config.cjs — .cjs since root is now ESM)
 │
 ├── MIDDLEWARE STACK (global → route-level)
 │   ├── CORS (ALLOWED_ORIGINS env var)
@@ -99,7 +107,8 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── Google Geocoding API (+ Firebase/Firestore)
 │   ├── LTA DataMall API (Singapore transport)
 │   ├── Douyin webcast API — SM3/a_bogus auth
-│   ├── Telegram Bot API — polling/webhook
+│   ├── Telegram Bot API — polling/webhook (node-telegram-bot-api ^1.1.0,
+│   │     ESM-only, fetch-based client — no longer pulls in `request`)
 │   ├── Discord.js Bot
 │   └── Nodemailer (OTP email delivery)
 │

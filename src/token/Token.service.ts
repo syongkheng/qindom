@@ -1,8 +1,8 @@
-import { Exceptions } from "../exceptions/AppExceptions";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import jwt from "jsonwebtoken";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser";
+import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 
 export class TokenService {
   private readonly jwtSecret: string;

@@ -1,10 +1,10 @@
 import { Knex } from "knex";
-import { LoggingUtilities } from "./logging/LoggingUtilities";
-import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext";
-import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop";
-import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info";
-import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station";
-import { toMessage } from "./errorUtils";
+import { LoggingUtilities } from "./logging/LoggingUtilities.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
+import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop.js";
+import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info.js";
+import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station.js";
+import { toMessage } from "./errorUtils.js";
 
 class KnexSqlUtilities {
   constructor(private knex: Knex) {

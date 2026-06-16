@@ -1,4 +1,4 @@
-import { BaseExceptions } from "./BaseException";
+import { BaseExceptions } from "./BaseException.js";
 
 export class ParseJsonException extends BaseExceptions {
   constructor(process?: string) {

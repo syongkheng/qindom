@@ -1,12 +1,12 @@
 import { Router, Request, Response } from "express";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { HdbService } from "./Hdb.service";
-import { CoordinateService } from "./Coordinate.service";
-import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { getUser, handleException, hasRole } from "../utils/requestUtils";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { HdbService } from "./Hdb.service.js";
+import { CoordinateService } from "./Coordinate.service.js";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
 
 export default function createHdbController(db: KnexSqlUtilities) {
   const router = Router();

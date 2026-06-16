@@ -1,11 +1,11 @@
 import { Router, Request, Response } from "express";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { ItineraryService } from "./Itinerary.service";
-import { ItineraryValidator } from "./Itinerary.validator";
-import { getUser, handleException } from "../utils/requestUtils";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { ItineraryService } from "./Itinerary.service.js";
+import { ItineraryValidator } from "./Itinerary.validator.js";
+import { getUser, handleException } from "../utils/requestUtils.js";
 
 function extractIp(req: Request): string {
   const raw = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";

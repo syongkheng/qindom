@@ -1,7 +1,7 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
-import { firestoreDB } from "../../../config/db/firebase";
-import { mapStoveLevel } from "./Register.command";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
+import { firestoreDB } from "../../../config/db/firebase.js";
+import { mapStoveLevel } from "./Register.command.js";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
 
 /**
  * Command for listing all registered users (governors) from Firebase Firestore.

@@ -1,7 +1,7 @@
-import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { LlmV1Validator } from "./Llm.v1.validator";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { LlmV1Validator } from "./Llm.v1.validator.js";
 
 /**
  * Service to handle LLM-related operations.

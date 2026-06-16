@@ -1,11 +1,11 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { TgImageService } from "./TgImage.service";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { getUser, handleException } from "../utils/requestUtils";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { TgImageService } from "./TgImage.service.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { getUser, handleException } from "../utils/requestUtils.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 

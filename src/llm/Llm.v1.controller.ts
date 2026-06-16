@@ -1,13 +1,13 @@
 import { Router, Response } from "express";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { OptionalTokenFilter } from "../middlewares/TokenFilter";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { handleException } from "../utils/requestUtils";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities";
-import { LlmServiceV1 } from "./Llm.v1.service";
-import { IRequestLogContext } from "../models/IRequestLogContext";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { OptionalTokenFilter } from "../middlewares/TokenFilter.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { handleException } from "../utils/requestUtils.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
+import { LlmServiceV1 } from "./Llm.v1.service.js";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
 
 export default function createLlmControllerV1(db: KnexSqlUtilities) {
   const router = Router();

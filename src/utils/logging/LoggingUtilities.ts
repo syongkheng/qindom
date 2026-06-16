@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { IRequestLogContext, IRequestLogEvent } from "../../models/IRequestLogContext";
+import { IRequestLogContext, IRequestLogEvent } from "../../models/IRequestLogContext.js";
 
 dotenv.config();
 

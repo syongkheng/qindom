@@ -1,11 +1,11 @@
 import { Router, Response } from "express";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { MandatoryTokenFilter } from "../middlewares/TokenFilter";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { TrailService } from "./Trail.service";
-import { TrailValidator } from "./Trail.validator";
-import { getUser, handleException } from "../utils/requestUtils";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { TrailService } from "./Trail.service.js";
+import { TrailValidator } from "./Trail.validator.js";
+import { getUser, handleException } from "../utils/requestUtils.js";
 
 export default function createTrailController(db: KnexSqlUtilities) {
   const router = Router();

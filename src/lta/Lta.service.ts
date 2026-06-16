@@ -1,9 +1,9 @@
-import { Exceptions } from "../exceptions/AppExceptions";
-import { UnknownException } from "../exceptions/UnknownException";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { UnknownException } from "../exceptions/UnknownException.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import dotenv from "dotenv";
-import { toMessage } from "../utils/errorUtils";
+import { toMessage } from "../utils/errorUtils.js";
 
 // Load environment variables from .env file
 dotenv.config();

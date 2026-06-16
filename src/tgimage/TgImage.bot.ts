@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { TgImageService } from "./TgImage.service";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { TgImageService } from "./TgImage.service.js";
 
 const ADMIN_MENU =
   "Commands:\n  /stats — hosting statistics\n  /list — recent files\n  /help — show this message";

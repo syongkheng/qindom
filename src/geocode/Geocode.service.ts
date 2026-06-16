@@ -1,7 +1,7 @@
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { ITB_GEOCODE_CACHE } from "../models/databases/tb_geocode_cache";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { toMessage } from "../utils/errorUtils";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { ITB_GEOCODE_CACHE } from "../models/databases/tb_geocode_cache.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { toMessage } from "../utils/errorUtils.js";
 
 const NOMINATIM_BASE = "https://nominatim.openstreetmap.org";
 const NOMINATIM_HEADERS = {

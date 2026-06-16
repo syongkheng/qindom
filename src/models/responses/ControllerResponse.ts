@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { LoggingUtilities } from "../../utils/logging/LoggingUtilities";
+import { LoggingUtilities } from "../../utils/logging/LoggingUtilities.js";
 
 const isPrd = process.env.NODE_ENV === "prd";
 

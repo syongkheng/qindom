@@ -1,6 +1,6 @@
-import { LogEmoji } from "../constants/LogEmoji";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { IRequestLogEvent } from "../models/IRequestLogContext";
+import { LogEmoji } from "../constants/LogEmoji.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { IncomingHttpHeaders } from "http";
 
 export class HeaderValidationUtilities {

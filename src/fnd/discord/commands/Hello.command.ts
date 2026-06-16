@@ -1,5 +1,5 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
 
 /**
  * Hello command for greeting users in Discord.

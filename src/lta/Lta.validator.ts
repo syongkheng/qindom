@@ -1,5 +1,5 @@
 import { Request } from "express";
-import { Exceptions } from "../exceptions/AppExceptions";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 
 const BUS_STOP_CODE_REGEX = /^\d{5}$/;
 

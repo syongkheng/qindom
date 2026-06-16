@@ -1,11 +1,11 @@
 import { Router, Response } from "express";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { FileService } from "./File.service";
-import { FileValidator } from "./File.validator";
-import { getUser, handleException } from "../utils/requestUtils";
-import { Exceptions } from "../exceptions/AppExceptions";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { FileService } from "./File.service.js";
+import { FileValidator } from "./File.validator.js";
+import { getUser, handleException } from "../utils/requestUtils.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 
 export default function createFileController(db: KnexSqlUtilities): Router {
   const router = Router();

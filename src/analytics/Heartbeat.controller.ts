@@ -1,11 +1,11 @@
 import { Router, Response } from "express";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { HeartbeatService } from "./Heartbeat.service";
-import { OptionalTokenFilter } from "../middlewares/TokenFilter";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { Exceptions } from "../exceptions/AppExceptions";
-import { handleException } from "../utils/requestUtils";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { HeartbeatService } from "./Heartbeat.service.js";
+import { OptionalTokenFilter } from "../middlewares/TokenFilter.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { handleException } from "../utils/requestUtils.js";
 
 export default function createHeartbeatController(db: KnexSqlUtilities) {
   const router = Router();

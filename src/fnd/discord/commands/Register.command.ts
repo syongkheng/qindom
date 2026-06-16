@@ -1,7 +1,7 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
 import crypto from "crypto";
-import { firestoreDB } from "../../../config/db/firebase";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
+import { firestoreDB } from "../../../config/db/firebase.js";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
 
 /**
  * Secret key for API signature generation.

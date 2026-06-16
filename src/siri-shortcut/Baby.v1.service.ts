@@ -1,9 +1,9 @@
-import { LogEmoji } from "../constants/LogEmoji";
-import { ITB_BABY_FEEDING_RECORD } from "../models/databases/tb_baby_feeding_record";
-import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { SsBabyV1Validator } from "./Baby.v1.validator";
+import { LogEmoji } from "../constants/LogEmoji.js";
+import { ITB_BABY_FEEDING_RECORD } from "../models/databases/tb_baby_feeding_record.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { SsBabyV1Validator } from "./Baby.v1.validator.js";
 
 /**
  * Service to handle LLM-related operations.

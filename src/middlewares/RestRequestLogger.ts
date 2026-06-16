@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextFunction, Request, Response } from "express";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 
 export const RestRequestLogger = function (req: Request, res: Response, next: NextFunction) {
   const payload = req.method === "GET" ? req.query : JSON.parse(LoggingUtilities.sanitise(JSON.stringify(req.body ?? {})));

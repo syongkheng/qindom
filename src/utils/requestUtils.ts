@@ -1,11 +1,11 @@
 import { Response } from "express";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo";
-import { BaseExceptions } from "../exceptions/BaseException";
-import { UnauthorizedAccessException } from "../exceptions/UnauthorizedAccessException";
-import { ControllerResponse } from "../models/responses/ControllerResponse";
-import { LoggingUtilities } from "./logging/LoggingUtilities";
-import { toMessage } from "./errorUtils";
+import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
+import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { BaseExceptions } from "../exceptions/BaseException.js";
+import { UnauthorizedAccessException } from "../exceptions/UnauthorizedAccessException.js";
+import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { LoggingUtilities } from "./logging/LoggingUtilities.js";
+import { toMessage } from "./errorUtils.js";
 
 export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {
   if (!req.user) throw new UnauthorizedAccessException();

@@ -1,11 +1,11 @@
 import { parse, HTMLElement } from "node-html-parser";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { CoordinateService } from "./Coordinate.service";
-import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException";
-import { UnknownException } from "../exceptions/UnknownException";
-import { toMessage } from "../utils/errorUtils";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { CoordinateService } from "./Coordinate.service.js";
+import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
+import { UnknownException } from "../exceptions/UnknownException.js";
+import { toMessage } from "../utils/errorUtils.js";
 
 interface FlatRecord {
   town: string;

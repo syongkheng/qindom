@@ -1,8 +1,8 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
-import { firestoreDB } from "../../../config/db/firebase";
-import { currentTimestampMs, mapStoveLevel, signPayload } from "./Register.command";
-import { toMessage } from "../../../utils/errorUtils";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
+import { firestoreDB } from "../../../config/db/firebase.js";
+import { currentTimestampMs, mapStoveLevel, signPayload } from "./Register.command.js";
+import { toMessage } from "../../../utils/errorUtils.js";
 
 const MAX_HISTORY = 5;
 

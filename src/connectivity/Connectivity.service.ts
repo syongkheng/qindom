@@ -1,4 +1,4 @@
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 
 /**
  * Service to handle connectivity checks.

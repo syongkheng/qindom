@@ -1,4 +1,4 @@
-import { BaseExceptions } from "./BaseException";
+import { BaseExceptions } from "./BaseException.js";
 
 export class TokenExpiredException extends BaseExceptions {
   constructor() {

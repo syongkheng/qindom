@@ -1,7 +1,7 @@
 import { Message, ChannelType, EmbedBuilder } from "discord.js";
-import { firestoreDB } from "../../../config/db/firebase";
-import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
-import { toMessage } from "../../../utils/errorUtils";
+import { firestoreDB } from "../../../config/db/firebase.js";
+import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities.js";
+import { toMessage } from "../../../utils/errorUtils.js";
 
 const ALLOWED_ADMIN_IDS = ["340529865952460800"];
 

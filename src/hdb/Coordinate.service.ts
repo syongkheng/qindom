@@ -1,7 +1,7 @@
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities";
-import { ITB_HDB_PPHS_COORDINATE } from "../models/databases/tb_hdb_pphs_coordinate";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities";
-import { toMessage } from "../utils/errorUtils";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { ITB_HDB_PPHS_COORDINATE } from "../models/databases/tb_hdb_pphs_coordinate.js";
+import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { toMessage } from "../utils/errorUtils.js";
 
 type CoordinateSource = "database" | "onemap" | "nominatim" | "error" | "unparseable";
 

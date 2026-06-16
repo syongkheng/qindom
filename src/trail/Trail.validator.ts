@@ -1,5 +1,5 @@
 import { Request } from "express";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException";
+import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 
 export class TrailValidator {
   static validateCreateSession(req: Request): {
