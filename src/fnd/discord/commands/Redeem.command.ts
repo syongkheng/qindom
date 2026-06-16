@@ -6,6 +6,7 @@ import { IRequestLogContext } from "../../../models/IRequestLogContext";
 import { signPayload } from "./Register.command";
 import { LoggingUtilities } from "../../../utils/logging/LoggingUtilities";
 import { toMessage } from "../../../utils/errorUtils";
+import { DocumentReference } from "@google-cloud/firestore";
 
 const ALLOWED_REDEEMER_IDS = ["340529865952460800", "383607274624778241"];
 const EMBED_BATCH_SIZE = 10;
@@ -34,7 +35,7 @@ interface RedeemResult {
 
 async function redeemForGovernor(
   giftCode: string,
-  docRef: FirebaseFirestore.DocumentReference,
+  docRef: DocumentReference,
   data: any,
   redemptionId: string,
   attempt = 1
@@ -164,7 +165,7 @@ export async function executeRedemption(
   const redemptionId = "disc_" + crypto.randomUUID().replace(/-/g, "").substring(0, 5);
 
   const collections = await db.listCollections();
-  const governorCollections = collections.filter((c) => c.id && /^\d+$/.test(c.id));
+  const governorCollections = collections.filter((c: { id: string; }) => c.id && /^\d+$/.test(c.id));
   const total = governorCollections.length;
 
   const logCtx: IRequestLogContext = {

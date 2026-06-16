@@ -1,16 +1,11 @@
-import admin from "firebase-admin";
+import { initializeApp, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 import path from "path";
 
-// Path to your service account key JSON
 const serviceAccountPath = path.join(__dirname, "./serviceAccountKey.json");
 
-// Initialize Firebase Admin SDK
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccountPath),
+const app = initializeApp({
+  credential: cert(serviceAccountPath),
 });
 
-// Export Firestore instance
-export const firestoreDB = admin.firestore();
-
-// Example usage:
-// firestoreDB.collection("users").doc("discordUserId").set({ governorId: 12345 });
+export const firestoreDB = getFirestore(app);
