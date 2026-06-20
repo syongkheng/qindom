@@ -38,6 +38,7 @@
     "node-html-parser": "^7.0.1",
     "node-telegram-bot-api": "^1.1.0",
     "nodemailer": "^9.0.1",
+    "patch-package": "^8.0.1",
     "sharp": "^0.34.5"
   },
   "overrides": {
@@ -53,7 +54,6 @@
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/nodemailer": "^7.0.11",
-    "patch-package": "^8.0.1",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   }
