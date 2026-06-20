@@ -6,6 +6,8 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { ItineraryService } from "./Itinerary.service.js";
 import { ItineraryValidator } from "./Itinerary.validator.js";
 import { getUser, handleException } from "../utils/requestUtils.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
 
 function extractIp(req: Request): string {
   const raw = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
@@ -39,7 +41,11 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   router.post("/challenge", async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { shortCode, challenge } = ItineraryValidator.validateChallengeRequest(req);
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { shortCode, challenge } = ItineraryValidator.validateChallengeRequest(req.body, validationEvent);
       const result = await svc.verifyChallenge(shortCode, challenge);
       void svc.recordView(shortCode, extractIp(req), (req.headers["user-agent"] || "Unknown").slice(0, 512));
       return cr.ok(result);
@@ -55,7 +61,11 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   router.post("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const body = ItineraryValidator.validateCreateRequest(req);
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const body = ItineraryValidator.validateCreateRequest(req.body, validationEvent);
       const result = await svc.create(getUser(req).id, body);
       return cr.ok(result);
     } catch (err) {
@@ -89,7 +99,11 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   router.post("/edit/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const body = ItineraryValidator.validateEditRequest(req);
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const body = ItineraryValidator.validateEditRequest(req.body, validationEvent);
       const result = await svc.edit(getUser(req).id, req.params.sessionId, body);
       return cr.ok(result);
     } catch (err) {

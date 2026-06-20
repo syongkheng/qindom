@@ -7,6 +7,7 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { SsBabyV1Service } from "./Baby.v1.service.js";
+import { SsBabyV1Validator } from "./Baby.v1.validator.js";
 
 export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
   const router = Router();
@@ -35,7 +36,7 @@ export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
 
       return cr.ok(serviceResponse);
     } catch (err) {
-      return handleException(err, cr, "LlmControllerV1.POST /message", "Failed to record message");
+      return handleException(err, cr, "SsBabyControllerV1.POST /baby/feeding", "Failed to record feeding");
     }
   });
 
@@ -43,28 +44,24 @@ export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;
+
+      // Request Structure Validation
+
       const requestBodyStructuralValidationLoggingEvent = logContext
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
         : undefined;
 
-      // For simplicity, we will just echo back the diaper change record without saving to DB
+      const diaperChangeRequest = SsBabyV1Validator.validateDiaperChangeRequest(
+        req.body,
+        requestBodyStructuralValidationLoggingEvent,
+      );
 
-      const { timing, type } = req.body;
+      // Calling of service
+      const serviceResponse = await ssBabyServiceV1.recordDiaperChange(diaperChangeRequest, logContext);
 
-      StructuralValidationUtilities.required(timing, "timing", requestBodyStructuralValidationLoggingEvent);
-      StructuralValidationUtilities.string(timing, "timing", requestBodyStructuralValidationLoggingEvent);
-
-      StructuralValidationUtilities.required(type, "type", requestBodyStructuralValidationLoggingEvent);
-      StructuralValidationUtilities.string(type, "type", requestBodyStructuralValidationLoggingEvent);
-
-      return cr.ok({
-        echo: {
-          timing,
-          type,
-        },
-      });
+      return cr.ok(serviceResponse);
     } catch (err) {
-      return handleException(err, cr, "LlmControllerV1.POST /baby/diaper", "Failed to record diaper change");
+      return handleException(err, cr, "SsBabyControllerV1.POST /baby/diaper", "Failed to record diaper change");
     }
   });
 
@@ -78,7 +75,21 @@ export default function createSsBabyControllerV1(db: KnexSqlUtilities) {
 
       return cr.ok(serviceResponse);
     } catch (err) {
-      return handleException(err, cr, "LlmControllerV1.GET /message", "Failed to retrieve message");
+      return handleException(err, cr, "SsBabyControllerV1.GET /baby/feeding", "Failed to retrieve feeding records");
+    }
+  });
+
+  router.get("/baby/diaper", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const logContext: IRequestLogContext = req.logContext;
+
+      // Calling of service
+      const serviceResponse = await ssBabyServiceV1.getDiaperRecords(logContext);
+
+      return cr.ok(serviceResponse);
+    } catch (err) {
+      return handleException(err, cr, "SsBabyControllerV1.GET /baby/diaper", "Failed to retrieve diaper records");
     }
   });
 

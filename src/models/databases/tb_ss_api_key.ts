@@ -4,6 +4,7 @@ export interface ITbSsApiKey {
 
   api_key_prefix: string;
   api_key_hash: string;
+  key_hint?: string | null;
 
   name?: string;
 

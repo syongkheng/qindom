@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { NextFunction, Request, Response } from "express";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
@@ -24,13 +25,14 @@ export const RequestApiKeyFilter = async function (req: Request, res: Response, 
     const apiKeyPrefix = apiKey.split("_")[0];
 
     const apiKeyValue = apiKey.split("_")[1];
+    const apiKeyHash = crypto.createHash("sha256").update(apiKeyValue).digest("hex");
 
     apiKeyValidationLoggingEvent?.children?.push(`Prefix: '${apiKeyPrefix}'`);
 
     if (apiKeyPrefix === "ss") {
       const validKeys = await db.findOne<ITbSsApiKey>(
         "tb_ss_api_key",
-        { api_key_prefix: apiKeyPrefix, api_key_hash: apiKeyValue, record_status: "A" },
+        { api_key_prefix: apiKeyPrefix, api_key_hash: apiKeyHash, record_status: "A" },
         ["*"],
         apiKeyValidationLoggingEvent,
       );

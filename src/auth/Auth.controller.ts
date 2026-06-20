@@ -2,7 +2,6 @@ import { Router, Request, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { AuthService } from "./Auth.service.js";
-import { BaseExceptions } from "../exceptions/BaseException.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import {
   loginLimiter,
@@ -14,9 +13,9 @@ import {
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { AuthValidator } from "./Auth.validator.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { toMessage } from "../utils/errorUtils.js";
 import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
 
 export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();
@@ -56,12 +55,14 @@ export default function createAuthController(db: KnexSqlUtilities) {
   router.post("/preflight", async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { email, system } = AuthValidator.validatePreflightRequest(req);
-      return cr.ok(await svc.checkIfEmailExistsWithinSystem({ email, system, logContext: req.logContext }));
-    } catch (error) {
-      if (error instanceof BaseExceptions)
-        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      return cr.ko(toMessage(error));
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { email, system } = AuthValidator.validatePreflightRequest(req.body, validationEvent);
+      return cr.ok(await svc.checkIfEmailExistsWithinSystem({ email, system, logContext }));
+    } catch (err) {
+      return handleException(err, cr, "AuthController.POST /preflight", "Failed to check email");
     }
   });
 
@@ -69,12 +70,14 @@ export default function createAuthController(db: KnexSqlUtilities) {
   router.post("/login", [loginLimiter], async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { email, password, system } = AuthValidator.validateLoginRequest(req);
-      return cr.ok(await svc.login({ email, password, system, logContext: req.logContext }));
-    } catch (error) {
-      if (error instanceof BaseExceptions)
-        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      return cr.ko(toMessage(error));
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { email, password, system } = AuthValidator.validateLoginRequest(req.body, validationEvent);
+      return cr.ok(await svc.login({ email, password, system, logContext }));
+    } catch (err) {
+      return handleException(err, cr, "AuthController.POST /login", "Failed to login");
     }
   });
 
@@ -82,12 +85,14 @@ export default function createAuthController(db: KnexSqlUtilities) {
   router.post("/register", [registerLimiter], async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { username, email, password, system } = AuthValidator.validateRegisterRequest(req);
-      return cr.ok(await svc.createNewUser({ username, email, password, system, logContext: req.logContext }));
-    } catch (error) {
-      if (error instanceof BaseExceptions)
-        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      return cr.ko(toMessage(error));
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { username, email, password, system } = AuthValidator.validateRegisterRequest(req.body, validationEvent);
+      return cr.ok(await svc.createNewUser({ username, email, password, system, logContext }));
+    } catch (err) {
+      return handleException(err, cr, "AuthController.POST /register", "Failed to register");
     }
   });
 
@@ -95,12 +100,14 @@ export default function createAuthController(db: KnexSqlUtilities) {
   router.post("/verify-email", [verifyEmailLimiter], async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { email, system, code } = AuthValidator.validateEmailVerifyRequest(req);
-      return cr.ok(await svc.verifyEmail({ email, system, code, logContext: req.logContext }));
-    } catch (error) {
-      if (error instanceof BaseExceptions)
-        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      return cr.ko(toMessage(error));
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { email, system, code } = AuthValidator.validateEmailVerifyRequest(req.body, validationEvent);
+      return cr.ok(await svc.verifyEmail({ email, system, code, logContext }));
+    } catch (err) {
+      return handleException(err, cr, "AuthController.POST /verify-email", "Failed to verify email");
     }
   });
 
@@ -108,8 +115,12 @@ export default function createAuthController(db: KnexSqlUtilities) {
   router.post("/resend-verify", [resendVerifyLimiter], async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { email, system } = AuthValidator.validatePreflightRequest(req);
-      await svc.resendVerifyCode({ email, system, logContext: req.logContext });
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { email, system } = AuthValidator.validatePreflightRequest(req.body, validationEvent);
+      await svc.resendVerifyCode({ email, system, logContext });
       return cr.ok({ sent: true }); // Always respond 200 to avoid leaking whether the email is registered
     } catch {
       return cr.ok({ sent: true }); // intentionally swallow errors
@@ -120,48 +131,53 @@ export default function createAuthController(db: KnexSqlUtilities) {
   router.post("/verification", async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { token } = AuthValidator.validateValidateTokenRequest(req);
-      const authenticateTokenLoggingEvent = req.logContext
-        ? LoggingUtilities.request.branch(req.logContext, "SERVICE", "Authenticating token")
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { token } = AuthValidator.validateValidateTokenRequest(req.body, validationEvent);
+      const authenticateTokenLoggingEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "SERVICE", "Authenticating token")
         : undefined;
       return cr.ok(await svc.authenticateToken(token, authenticateTokenLoggingEvent));
-    } catch (error) {
-      if (error instanceof BaseExceptions)
-        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      return cr.ko(toMessage(error));
+    } catch (err) {
+      return handleException(err, cr, "AuthController.POST /verification", "Failed to verify token");
     }
   });
 
   router.post("/password/validate", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
       const { username, system } = getUser(req);
-      const { password } = AuthValidator.validatePasswordValidateRequest(req);
-
-      const validatePasswordLoggingEvent = req.logContext
-        ? LoggingUtilities.request.branch(req.logContext, "SERVICE", "Validating password")
+      const { password } = AuthValidator.validatePasswordValidateRequest(req.body, validationEvent);
+      const validatePasswordLoggingEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "SERVICE", "Validating password")
         : undefined;
       return cr.ok(await svc.validatePassword(`${username}_${system}`, password, validatePasswordLoggingEvent));
-    } catch (error) {
-      if (error instanceof BaseExceptions)
-        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      return cr.ko(toMessage(error));
+    } catch (err) {
+      return handleException(err, cr, "AuthController.POST /password/validate", "Failed to validate password");
     }
   });
 
   router.post("/password/update", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
       const { username, system } = getUser(req);
-      const { newPassword } = AuthValidator.validatePasswordUpdateRequest(req);
-      const updatePasswordLoggingEvent = req.logContext
-        ? LoggingUtilities.request.branch(req.logContext, "SERVICE", "Updating password")
+      const { newPassword } = AuthValidator.validatePasswordUpdateRequest(req.body, validationEvent);
+      const updatePasswordLoggingEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "SERVICE", "Updating password")
         : undefined;
       return cr.ok(await svc.updatePassword(`${username}_${system}`, newPassword, updatePasswordLoggingEvent));
-    } catch (error) {
-      if (error instanceof BaseExceptions)
-        return cr.result(error.httpStatus, toMessage(error), error.toResponseMessage());
-      return cr.ko(toMessage(error));
+    } catch (err) {
+      return handleException(err, cr, "AuthController.POST /password/update", "Failed to update password");
     }
   });
 

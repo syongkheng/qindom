@@ -26,7 +26,9 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── RestRequestLogger (logs all requests; redacts password/blob/token/email)
 │   ├── RequestHeaderFilter (POST must have Content-Type: application/json)
 │   ├── MandatoryTokenFilter (JWT required → 401 if missing)
-│   └── OptionalTokenFilter (JWT attached if present)
+│   ├── OptionalTokenFilter (JWT attached if present)
+│   └── RequestApiKeyFilter (x-api-key header → tb_ss_api_key / tb_llm_api_key lookup,
+│         sets logContext.metadata.userId)
 │
 ├── MODULES
 │   │
@@ -93,12 +95,26 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── Rate limit: 15 req/min
 │   │
 │   ├── TELEGRAM STORAGE  /api/telegram  [AUTH REQUIRED]
-│       ├── Link qindom account to Telegram (ephemeral 10-min token)
-│       ├── Upload / list / delete / expire media via bot
-│       ├── Stores telegram_file_id only (no binary)
-│       ├── Telegram Bot: /start /help /link /get /list /delete /expire
-│       └── DB: tb_telegram_link, tb_telegram_media,
-│              tb_telegram_link_token
+│   │   ├── Link qindom account to Telegram (ephemeral 10-min token)
+│   │   ├── Upload / list / delete / expire media via bot
+│   │   ├── Stores telegram_file_id only (no binary)
+│   │   ├── Telegram Bot: /start /help /link /get /list /delete /expire
+│   │   └── DB: tb_telegram_link, tb_telegram_media,
+│   │          tb_telegram_link_token
+│   │
+│   ├── SIRI SHORTCUT (BABY TRACKING)  /v1/ss/baby  [API-KEY AUTH]
+│   │   ├── Feeding: POST/GET /baby/feeding — DB: tb_baby_feeding_record
+│   │   ├── Diaper:  POST/GET /baby/diaper  — DB: tb_baby_diaper_record
+│   │   │     (has_stool/has_urine bool + stool_load/urine_load ENUM
+│   │   │      light/medium/heavy; changed_dt = event time, distinct
+│   │   │      from created_dt insert-audit time)
+│   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_ss_api_key lookup
+│   │
+│   └── BABY API KEY MGMT  /api/baby  [JWT AUTH]
+│       ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
+│       ├── POST   /api-key → revokes existing, generates new ss_ key, returns { key }
+│       ├── DELETE /api-key → soft-deletes active key (record_status D)
+│       └── DB: tb_ss_api_key (same table as siri-shortcut auth)
 │
 │
 │
@@ -125,7 +141,8 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── databases/ — DB row interfaces (ITB_* / ITb*)
 │   │   ├── tb_aa_user, tb_scenic_*, tb_trail_*, tb_travel_*, etc.
 │   │   ├── tb_telegram_media, tb_telegram_link, tb_telegram_link_token
-│   │   └── tb_tg_image, tb_tg_stats_whitelist
+│   │   ├── tb_tg_image, tb_tg_stats_whitelist
+│   │   └── tb_baby_feeding_record, tb_baby_diaper_record
 │   ├── dtos/ — service response shapes (XyzDto suffix)
 │   │   ├── DouyinDto.ts — DouyinRankUser
 │   │   ├── SleepDto.ts — SleepLogDto

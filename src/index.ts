@@ -4,13 +4,16 @@ import dotenv from "dotenv";
 
 const envFile = process.env.NODE_ENV === "prd" ? ".env" : ".env.dev";
 
-dotenv.config({ path: envFile });
+dotenv.config({ path: envFile, override: true });
 
-import express, { Application } from "express";
+import express, { Application, RequestHandler, Router } from "express";
 import cors from "cors";
 import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
 import { initializeDatabase } from "./config/db/mysql.js";
 import { RestRequestLogger } from "./middlewares/RestRequestLogger.js";
+import { MandatoryTokenFilter } from "./middlewares/TokenFilter.js";
+import { globalLimiter, douyinLimiter } from "./middlewares/RateLimiter.js";
+import { mw } from "./middlewares/presets.js";
 
 // Controllers
 import createConnectivityController from "./connectivity/Connectivity.controller.js";
@@ -23,14 +26,13 @@ import createFileController from "./file/File.controller.js";
 import createDouyinController from "./douyin/Douyin.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
-
 import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
-
 import createTrailController from "./trail/Trail.controller.js";
-import { TgImageService } from "./tgimage/TgImage.service.js";
+import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller.js";
+import createBabyApiKeyController from "./baby/BabyApiKey.controller.js";
+import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
 import { initTgImageBot } from "./tgimage/TgImage.bot.js";
-import { globalLimiter, douyinLimiter } from "./middlewares/RateLimiter.js";
-import { MandatoryTokenFilter } from "./middlewares/TokenFilter.js";
+import { setupTelegramLogSender } from "./tgimage/TgImage.logSender.js";
 
 async function startServer() {
   const app: Application = express();
@@ -49,7 +51,7 @@ async function startServer() {
       if (allowedOrigins.includes(origin)) return callback(null, true);
       callback(new Error(`CORS: origin '${origin}' not allowed`));
     },
-    methods: "GET,POST,OPTIONS",
+    methods: "GET,POST,DELETE,OPTIONS",
     credentials: true,
     optionsSuccessStatus: 204,
   };
@@ -76,71 +78,37 @@ async function startServer() {
   // Initialize database
   const db = await initializeDatabase();
 
-  // Inject db into controllers
-  // Use custom middlewares in each controllers
-  app.use("/connectivity", [RestRequestLogger, RequestHeaderFilter], createConnectivityController(db));
-  app.use("/api/hdb", [RestRequestLogger, RequestHeaderFilter], createHdbController(db));
-  app.use("/api/lta", [RestRequestLogger, RequestHeaderFilter], createLtaController(db));
-  app.use("/api/auth", [RestRequestLogger, RequestHeaderFilter], createAuthController(db));
-  app.use("/api/pfp", [RestRequestLogger, RequestHeaderFilter], createPfpController(db));
-  app.use("/api/itinerary", [RestRequestLogger, RequestHeaderFilter], createItineraryController(db));
-  app.use("/api/file", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createFileController(db));
-  app.use("/api/img", [RestRequestLogger], createTgImageGetController(db));
-  app.use("/api/img", [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db));
-  app.use(
-    "/api/douyin",
-    [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter],
-    createDouyinController(db),
-  );
-  app.use("/api/geocode", [RestRequestLogger, RequestHeaderFilter], createGeocodeController(db));
-  // app.post("/api/telegram/webhook", createTelegramWebhookHandler(db));
-  app.use("/api/trail", [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter], createTrailController(db));
-
-  // LLM
-  app.use("/v1/llm", [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter], createLlmControllerV1(db));
-
-  // Siri Shortcuts
-  app.use("/v1/ss", [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter], createSsBabyControllerV1(db));
+  // Route table — [path, middlewares, router]
+  const routes: [string, RequestHandler[], Router][] = [
+    ["/connectivity",  mw.std,                                    createConnectivityController(db)],
+    ["/api/hdb",       mw.std,                                    createHdbController(db)],
+    ["/api/lta",       mw.std,                                    createLtaController(db)],
+    ["/api/auth",      mw.std,                                    createAuthController(db)],
+    ["/api/pfp",       mw.std,                                    createPfpController(db)],
+    ["/api/itinerary", mw.std,                                    createItineraryController(db)],
+    ["/api/file",      mw.auth,                                   createFileController(db)],
+    ["/api/img",       mw.pub,                                    createTgImageGetController(db)],
+    ["/api/img",       [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)],  // no RHF — multipart upload
+    ["/api/douyin",    [...mw.auth, douyinLimiter],               createDouyinController(db)],
+    ["/api/geocode",   mw.std,                                    createGeocodeController(db)],
+    ["/api/trail",     mw.auth,                                   createTrailController(db)],
+    ["/v1/llm",        mw.apiKey,                                 createLlmControllerV1(db)],
+    ["/v1/ss",         mw.apiKey,                                 createSsBabyControllerV1(db)],
+    ["/api/baby",      mw.auth,                                   createBabyApiKeyController(db)],
+  ];
+  routes.forEach(([path, mws, router]) => app.use(path, mws, router));
 
   // Start server
   app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
     initTgImageBot(db)
-      .then(async () => {
-        const chatId = await new TgImageService(db).getStorageChatId();
-        const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
-        if (chatId && token) {
-          LoggingUtilities.setLogSender((text) => {
-            const payload = text.length > 3900 ? text.slice(0, 3890) + "\n[...]" : text;
-
-            const escaped = payload.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-            fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                chat_id: chatId,
-                parse_mode: "HTML",
-                text: `<pre>${escaped}</pre>`,
-              }),
-            }).catch(() => {});
-          });
-        }
-      })
+      .then(() => setupTelegramLogSender(db))
       .catch((err) => LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err)));
   });
 }
 
 // Start the application
 startServer();
-
-// Start Discord Bot
-import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
-import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter.js";
-import { RequestApiKeyFilter } from "./middlewares/ApiKeyFilter.js";
-import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller.js";
 
 startDiscordBot().catch((err) => LoggingUtilities.service.error("Discord", err?.message ?? String(err)));

@@ -1,8 +1,11 @@
-import { Request } from "express";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
+import { IRequestLogEvent } from "../models/IRequestLogContext.js";
+import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
 
 export class ItineraryValidator {
-  static validateCreateRequest(req: Request): {
+  static validateCreateRequest(
+    body: Record<string, unknown>,
+    event?: IRequestLogEvent,
+  ): {
     idempotencyKey?: string; sessionTitle: string; destination?: string;
     destinationRaw?: any[]; country?: string; numberOfPax?: number;
     itineraryDateRaw?: any[]; startDate?: string; endDate?: string;
@@ -14,8 +17,9 @@ export class ItineraryValidator {
       numberOfPax, itineraryDateRaw, startDate, endDate, unknownDate,
       durationInDays, challenge, agendaItems = [], paxNames = [], bookings = [],
       packingItems = [],
-    } = req.body;
-    if (!sessionTitle) throw new InvalidRequestException("sessionTitle");
+    } = body as any;
+    StructuralValidationUtilities.required(sessionTitle, "sessionTitle", event);
+    StructuralValidationUtilities.string(sessionTitle, "sessionTitle", event);
     return {
       idempotencyKey, sessionTitle, destination, destinationRaw, country,
       numberOfPax, itineraryDateRaw, startDate, endDate, unknownDate,
@@ -23,7 +27,10 @@ export class ItineraryValidator {
     };
   }
 
-  static validateEditRequest(req: Request): {
+  static validateEditRequest(
+    body: Record<string, unknown>,
+    event?: IRequestLogEvent,
+  ): {
     sessionTitle?: string; destination?: string; destinationRaw?: any[];
     country?: string; numberOfPax?: number; itineraryDateRaw?: any[];
     startDate?: string; endDate?: string; unknownDate?: boolean;
@@ -38,7 +45,7 @@ export class ItineraryValidator {
       challenge, agendaItems = [], _agendaIdsToDelete = [],
       _agendaIdsToUpdate = [], paxNames, bookings = [], _bookingIdsToDelete = [],
       packingItems = [], _packingIdsToDelete = [],
-    } = req.body;
+    } = body as any;
     return {
       sessionTitle, destination, destinationRaw, country, numberOfPax,
       itineraryDateRaw, startDate, endDate, unknownDate, durationInDays,
@@ -47,10 +54,15 @@ export class ItineraryValidator {
     };
   }
 
-  static validateChallengeRequest(req: Request): { shortCode: string; challenge: string } {
-    const { shortCode, challenge } = req.body;
-    if (!shortCode) throw new InvalidRequestException("shortCode");
-    if (!challenge) throw new InvalidRequestException("challenge");
-    return { shortCode, challenge };
+  static validateChallengeRequest(
+    body: Record<string, unknown>,
+    event?: IRequestLogEvent,
+  ): { shortCode: string; challenge: string } {
+    const { shortCode, challenge } = body;
+    StructuralValidationUtilities.required(shortCode, "shortCode", event);
+    StructuralValidationUtilities.string(shortCode, "shortCode", event);
+    StructuralValidationUtilities.required(challenge, "challenge", event);
+    StructuralValidationUtilities.string(challenge, "challenge", event);
+    return { shortCode: shortCode as string, challenge: challenge as string };
   }
 }
