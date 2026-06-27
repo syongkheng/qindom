@@ -26,7 +26,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
       requestHeaderValidationLoggingEvent,
     );
     if (!authHeader?.startsWith("Bearer ")) {
-      return response.badAuthorization("Invalid Header - Authorization");
+      return response.result(401, "token_invalid", "Authentication required.");
     }
 
     if (!jwtSecret) {
@@ -44,17 +44,17 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
       ["id", "token"],
     );
     if (!user || user.token !== token) {
-      return response.badAuthorization("Token revoked or invalid");
+      return response.result(401, "token_invalid", "Your session is no longer valid. Please log in again.");
     }
 
     req.user = { ...decoded, id: user.id! };
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      return response.badAuthorization("Token expired");
+      return response.result(401, "token_invalid", "Your session has expired. Please log in again.");
     }
 
-    return response.badAuthorization("Invalid token");
+    return response.result(401, "token_invalid", "Invalid authentication. Please log in again.");
   }
 };
 

@@ -17,6 +17,7 @@ import { mw } from "./middlewares/presets.js";
 
 // Controllers
 import createConnectivityController from "./connectivity/Connectivity.controller.js";
+import createHeartbeatController from "./analytics/Heartbeat.controller.js";
 import createHdbController from "./hdb/Hdb.controller.js";
 import createLtaController from "./lta/Lta.controller.js";
 import createAuthController from "./auth/Auth.controller.js";
@@ -81,6 +82,7 @@ async function startServer() {
   // Route table — [path, middlewares, router]
   const routes: [string, RequestHandler[], Router][] = [
     ["/connectivity",  mw.std,                                    createConnectivityController(db)],
+    ["/api/analytics", mw.std,                                    createHeartbeatController(db)],
     ["/api/hdb",       mw.std,                                    createHdbController(db)],
     ["/api/lta",       mw.std,                                    createLtaController(db)],
     ["/api/auth",      mw.std,                                    createAuthController(db)],

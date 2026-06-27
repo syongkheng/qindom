@@ -174,13 +174,38 @@ CREATE TABLE IF NOT EXISTS tb_lrt_mrt_station (
 -- ── Analytics ────────────────────────────────────────────────────────────────
 
 -- Heartbeat / session activity — keyed by session_id, upserted on each ping.
+-- system identifies which frontend sent the ping (e.g. 'llm', 'travel-planner', 'dental-directory').
 DROP TABLE IF EXISTS tb_analytic_user_activity;
 CREATE TABLE IF NOT EXISTS tb_analytic_user_activity (
   session_id   VARCHAR(64) PRIMARY KEY,
   user_id      VARCHAR(64) NULL,
   last_seen_at BIGINT      NOT NULL,
   ip_address   VARCHAR(45),
-  user_agent   TEXT
+  user_agent   TEXT,
+  system       VARCHAR(64) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rich analytics events from any frontend system.
+-- properties is a JSON-encoded object of event-specific metadata.
+-- system identifies the source app (e.g. 'llm', 'travel-planner', 'dental-directory').
+DROP TABLE IF EXISTS tb_analytic_event;
+CREATE TABLE IF NOT EXISTS tb_analytic_event (
+  id          BIGINT        NOT NULL AUTO_INCREMENT,
+  event       VARCHAR(64)   NOT NULL,
+  properties  LONGTEXT      NULL,
+  page        VARCHAR(512)  NULL,
+  referrer    VARCHAR(512)  NULL,
+  session_id  VARCHAR(64)   NOT NULL,
+  user_id     VARCHAR(64)   NULL,
+  ip_address  VARCHAR(45)   NULL,
+  user_agent  TEXT          NULL,
+  system      VARCHAR(64)   NOT NULL,
+  created_at  BIGINT        NOT NULL,
+  PRIMARY KEY (id),
+  INDEX idx_analytic_event_session  (session_id),
+  INDEX idx_analytic_event_system   (system),
+  INDEX idx_analytic_event_event    (event),
+  INDEX idx_analytic_event_created  (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Travel Itinerary ─────────────────────────────────────────────────────────

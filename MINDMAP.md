@@ -44,8 +44,11 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── DB: tb_aa_user
 │   │
 │   ├── ANALYTICS  /api/analytics
-│   │   ├── Heartbeat pings (session + IP + user-agent)
-│   │   └── DB: tb_analytic_user_activity
+│   │   ├── POST /heartbeat — session activity ping (upserted by session_id); requires system field
+│   │   ├── POST /event     — ingest structured event (event, properties, page, referrer,
+│   │   │                     sessionId, timestamp, system); fire-and-forget from any frontend
+│   │   ├── system field identifies source app: 'llm' | 'travel-planner' | 'dental-directory'
+│   │   └── DB: tb_analytic_user_activity (+ system col), tb_analytic_event
 │   │
 │   ├── CONNECTIVITY  /connectivity
 │   │   └── Health check (no auth)
