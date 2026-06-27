@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS tb_analytic_user_activity (
   last_seen_at BIGINT      NOT NULL,
   ip_address   VARCHAR(45),
   user_agent   TEXT,
-  system       VARCHAR(64) NULL
+  `system`     VARCHAR(64) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Rich analytics events from any frontend system.
@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS tb_analytic_event (
   user_id     VARCHAR(64)   NULL,
   ip_address  VARCHAR(45)   NULL,
   user_agent  TEXT          NULL,
-  system      VARCHAR(64)   NOT NULL,
+  `system`    VARCHAR(64)   NOT NULL,
   created_at  BIGINT        NOT NULL,
   PRIMARY KEY (id),
   INDEX idx_analytic_event_session  (session_id),
