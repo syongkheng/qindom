@@ -119,6 +119,23 @@ qindom (Express 5 + TypeScript + MySQL)
 │       ├── DELETE /api-key → soft-deletes active key (record_status D)
 │       └── DB: tb_ss_api_key (same table as siri-shortcut auth)
 │
+│   ├── SUGGESTION  /api/suggestion
+│   │   ├── GET  /activity?destination=... — fuzzy search (LOWER LIKE), public
+│   │   ├── POST /activity — admin-only (JWT + role "admin")
+│   │   ├── DELETE /activity/:id — admin-only
+│   │   ├── GET  /packing — all active packing suggestions, public
+│   │   ├── POST /packing — admin-only
+│   │   ├── DELETE /packing/:id — admin-only
+│   │   └── DB: tb_suggestion_activity (destination_tag, category, estimated_hours)
+│   │           tb_suggestion_packing (trip_type, label, category)
+│   │       Seeded with 18 Singapore activities + 15 general/city packing items
+│   │
+│   └── WEDDING  /api/wedding
+│       ├── POST /rsvp — self-service guest RSVP (OptionalTokenFilter)
+│       │     Fields: name, email, attending (bool), contactNumber?,
+│       │     dietaryRestrictions?, mealPreference?, additionalGuestContact[]
+│       │     Duplicate email guard (400 on re-submit)
+│       └── DB: tb_wedding_rsvp, tb_wedding_rsvp_guest
 │
 │
 ├── EXTERNAL SERVICES
@@ -145,7 +162,8 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── tb_aa_user, tb_scenic_*, tb_trail_*, tb_travel_*, etc.
 │   │   ├── tb_telegram_media, tb_telegram_link, tb_telegram_link_token
 │   │   ├── tb_tg_image, tb_tg_stats_whitelist
-│   │   └── tb_baby_feeding_record, tb_baby_diaper_record
+│   │   ├── tb_baby_feeding_record, tb_baby_diaper_record
+│   │   └── tb_wedding_rsvp, tb_wedding_rsvp_guest
 │   ├── dtos/ — service response shapes (XyzDto suffix)
 │   │   ├── DouyinDto.ts — DouyinRankUser
 │   │   ├── SleepDto.ts — SleepLogDto

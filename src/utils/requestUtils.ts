@@ -23,7 +23,7 @@ export function handleException(
   fallback: string
 ): Response {
   if (err instanceof BaseExceptions) {
-    return cr.result(err.httpStatus, err.name, err.clientMessage);
+    return cr.result(err.httpStatus, err.name, err.toResponseMessage());
   }
   LoggingUtilities.service.error(logLabel, toMessage(err));
   return cr.ko(fallback);

@@ -31,9 +31,16 @@ import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
 import createTrailController from "./trail/Trail.controller.js";
 import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller.js";
 import createBabyApiKeyController from "./baby/BabyApiKey.controller.js";
+import createAigApiKeyController from "./aig/AigApiKey.controller.js";
 import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
 import { initTgImageBot } from "./tgimage/TgImage.bot.js";
 import { setupTelegramLogSender } from "./tgimage/TgImage.logSender.js";
+
+// Wedding
+import createWeddingController from "./wedding/Wedding.controller.js";
+
+// Suggestion
+import createSuggestionController from "./suggestion/Suggestion.controller.js";
 
 async function startServer() {
   const app: Application = express();
@@ -97,6 +104,9 @@ async function startServer() {
     ["/v1/llm",        mw.apiKey,                                 createLlmControllerV1(db)],
     ["/v1/ss",         mw.apiKey,                                 createSsBabyControllerV1(db)],
     ["/api/baby",      mw.auth,                                   createBabyApiKeyController(db)],
+    ["/api/aig",       mw.auth,                                   createAigApiKeyController(db)],
+    ["/wedding",         mw.std,                                  createWeddingController(db)],
+    ["/api/suggestion",  mw.std,                                  createSuggestionController(db)],
   ];
   routes.forEach(([path, mws, router]) => app.use(path, mws, router));
 

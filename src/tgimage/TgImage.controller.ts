@@ -7,7 +7,7 @@ import { TgImageService } from "./TgImage.service.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException } from "../utils/requestUtils.js";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 
 export function createTgImageGetController(db: KnexSqlUtilities): Router {
   const router = Router();
@@ -46,7 +46,6 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype,
-        req.file.size,
         { username, ip, sessionId, uuid },
       );
       return cr.ok(result);

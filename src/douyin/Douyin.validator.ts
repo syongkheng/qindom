@@ -1,43 +1,40 @@
+import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
-import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
+import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 
 export class DouyinValidator {
   static validateLiveStatusRequest(
     query: Record<string, unknown>,
-    event?: IRequestLogEvent,
+    loggingEvent?: IRequestLogEvent,
   ): { userId: string } {
     const { userId } = query;
-    StructuralValidationUtilities.required(userId, "userId", event);
-    StructuralValidationUtilities.string(userId, "userId", event);
+    V.requiredString(userId, "userId", loggingEvent);
     if (!(userId as string).trim()) {
-      event?.children?.push(`'userId' nonEmpty ${LogEmoji.error} `);
-      throw new Exceptions.InvalidRequest("'userId' must not be empty");
+      loggingEvent?.children?.push(`'userId' nonEmpty ${LogEmoji.error} `);
+      throw new InvalidRequestException("userId", "format");
     }
-    event?.children?.push(`'userId' nonEmpty ${LogEmoji.success} `);
+    loggingEvent?.children?.push(`'userId' nonEmpty ${LogEmoji.success} `);
     return { userId: (userId as string).trim() };
   }
 
   static validateRankListRequest(
     query: Record<string, unknown>,
-    event?: IRequestLogEvent,
+    loggingEvent?: IRequestLogEvent,
   ): { roomId: string; anchorId: string; secAnchorId: string | null } {
     const { roomId, anchorId, secAnchorId } = query;
-    StructuralValidationUtilities.required(roomId, "roomId", event);
-    StructuralValidationUtilities.string(roomId, "roomId", event);
+    V.requiredString(roomId, "roomId", loggingEvent);
     if (!(roomId as string).trim()) {
-      event?.children?.push(`'roomId' nonEmpty ${LogEmoji.error} `);
-      throw new Exceptions.InvalidRequest("'roomId' must not be empty");
+      loggingEvent?.children?.push(`'roomId' nonEmpty ${LogEmoji.error} `);
+      throw new InvalidRequestException("roomId", "format");
     }
-    event?.children?.push(`'roomId' nonEmpty ${LogEmoji.success} `);
-    StructuralValidationUtilities.required(anchorId, "anchorId", event);
-    StructuralValidationUtilities.string(anchorId, "anchorId", event);
+    loggingEvent?.children?.push(`'roomId' nonEmpty ${LogEmoji.success} `);
+    V.requiredString(anchorId, "anchorId", loggingEvent);
     if (!(anchorId as string).trim()) {
-      event?.children?.push(`'anchorId' nonEmpty ${LogEmoji.error} `);
-      throw new Exceptions.InvalidRequest("'anchorId' must not be empty");
+      loggingEvent?.children?.push(`'anchorId' nonEmpty ${LogEmoji.error} `);
+      throw new InvalidRequestException("anchorId", "format");
     }
-    event?.children?.push(`'anchorId' nonEmpty ${LogEmoji.success} `);
+    loggingEvent?.children?.push(`'anchorId' nonEmpty ${LogEmoji.success} `);
     return {
       roomId: (roomId as string).trim(),
       anchorId: (anchorId as string).trim(),

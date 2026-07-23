@@ -522,6 +522,70 @@ CREATE TABLE IF NOT EXISTS tb_wedding_guest (
   record_status VARCHAR(1)   NOT NULL DEFAULT 'A'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Wedding RSVP (self-service guest submissions) ─────────────────────────────
+
+DROP TABLE IF EXISTS tb_wedding_rsvp_guest;
+DROP TABLE IF EXISTS tb_wedding_rsvp;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_rsvp (
+  id                   BIGINT       NOT NULL AUTO_INCREMENT,
+  name                 VARCHAR(255) NOT NULL,
+  email                VARCHAR(255) NOT NULL,
+  contact_number       VARCHAR(30)  NULL,
+  attending            TINYINT(1)   NOT NULL,
+  dietary_restrictions VARCHAR(100) NULL,
+  meal_preference      VARCHAR(100) NULL,
+  record_status        CHAR(1)      NOT NULL DEFAULT 'A',
+  created_dt           BIGINT       NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_wedding_rsvp_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tb_wedding_rsvp_guest (
+  id                   BIGINT       NOT NULL AUTO_INCREMENT,
+  rsvp_id              BIGINT       NOT NULL,
+  name                 VARCHAR(255) NOT NULL,
+  email                VARCHAR(255) NULL,
+  contact_number       VARCHAR(30)  NULL,
+  dietary_restrictions VARCHAR(100) NULL,
+  meal_preference      VARCHAR(100) NULL,
+  record_status        CHAR(1)      NOT NULL DEFAULT 'A',
+  created_dt           BIGINT       NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_wrsvp_guest_rsvp FOREIGN KEY (rsvp_id) REFERENCES tb_wedding_rsvp(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Suggestion Pool ─────────────────────────────────────────────────────────
+-- Admin-curated activity and packing suggestions shown in the travel planner.
+
+DROP TABLE IF EXISTS tb_suggestion_packing;
+DROP TABLE IF EXISTS tb_suggestion_activity;
+
+CREATE TABLE IF NOT EXISTS tb_suggestion_activity (
+  id              BIGINT        NOT NULL AUTO_INCREMENT,
+  destination_tag VARCHAR(255)  NOT NULL,
+  title           VARCHAR(255)  NOT NULL,
+  category        VARCHAR(64)   NULL,
+  estimated_hours DECIMAL(4,1)  NULL,
+  description     TEXT          NULL,
+  record_status   CHAR(1)       NOT NULL DEFAULT 'A',
+  created_dt      BIGINT        NOT NULL,
+  PRIMARY KEY (id),
+  INDEX idx_suggestion_activity_dest (destination_tag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tb_suggestion_packing (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  trip_type     VARCHAR(64)  NOT NULL,
+  label         VARCHAR(255) NOT NULL,
+  label_key     VARCHAR(128) NULL,
+  category      VARCHAR(64)  NULL,
+  record_status CHAR(1)      NOT NULL DEFAULT 'A',
+  created_dt    BIGINT       NOT NULL,
+  PRIMARY KEY (id),
+  INDEX idx_suggestion_packing_trip (trip_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Telegram Media Storage ───────────────────────────────────────────────────
 
 -- Links a Telegram user ID to a qindom account. One row per Telegram user.

@@ -1,10 +1,10 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 
 export class ItineraryValidator {
   static validateCreateRequest(
     body: Record<string, unknown>,
-    event?: IRequestLogEvent,
+    loggingEvent?: IRequestLogEvent,
   ): {
     idempotencyKey?: string; sessionTitle: string; destination?: string;
     destinationRaw?: any[]; country?: string; numberOfPax?: number;
@@ -18,8 +18,7 @@ export class ItineraryValidator {
       durationInDays, challenge, agendaItems = [], paxNames = [], bookings = [],
       packingItems = [],
     } = body as any;
-    StructuralValidationUtilities.required(sessionTitle, "sessionTitle", event);
-    StructuralValidationUtilities.string(sessionTitle, "sessionTitle", event);
+    V.requiredString(sessionTitle, "sessionTitle", loggingEvent);
     return {
       idempotencyKey, sessionTitle, destination, destinationRaw, country,
       numberOfPax, itineraryDateRaw, startDate, endDate, unknownDate,
@@ -29,7 +28,7 @@ export class ItineraryValidator {
 
   static validateEditRequest(
     body: Record<string, unknown>,
-    event?: IRequestLogEvent,
+    loggingEvent?: IRequestLogEvent,
   ): {
     sessionTitle?: string; destination?: string; destinationRaw?: any[];
     country?: string; numberOfPax?: number; itineraryDateRaw?: any[];
@@ -56,13 +55,11 @@ export class ItineraryValidator {
 
   static validateChallengeRequest(
     body: Record<string, unknown>,
-    event?: IRequestLogEvent,
+    loggingEvent?: IRequestLogEvent,
   ): { shortCode: string; challenge: string } {
     const { shortCode, challenge } = body;
-    StructuralValidationUtilities.required(shortCode, "shortCode", event);
-    StructuralValidationUtilities.string(shortCode, "shortCode", event);
-    StructuralValidationUtilities.required(challenge, "challenge", event);
-    StructuralValidationUtilities.string(challenge, "challenge", event);
+    V.requiredString(shortCode, "shortCode", loggingEvent);
+    V.requiredString(challenge, "challenge", loggingEvent);
     return { shortCode: shortCode as string, challenge: challenge as string };
   }
 }

@@ -1,20 +1,20 @@
+import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
-import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
+import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 
 export class FileValidator {
   static validateDeleteRequest(
     body: Record<string, unknown>,
-    event?: IRequestLogEvent,
+    loggingEvent?: IRequestLogEvent,
   ): { fileIds: string[] } {
     const { _fileIdsToDelete } = body;
-    StructuralValidationUtilities.required(_fileIdsToDelete, "_fileIdsToDelete", event);
+    V.required(_fileIdsToDelete, "_fileIdsToDelete", loggingEvent);
     if (!Array.isArray(_fileIdsToDelete) || _fileIdsToDelete.length === 0) {
-      event?.children?.push(`'_fileIdsToDelete' nonEmptyArray ${LogEmoji.error} `);
-      throw new Exceptions.InvalidRequest("'_fileIdsToDelete' must be a non-empty array");
+      loggingEvent?.children?.push(`'_fileIdsToDelete' nonEmptyArray ${LogEmoji.error} `);
+      throw new InvalidRequestException("_fileIdsToDelete", "format");
     }
-    event?.children?.push(`'_fileIdsToDelete' nonEmptyArray ${LogEmoji.success} `);
+    loggingEvent?.children?.push(`'_fileIdsToDelete' nonEmptyArray ${LogEmoji.success} `);
     return { fileIds: _fileIdsToDelete as string[] };
   }
 }

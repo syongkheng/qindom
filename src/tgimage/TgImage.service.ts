@@ -13,9 +13,50 @@ const TABLE_WHITELIST = "tb_tg_stats_whitelist";
 export class TgImageService {
   private readonly botToken: string;
 
+  // Telegram's getFile/download endpoint hard-caps at 20MB regardless of the
+  // ~50MB sendDocument upload limit — anything stored bigger than this can
+  // never be retrieved again, so we compress before upload to stay under it.
+  private static readonly MAX_TELEGRAM_FILE_BYTES = 19 * 1024 * 1024;
 
   constructor(private db: KnexSqlUtilities) {
     this.botToken = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN!;
+  }
+
+  private async compressForTelegram(
+    buffer: Buffer,
+    mimetype: string,
+  ): Promise<{ buffer: Buffer; mimetype: string }> {
+    if (buffer.length <= TgImageService.MAX_TELEGRAM_FILE_BYTES || mimetype === "image/svg+xml") {
+      return { buffer, mimetype };
+    }
+
+    let quality = 80;
+    let width: number | undefined;
+    let output = buffer;
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const pipeline = sharp(buffer, { failOn: "none" }).rotate();
+      if (width) pipeline.resize({ width, withoutEnlargement: true });
+      output = await pipeline.jpeg({ quality }).toBuffer();
+
+      if (output.length <= TgImageService.MAX_TELEGRAM_FILE_BYTES) {
+        break;
+      }
+
+      if (quality > 40) {
+        quality -= 10;
+      } else {
+        const metadata = await sharp(buffer).metadata();
+        width = Math.round((width ?? metadata.width ?? 4000) * 0.85);
+        quality = 60;
+      }
+    }
+
+    LoggingUtilities.service.info(
+      "TgImageService.upload",
+      `Compressed image from ${buffer.length} to ${output.length} bytes to stay under Telegram's 20MB retrieval cap`,
+    );
+    return { buffer: output, mimetype: "image/jpeg" };
   }
 
   async getStorageChatId(): Promise<number | null> {
@@ -37,7 +78,6 @@ export class TgImageService {
     fileBuffer: Buffer,
     originalname: string,
     mimetype: string,
-    size: number,
     meta?: { username?: string; ip?: string; sessionId?: string; uuid?: string },
   ): Promise<{ shortCode: string; url: string }> {
     const storageChatId = await this.getStorageChatId();
@@ -50,12 +90,14 @@ export class TgImageService {
     if (meta?.ip) captionParts.push(`🌐 ${meta.ip}`);
     if (meta?.sessionId) captionParts.push(`📋 ${meta.sessionId}`);
 
+    const { buffer: uploadBuffer, mimetype: uploadMimetype } = await this.compressForTelegram(fileBuffer, mimetype);
+
     const formData = new FormData();
     formData.append("chat_id", String(storageChatId));
     formData.append("caption", captionParts.join("\n"));
     formData.append(
       "document",
-      new Blob([new Uint8Array(fileBuffer)], { type: mimetype }),
+      new Blob([new Uint8Array(uploadBuffer)], { type: uploadMimetype }),
       originalname,
     );
 
@@ -79,9 +121,9 @@ export class TgImageService {
       short_code: shortCode,
       uuid: meta?.uuid,
       telegram_file_id: body.result.document.file_id,
-      mime_type: mimetype,
+      mime_type: uploadMimetype,
       file_name: originalname,
-      size_in_bytes: size,
+      size_in_bytes: uploadBuffer.length,
       created_dt: Date.now(),
       record_status: "A",
     });

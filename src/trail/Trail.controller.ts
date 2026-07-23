@@ -26,7 +26,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
   router.post("/sessions", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const body = TrailValidator.validateCreateSession(req);
+      const body = TrailValidator.validateCreateSession(req.body);
       const session = await svc.createSession(getUser(req).id, body);
       return cr.ok(session);
     } catch (err) {
@@ -49,7 +49,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
   router.post("/sessions/:sessionId/complete", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const body = TrailValidator.validateCompleteSession(req);
+      const body = TrailValidator.validateCompleteSession(req.body);
       const session = await svc.completeSession(req.params.sessionId, getUser(req).id, body);
       return cr.ok(session);
     } catch (err) {
@@ -83,7 +83,7 @@ export default function createTrailController(db: KnexSqlUtilities) {
   router.post("/custom", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const body = TrailValidator.validateCreateCustomTrail(req);
+      const body = TrailValidator.validateCreateCustomTrail(req.body);
       const trail = await svc.createCustomTrail(getUser(req).id, body);
       return cr.ok(trail);
     } catch (err) {

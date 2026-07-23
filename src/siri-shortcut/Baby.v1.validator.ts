@@ -1,8 +1,6 @@
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { LogEmoji } from "../constants/LogEmoji.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 import { DiaperLoadLevel } from "../models/databases/tb_baby_diaper_record.js";
 
 export class SsBabyV1Validator {
@@ -15,13 +13,9 @@ export class SsBabyV1Validator {
     return content;
   }
 
-  /**
-   * Pure structural validation for POST /baby/diaper — no DB access needed, so this is
-   * static (controller-facing), unlike the instance/business methods above which need `this.db`.
-   */
   static validateDiaperChangeRequest(
     body: any,
-    event?: IRequestLogEvent,
+    loggingEvent?: IRequestLogEvent,
   ): {
     changedAt: number;
     hasStool: boolean;
@@ -31,17 +25,12 @@ export class SsBabyV1Validator {
   } {
     const { changedAt, hasStool, hasUrine, stoolLoad, urineLoad } = body ?? {};
 
-    StructuralValidationUtilities.required(changedAt, "changedAt", event);
-    StructuralValidationUtilities.number(changedAt, "changedAt", event);
+    V.requiredNumber(changedAt, "changedAt", loggingEvent);
+    V.requiredBoolean(hasStool, "hasStool", loggingEvent);
+    V.requiredBoolean(hasUrine, "hasUrine", loggingEvent);
 
-    StructuralValidationUtilities.required(hasStool, "hasStool", event);
-    StructuralValidationUtilities.boolean(hasStool, "hasStool", event);
-
-    StructuralValidationUtilities.required(hasUrine, "hasUrine", event);
-    StructuralValidationUtilities.boolean(hasUrine, "hasUrine", event);
-
-    StructuralValidationUtilities.requiredOneOfWhen(hasStool, stoolLoad, this.LOAD_LEVELS, "stoolLoad", event);
-    StructuralValidationUtilities.requiredOneOfWhen(hasUrine, urineLoad, this.LOAD_LEVELS, "urineLoad", event);
+    V.requiredOneOfWhen(hasStool, stoolLoad, this.LOAD_LEVELS, "stoolLoad", loggingEvent);
+    V.requiredOneOfWhen(hasUrine, urineLoad, this.LOAD_LEVELS, "urineLoad", loggingEvent);
 
     return {
       changedAt,

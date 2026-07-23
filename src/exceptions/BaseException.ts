@@ -4,7 +4,9 @@ export class BaseExceptions extends Error {
   constructor(
     public readonly code: string,
     public readonly clientMessage: string,
-    public readonly httpStatus: number = 400
+    public readonly httpStatus: number = 400,
+    public readonly fieldName?: string,
+    public readonly typeOfError?: string,
   ) {
     super(clientMessage);
     this.name = this.constructor.name;
@@ -15,6 +17,8 @@ export class BaseExceptions extends Error {
   toResponseMessage() {
     return {
       code: this.code,
+      fieldName: this.fieldName,
+      typeOfError: this.typeOfError,
       message: this.message,
       timestamp: this.timestamp,
     };
