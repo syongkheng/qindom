@@ -13,7 +13,7 @@ export interface RsvpGuestPayload {
 
 export interface RsvpPayload {
   name: string;
-  email: string;
+  email?: string | null;
   contactNumber?: string | null;
   attending: boolean;
   dietaryRestrictions?: string | null;
@@ -29,7 +29,7 @@ export interface RsvpPayload {
 
 export interface RsvpLookupResult {
   name: string;
-  email: string;
+  email: string | null;
   contactNumber: string | null;
   attending: boolean;
   dietaryRestrictions: string | null;
@@ -103,7 +103,7 @@ export class WeddingService {
         "tb_wedding_rsvp",
         {
           name: payload.name,
-          email: payload.email,
+          email: payload.email ?? null,
           contact_number: payload.contactNumber ?? null,
           attending: payload.attending ? 1 : 0,
           dietary_restrictions: payload.dietaryRestrictions ?? null,

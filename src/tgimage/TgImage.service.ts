@@ -157,7 +157,10 @@ export class TgImageService {
     if (mimeType === "image/svg+xml") {
       return { stream: fileResponse.data, contentType: "image/svg+xml" };
     }
-    return { stream: fileResponse.data.pipe(sharp().jpeg({ quality: 80 })), contentType: "image/jpeg" };
+    // sharp() strips EXIF (including Orientation) on re-encode by default —
+    // .rotate() with no args bakes the EXIF-specified rotation into the
+    // pixels first, so the image still displays upright once that tag is gone.
+    return { stream: fileResponse.data.pipe(sharp().rotate().jpeg({ quality: 80 })), contentType: "image/jpeg" };
   }
 
   async listAdmins(): Promise<{ id: number; telegram_user_id: number; added_dt: number }[]> {

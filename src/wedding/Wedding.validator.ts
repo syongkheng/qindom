@@ -23,7 +23,7 @@ export class WeddingValidator {
     } = req.body;
 
     V.requiredString(name, "name", loggingEvent);
-    V.requiredEmail(email, "email", loggingEvent);
+    V.optionalEmail(email, "email", loggingEvent);
     V.requiredBoolean(attending, "attending", loggingEvent);
     V.optionalContactNumber(contactNumber, "contactNumber", loggingEvent);
     V.optionalString(dietaryRestrictions, "dietaryRestrictions", loggingEvent);
@@ -32,15 +32,24 @@ export class WeddingValidator {
 
     // Re-submitting an already-registered email overwrites that person's
     // previous RSVP (see WeddingService.submitRsvp) rather than being
-    // rejected as a duplicate.
-    const [existing] = await this.db.find<ITb_wedding_rsvp>(
-      "tb_wedding_rsvp",
-      { email, record_status: "A" },
-      { columns: ["id"] },
-      loggingEvent,
-    );
+    // rejected as a duplicate. Without an email there's nothing to match
+    // against, so this always inserts a fresh row.
+    const existing = email
+      ? (
+          await this.db.find<ITb_wedding_rsvp>(
+            "tb_wedding_rsvp",
+            { email, record_status: "A" },
+            { columns: ["id"] },
+            loggingEvent,
+          )
+        )[0]
+      : undefined;
     loggingEvent?.children?.push(
-      existing ? `'email' matches existing RSVP #${existing.id} — will update ${LogEmoji.success}` : `'email' is new ${LogEmoji.success}`,
+      existing
+        ? `'email' matches existing RSVP #${existing.id} — will update ${LogEmoji.success}`
+        : email
+          ? `'email' is new ${LogEmoji.success}`
+          : `'email' not provided ${LogEmoji.warning}`,
     );
 
     const guests: RsvpGuestPayload[] = [];
@@ -52,7 +61,7 @@ export class WeddingValidator {
 
     return {
       name,
-      email,
+      email: email ?? null,
       contactNumber: contactNumber ?? null,
       attending,
       dietaryRestrictions: dietaryRestrictions ?? null,
