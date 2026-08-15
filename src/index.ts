@@ -32,6 +32,8 @@ import createTrailController from "./trail/Trail.controller.js";
 import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller.js";
 import createBabyApiKeyController from "./baby/BabyApiKey.controller.js";
 import createAigApiKeyController from "./aig/AigApiKey.controller.js";
+import createIotController from "./iot/Iot.controller.js";
+import createIotApiKeyController from "./iot/IotApiKey.controller.js";
 import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
 import { initTgImageBot } from "./tgimage/TgImage.bot.js";
 import { setupTelegramLogSender } from "./tgimage/TgImage.logSender.js";
@@ -105,6 +107,8 @@ async function startServer() {
     ["/v1/ss",         mw.apiKey,                                 createSsBabyControllerV1(db)],
     ["/api/baby",      mw.auth,                                   createBabyApiKeyController(db)],
     ["/api/aig",       mw.auth,                                   createAigApiKeyController(db)],
+    ["/iot",           mw.apiKey,                                 createIotController(db)],
+    ["/api/iot-key",   mw.auth,                                   createIotApiKeyController(db)],
     ["/wedding",         mw.std,                                  createWeddingController(db)],
     ["/api/suggestion",  mw.std,                                  createSuggestionController(db)],
   ];

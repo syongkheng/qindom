@@ -113,11 +113,24 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │      from created_dt insert-audit time)
 │   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_ss_api_key lookup
 │   │
-│   └── BABY API KEY MGMT  /api/baby  [JWT AUTH]
-│       ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
-│       ├── POST   /api-key → revokes existing, generates new ss_ key, returns { key }
+│   ├── BABY API KEY MGMT  /api/baby  [JWT AUTH]
+│   │   ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
+│   │   ├── POST   /api-key → revokes existing, generates new ss_ key, returns { key }
+│   │   ├── DELETE /api-key → soft-deletes active key (record_status D)
+│   │   └── DB: tb_ss_api_key (same table as siri-shortcut auth)
+│   │
+│   ├── IOT DEVICES  /iot  [API-KEY AUTH]
+│   │   ├── POST /iot — heartbeat/connectivity proof, body { deviceId, deviceName? },
+│   │   │     upserted by device_id — DB: tb_iot_device_heartbeat
+│   │   ├── GET  /iot?deviceId=... — last-seen status for a device
+│   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_iot_api_key lookup
+│   │           (built for the hike-hitcher ESP32 + SSD1306 OLED connectivity test)
+│   │
+│   └── IOT API KEY MGMT  /api/iot-key  [JWT AUTH]
+│       ├── GET    /api-key → { hasKey, name, createdDt, keyHint }
+│       ├── POST   /api-key { deviceName } → revokes existing, generates new iot_ key, returns { key }
 │       ├── DELETE /api-key → soft-deletes active key (record_status D)
-│       └── DB: tb_ss_api_key (same table as siri-shortcut auth)
+│       └── DB: tb_iot_api_key
 │
 │   ├── SUGGESTION  /api/suggestion
 │   │   ├── GET  /activity?destination=... — fuzzy search (LOWER LIKE), public
