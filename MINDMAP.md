@@ -23,7 +23,10 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── CORS (ALLOWED_ORIGINS env var)
 │   ├── globalLimiter (100 req/min per IP)
 │   ├── express.json (5MB)
-│   ├── RestRequestLogger (logs all requests; redacts password/blob/token/email)
+│   ├── RestRequestLogger (logs all requests; redacts password/blob/token/email;
+│   │     console+Telegram by default — TELEGRAM_SILENT_ROUTES list in
+│   │     RestRequestLogger.ts skips the Telegram send only for noisy routes
+│   │     on success, e.g. POST /iot; still logs to console, still alerts on 4xx/5xx)
 │   ├── RequestHeaderFilter (POST must have Content-Type: application/json)
 │   ├── MandatoryTokenFilter (JWT required → 401 if missing)
 │   ├── OptionalTokenFilter (JWT attached if present)
@@ -120,11 +123,18 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── DB: tb_ss_api_key (same table as siri-shortcut auth)
 │   │
 │   ├── IOT DEVICES  /iot  [API-KEY AUTH]
-│   │   ├── POST /iot — heartbeat/connectivity proof, body { deviceId, deviceName? },
-│   │   │     upserted by device_id — DB: tb_iot_device_heartbeat
+│   │   ├── POST /iot — body { deviceId, deviceName?, lat?, lon?, alt?, temp?,
+│   │   │     recordedAt?, meta?: {rssi, chipTemp, uptimeMs} }
+│   │   │       ├── upserts last-seen status — DB: tb_iot_device_heartbeat
+│   │   │       └── inserts one coordinate-log row per request (path history)
+│   │   │             — DB: tb_iot_coordinate_log (recorded_dt = device-clock
+│   │   │             capture time in ms, converted from recordedAt seconds if
+│   │   │             given, else server receipt time; created_dt = insert time)
 │   │   ├── GET  /iot?deviceId=... — last-seen status for a device
+│   │   ├── GET  /iot/history?deviceId=...&limit=... — recent coordinate log rows,
+│   │   │     newest first (default limit 50) — for future path-map plotting
 │   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_iot_api_key lookup
-│   │           (built for the hike-hitcher ESP32 + SSD1306 OLED connectivity test)
+│   │           (built for the hike-hitcher ESP32 + SSD1306 OLED hiking tracker)
 │   │
 │   └── IOT API KEY MGMT  /api/iot-key  [JWT AUTH]
 │       ├── GET    /api-key → { hasKey, name, createdDt, keyHint }

@@ -114,8 +114,9 @@ export class LoggingUtilities {
 
     /**
      * Flush request tree.
+     * `skipTelegram` suppresses the Telegram send only — console output is unaffected.
      */
-    static flush(context: IRequestLogContext): void {
+    static flush(context: IRequestLogContext, options?: { skipTelegram?: boolean }): void {
       const duration = Date.now() - context.startTime;
       const lines: string[] = [];
 
@@ -170,7 +171,7 @@ export class LoggingUtilities {
       const text = lines.join("\n");
       lines.forEach((line) => console.log(line));
 
-      if (LoggingUtilities.logSender) LoggingUtilities.logSender(text);
+      if (LoggingUtilities.logSender && !options?.skipTelegram) LoggingUtilities.logSender(text);
     }
   };
 

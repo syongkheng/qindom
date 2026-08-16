@@ -15,19 +15,36 @@ export default function createIotController(db: KnexSqlUtilities) {
     return Array.isArray(raw) ? raw[0] : raw;
   }
 
-  // POST /iot — device heartbeat/connectivity proof, upserted by deviceId.
+  // POST /iot — device heartbeat/connectivity proof (upserted by deviceId),
+  // plus a coordinate log row (one per request) for future path plotting.
   router.post("/", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const { deviceId, deviceName } = req.body;
+      const { deviceId, deviceName, lat, lon, alt, temp, recordedAt, meta } = req.body;
       if (!deviceId) throw new Exceptions.InvalidRequest("deviceId");
+
+      const ipAddress = resolveIp(req);
 
       const result = await svc.recordHeartbeat({
         deviceId,
         deviceName,
-        ipAddress: resolveIp(req),
+        ipAddress,
         userAgent: req.headers["user-agent"] || "Unknown",
       });
+
+      await svc.logCoordinate({
+        deviceId,
+        lat,
+        lon,
+        alt,
+        temp,
+        recordedAt,
+        rssi: meta?.rssi,
+        chipTemp: meta?.chipTemp,
+        uptimeMs: meta?.uptimeMs,
+        ipAddress,
+      });
+
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "IotController.POST /", "Failed to record device heartbeat");
@@ -47,6 +64,21 @@ export default function createIotController(db: KnexSqlUtilities) {
       return cr.ok(record);
     } catch (err) {
       return handleException(err, cr, "IotController.GET /", "Failed to load device status");
+    }
+  });
+
+  // GET /iot/history?deviceId=...&limit=... — recent logged coordinates, newest first.
+  router.get("/history", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const deviceId = req.query.deviceId as string;
+      if (!deviceId) throw new Exceptions.InvalidRequest("deviceId");
+      const limit = req.query.limit ? Number(req.query.limit) : 50;
+
+      const rows = await svc.getCoordinateHistory(deviceId, limit);
+      return cr.ok(rows);
+    } catch (err) {
+      return handleException(err, cr, "IotController.GET /history", "Failed to load coordinate history");
     }
   });
 
