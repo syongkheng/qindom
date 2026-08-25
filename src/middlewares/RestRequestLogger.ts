@@ -4,7 +4,10 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 
 // Routes that fire frequently and add noise to Telegram — still logged to console/DB,
 // just not pushed to the Telegram log chat. Errors from these routes still alert.
-const TELEGRAM_SILENT_ROUTES: { method: string; path: string }[] = [{ method: "POST", path: "/iot" }];
+const TELEGRAM_SILENT_ROUTES: { method: string; path: string }[] = [
+  { method: "POST", path: "/iot" },
+  { method: "POST", path: "/api/analytics/heartbeat" },
+];
 
 function isTelegramSilentRoute(req: Request, statusCode: number): boolean {
   if (statusCode >= 400) return false;

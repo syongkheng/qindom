@@ -113,18 +113,19 @@ export class LoggingUtilities {
     }
 
     /**
-     * Flush request tree.
-     * `skipTelegram` suppresses the Telegram send only — console output is unaffected.
+     * Build the request tree text.
+     * `includeBodies` controls whether the raw request payload and response body are
+     * included — console output always gets them; the Telegram send does not, since the
+     * RequestId is enough to look the full payload/response up in the console/server logs.
      */
-    static flush(context: IRequestLogContext, options?: { skipTelegram?: boolean }): void {
-      const duration = Date.now() - context.startTime;
+    private static render(context: IRequestLogContext, duration: number, includeBodies: boolean): string[] {
       const lines: string[] = [];
 
       lines.push(`\n[${LoggingUtilities.timestamp()}] ${context.protocol ?? "HTTP"} ${context.method} ${context.path}`);
       lines.push(`${LoggingUtilities.INDENT}RequestId : ${context.requestId}`);
       lines.push(`${LoggingUtilities.INDENT}IP        : ${context.ip}`);
 
-      if (context.payload) {
+      if (includeBodies && context.payload) {
         lines.push(`${LoggingUtilities.INDENT}Payload   : ${JSON.stringify(context.payload, null, 0)}`);
       }
 
@@ -158,7 +159,7 @@ export class LoggingUtilities {
 
       lines.push(`${LoggingUtilities.END} RESPONSE ${context.statusCode}`);
 
-      if (context.response !== undefined) {
+      if (includeBodies && context.response !== undefined) {
         const respLines = JSON.stringify(context.response, null, 2).split("\n");
         lines.push(`   ${LoggingUtilities.END} ${respLines[0]}`);
         for (let i = 1; i < respLines.length; i++) {
@@ -168,10 +169,21 @@ export class LoggingUtilities {
 
       lines.push(`\nDuration: ${duration}ms\n`);
 
-      const text = lines.join("\n");
-      lines.forEach((line) => console.log(line));
+      return lines;
+    }
 
-      if (LoggingUtilities.logSender && !options?.skipTelegram) LoggingUtilities.logSender(text);
+    /**
+     * Flush request tree.
+     * `skipTelegram` suppresses the Telegram send only — console output is unaffected.
+     */
+    static flush(context: IRequestLogContext, options?: { skipTelegram?: boolean }): void {
+      const duration = Date.now() - context.startTime;
+
+      this.render(context, duration, true).forEach((line: string) => console.log(line));
+
+      if (LoggingUtilities.logSender && !options?.skipTelegram) {
+        LoggingUtilities.logSender(this.render(context, duration, false).join("\n"));
+      }
     }
   };
 
