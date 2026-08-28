@@ -342,20 +342,6 @@ export class AuthService {
     return { token: generatedToken, username: user.username, roles: parsedRoles };
   }
 
-  async authenticateToken(
-    token: string,
-    authEvent?: IRequestLogEvent,
-  ): Promise<{ username: string; roles: string[]; exist: boolean }> {
-    const decodedToken = await this.tokenService.decodeToken(token);
-    const existing = await this.db.find<ITB_AA_USER>(
-      "tb_aa_user",
-      { username: decodedToken.username, system: decodedToken.system, record_status: "A" },
-      { limit: 1 },
-      authEvent,
-    );
-    return { username: decodedToken.username, roles: decodedToken.roles ?? [], exist: existing.length > 0 };
-  }
-
   async validatePassword(
     username_system: string,
     password: string,

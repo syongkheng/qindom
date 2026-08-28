@@ -45,9 +45,10 @@
 {
     "code": 200 | 401 | 500,
     "status": "Ok" | "Invalid login credentials",
-    "data": { "token": string } | { "code": string, "message": string, "timestamp": number }
+    "data": { "username": string, "roles": string[] } | { "code": string, "message": string, "timestamp": number }
 }
 ```
+On success, sets the `jwt_token` (httpOnly) and `csrf_token` cookies via `Set-Cookie` — the JWT is never present in the response body.
 </details>
 
 #### Creating a new account
@@ -70,7 +71,7 @@
 {
     "code": 200 | 400 | 401 | 500,
     "status": "Ok" | "Ko",
-    "data": { "token": string } | { "code": string, "message": string, "timestamp": number }
+    "data": { "username": string, "roles": string[] } | { "code": string, "message": string, "timestamp": number }
 }
 ```
 </details>
@@ -80,19 +81,31 @@
 <details>
  <summary><code>POST</code> <code>/api/auth/verification</code></summary>
 
-##### Payload Format
-```
-{
-    "token": string
-}
-```
+Requires the `jwt_token` cookie (sent automatically by the browser) — no payload.
 
 ##### Response Format
 ```
 {
-    "code": 200 | 400 | 500,
-    "status": "Ok" | "The provided token is not in the correct format.",
-    "data": { "username": string, "role": string, "exist": boolean } | { "code": string, "message": string, "timestamp": number }
+    "code": 200 | 401 | 500,
+    "status": "Ok" | "token_invalid",
+    "data": { "username": string, "roles": string[], "exist": boolean } | { "code": string, "message": string, "timestamp": number }
+}
+```
+</details>
+
+#### Log out
+
+<details>
+ <summary><code>POST</code> <code>/api/auth/logout</code></summary>
+
+Requires the `jwt_token` cookie. Clears the `jwt_token` and `csrf_token` cookies.
+
+##### Response Format
+```
+{
+    "code": 200,
+    "status": "Ok",
+    "data": { "loggedOut": true }
 }
 ```
 </details>
@@ -102,7 +115,7 @@
 <details>
  <summary><code>POST</code> <code>/api/auth/password/validate</code></summary>
 
-Header: Authorization: Bearer <Token>
+Requires the `jwt_token` cookie plus a matching `X-CSRF-Token` header (value of the `csrf_token` cookie).
 ##### Payload Format
 ```
 {

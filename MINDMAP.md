@@ -15,7 +15,10 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     — __dirname/__filename sites use fileURLToPath(import.meta.url)
 │   ├── Framework: Express 5.1.0
 │   ├── Database: MySQL (db: wuxi) via Knex.js
-│   ├── Auth: JWT (30-day, Bearer token)
+│   ├── Auth: JWT (30-day, httpOnly cookie `jwt_token`) + double-submit
+│   │     CSRF cookie `csrf_token` (readable, echoed as X-CSRF-Token
+│   │     header on mutating requests) — see MandatoryTokenFilter /
+│   │     OptionalTokenFilter in src/middlewares/TokenFilter.ts
 │   ├── Deploy: AWS EC2 ap-southeast-1 — port 3000
 │   └── Process manager: PM2 (ecosystem.config.cjs — .cjs since root is now ESM)
 │
@@ -28,8 +31,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     RestRequestLogger.ts skips the Telegram send only for noisy routes
 │   │     on success, e.g. POST /iot; still logs to console, still alerts on 4xx/5xx)
 │   ├── RequestHeaderFilter (POST must have Content-Type: application/json)
-│   ├── MandatoryTokenFilter (JWT required → 401 if missing)
-│   ├── OptionalTokenFilter (JWT attached if present)
+│   ├── cookieParser (reads jwt_token / csrf_token cookies into req.cookies)
+│   ├── MandatoryTokenFilter (JWT cookie required → 401 if missing;
+│   │     403 csrf_invalid if X-CSRF-Token header doesn't match csrf_token
+│   │     cookie on non-GET requests)
+│   ├── OptionalTokenFilter (JWT cookie attached if present; same CSRF
+│   │     check applies only when a token was actually attached)
 │   └── RequestApiKeyFilter (x-api-key header → tb_ss_api_key / tb_llm_api_key lookup,
 │         sets logContext.metadata.userId)
 │
@@ -37,6 +44,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │
 │   ├── AUTH  /api/auth
 │   │   ├── Preflight → Register → OTP email → Verify → JWT
+│   │   ├── login/verify-email/username-change set the JWT via Set-Cookie
+│   │   │     (src/utils/AuthCookieUtilities.ts setAuthCookies) — token
+│   │   │     is never present in a JSON response body
+│   │   ├── POST /logout — clears jwt_token + csrf_token cookies
+│   │   ├── POST /verification — reads the cookie via MandatoryTokenFilter,
+│   │   │     no body needed (was: client POSTed token from localStorage)
 │   │   ├── bcrypt (10 rounds), SHA-256 OTP hash, 15-min TTL
 │   │   ├── Max 5 OTP attempts (429 lock)
 │   │   ├── Rate limits: 5 reg/hr, 10 login/15min

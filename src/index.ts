@@ -8,6 +8,7 @@ dotenv.config({ path: envFile, override: true });
 
 import express, { Application, RequestHandler, Router } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
 import { initializeDatabase } from "./config/db/mysql.js";
 import { RestRequestLogger } from "./middlewares/RestRequestLogger.js";
@@ -81,6 +82,7 @@ async function startServer() {
 
   // Middleware
   app.use(globalLimiter);
+  app.use(cookieParser());
   app.use(express.json({ limit: "5mb" }));
   app.use(express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 }));
   app.disable("x-powered-by");

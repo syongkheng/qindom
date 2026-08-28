@@ -16,6 +16,7 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { setAuthCookies, clearAuthCookies } from "../utils/AuthCookieUtilities.js";
 
 export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();
@@ -75,7 +76,9 @@ export default function createAuthController(db: KnexSqlUtilities) {
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
         : undefined;
       const { email, password, system } = AuthValidator.validateLoginRequest(req.body, validationEvent);
-      return cr.ok(await svc.login({ email, password, system, logContext }));
+      const { token, ...rest } = await svc.login({ email, password, system, logContext });
+      setAuthCookies(res, token);
+      return cr.ok(rest);
     } catch (err) {
       return handleException(err, cr, "AuthController.POST /login", "Failed to login");
     }
@@ -105,7 +108,9 @@ export default function createAuthController(db: KnexSqlUtilities) {
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
         : undefined;
       const { email, system, code } = AuthValidator.validateEmailVerifyRequest(req.body, validationEvent);
-      return cr.ok(await svc.verifyEmail({ email, system, code, logContext }));
+      const { token, ...rest } = await svc.verifyEmail({ email, system, code, logContext });
+      setAuthCookies(res, token);
+      return cr.ok(rest);
     } catch (err) {
       return handleException(err, cr, "AuthController.POST /verify-email", "Failed to verify email");
     }
@@ -127,22 +132,22 @@ export default function createAuthController(db: KnexSqlUtilities) {
     }
   });
 
-  // POST /verification — validate a JWT token
-  router.post("/verification", async (req: Request, res: Response) => {
+  // POST /verification — validate the session cookie (MandatoryTokenFilter already verified it)
+  router.post("/verification", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { token } = AuthValidator.validateValidateTokenRequest(req.body, validationEvent);
-      const authenticateTokenLoggingEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "SERVICE", "Authenticating token")
-        : undefined;
-      return cr.ok(await svc.authenticateToken(token, authenticateTokenLoggingEvent));
+      const { username, roles } = getUser(req);
+      return cr.ok({ username, roles, exist: true });
     } catch (err) {
       return handleException(err, cr, "AuthController.POST /verification", "Failed to verify token");
     }
+  });
+
+  // POST /logout — clear the auth + CSRF cookies
+  router.post("/logout", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    clearAuthCookies(res);
+    return cr.ok({ loggedOut: true });
   });
 
   router.post("/password/validate", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {

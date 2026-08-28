@@ -2,7 +2,6 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import jwt from "jsonwebtoken";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 
 export class TokenService {
   private readonly jwtSecret: string;
@@ -52,43 +51,6 @@ export class TokenService {
       LoggingUtilities.service.error(
         "TokenService.generateToken",
         `Something went wrong generating the token: ${error}`
-      );
-      throw new Exceptions.Unknown();
-    }
-  }
-
-  async decodeToken(token: string) {
-    LoggingUtilities.service.info(
-      "TokenService.decodeToken",
-      `Decoding: [REDACTED]`
-    );
-    try {
-      const decoded = jwt.verify(token, this.jwtSecret) as IDecodedTokenUser;
-      LoggingUtilities.service.info(
-        "TokenService.decodeToken",
-        `Decoded: ${JSON.stringify({ ...decoded })}`
-      );
-      return decoded;
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        if (error instanceof jwt.TokenExpiredError) {
-          LoggingUtilities.service.error(
-            "TokenService.decodeToken",
-            `Token has expired.`
-          );
-          throw new Exceptions.TokenExpired();
-        }
-        if (error instanceof jwt.JsonWebTokenError) {
-          LoggingUtilities.service.error(
-            "TokenService.decodeToken",
-            `Invalid token format.`
-          );
-          throw new Exceptions.TokenFormat();
-        }
-      }
-      LoggingUtilities.service.error(
-        "TokenService.decodeToken",
-        `Something went wrong decoding token.`
       );
       throw new Exceptions.Unknown();
     }

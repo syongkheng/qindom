@@ -5,6 +5,7 @@ import { PfpService } from "./Pfp.service.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { getUser, handleException } from "../utils/requestUtils.js";
+import { setAuthCookies } from "../utils/AuthCookieUtilities.js";
 
 export default function createPfpController(db: KnexSqlUtilities) {
   const router = Router();
@@ -59,7 +60,9 @@ export default function createPfpController(db: KnexSqlUtilities) {
       const { newUsername } = req.body;
       if (!newUsername || String(newUsername).trim().length < 3)
         return cr.badRequest("Username must be at least 3 characters.");
-      return cr.ok(await pfpService.updateUsername(`${username}_${system}`, String(newUsername).trim(), system));
+      const { token, ...rest } = await pfpService.updateUsername(`${username}_${system}`, String(newUsername).trim(), system);
+      setAuthCookies(res, token);
+      return cr.ok(rest);
     } catch (err) {
       return handleException(err, cr, "PfpController.POST /user/username", "Failed to update username");
     }

@@ -67,15 +67,6 @@ export class AuthValidator {
     return { email: (email as string).toLowerCase().trim(), system: system as string, code: code as string };
   }
 
-  static validateValidateTokenRequest(
-    body: Record<string, unknown>,
-    loggingEvent?: IRequestLogEvent,
-  ): { token: string } {
-    const { token } = body;
-    V.requiredString(token, "token", loggingEvent);
-    return { token: token as string };
-  }
-
   static validatePasswordValidateRequest(
     body: Record<string, unknown>,
     loggingEvent?: IRequestLogEvent,
