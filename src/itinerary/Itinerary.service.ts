@@ -5,6 +5,7 @@ import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item.js";
 import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view.js";
 import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking.js";
 import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item.js";
+import { ITB_TRAVEL_NOTE_ITEM } from "../models/databases/tb_travel_note_item.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { toMessage } from "../utils/errorUtils.js";
@@ -15,6 +16,7 @@ const TB_TRAVEL_AGENDA_FILE = "tb_travel_agenda_file";
 const TB_TRAVEL_ITINERARY_BOOKING = "tb_travel_itinerary_booking";
 const TB_TRAVEL_ITINERARY_VIEW = "tb_travel_itinerary_view";
 const TB_TRAVEL_PACKING_ITEM = "tb_travel_packing_item";
+const TB_TRAVEL_NOTE_ITEM = "tb_travel_note_item";
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -58,6 +60,7 @@ export function buildItineraryResponse(
   viewCount?: number,
   bookings: any[] = [],
   packingItems: any[] = [],
+  noteItems: any[] = [],
 ) {
   return {
     id: itinerary.id,
@@ -78,6 +81,7 @@ export function buildItineraryResponse(
     ...(viewCount !== undefined ? { viewCount } : {}),
     bookings,
     packingItems,
+    noteItems,
     agendaItems: agendaItems.map(({ record_status, created_dt, coordinates_lat, coordinates_lng, ...item }: any) => ({
       ...item,
       start_time: minutesToTime(item.start_time),
@@ -136,6 +140,22 @@ export class ItineraryService {
       category: p.category ?? "misc",
       packed: !!p.packed,
       quantity: p.quantity ?? undefined,
+    }));
+  }
+
+  async fetchNoteItemsForItinerary(itineraryId: number): Promise<any[]> {
+    const rows = (await this.db.find<ITB_TRAVEL_NOTE_ITEM>(
+      TB_TRAVEL_NOTE_ITEM,
+      { itinerary_id: itineraryId, record_status: "A" },
+      { orderBy: "sort_order", orderDirection: "asc" },
+    )) as ITB_TRAVEL_NOTE_ITEM[];
+
+    return rows.map((n) => ({
+      id: n.id,
+      label: n.label,
+      category: n.category ?? undefined,
+      url: n.url ?? undefined,
+      done: !!n.done,
     }));
   }
 
@@ -255,11 +275,12 @@ export class ItineraryService {
       "created_dt",
       "tg_short_code",
     ]);
-    const [bookings, packingItems] = await Promise.all([
+    const [bookings, packingItems, noteItems] = await Promise.all([
       this.fetchBookingsForItinerary(itinerary.id!),
       this.fetchPackingItemsForItinerary(itinerary.id!),
+      this.fetchNoteItemsForItinerary(itinerary.id!),
     ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, undefined, bookings, packingItems);
+    return buildItineraryResponse(itinerary, itemsWithFiles, undefined, bookings, packingItems, noteItems);
   }
 
   async getByShortCode(
@@ -289,12 +310,13 @@ export class ItineraryService {
       "created_dt",
       "tg_short_code",
     ]);
-    const [viewCount, bookings, packingItems] = await Promise.all([
+    const [viewCount, bookings, packingItems, noteItems] = await Promise.all([
       this.getViewCount(shortCode),
       this.fetchBookingsForItinerary(itinerary.id!),
       this.fetchPackingItemsForItinerary(itinerary.id!),
+      this.fetchNoteItemsForItinerary(itinerary.id!),
     ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems);
+    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems, noteItems);
   }
 
   async verifyChallenge(shortCode: string, challenge: string): Promise<ReturnType<typeof buildItineraryResponse>> {
@@ -321,12 +343,13 @@ export class ItineraryService {
       "created_dt",
       "tg_short_code",
     ]);
-    const [viewCount, bookings, packingItems] = await Promise.all([
+    const [viewCount, bookings, packingItems, noteItems] = await Promise.all([
       this.getViewCount(shortCode),
       this.fetchBookingsForItinerary(itinerary.id!),
       this.fetchPackingItemsForItinerary(itinerary.id!),
+      this.fetchNoteItemsForItinerary(itinerary.id!),
     ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems);
+    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems, noteItems);
   }
 
   async create(userId: number, body: any): Promise<{ shortCode: string; sessionId: string; agendaToFileMap: any[] }> {
@@ -347,6 +370,7 @@ export class ItineraryService {
       paxNames,
       bookings,
       packingItems = [],
+      noteItems = [],
     } = body;
 
     if (idempotencyKey) {
@@ -398,6 +422,7 @@ export class ItineraryService {
         const [agendaItemId] = await trx(TB_TRAVEL_AGENDA_ITEM).insert({
           itinerary_id: itineraryId,
           category: item.category || undefined,
+          list_type: item.listType ?? item.list_type ?? undefined,
           title: item.title,
           desc: item.desc || undefined,
           city: item.city || undefined,
@@ -449,6 +474,12 @@ export class ItineraryService {
         );
       }
 
+      if (noteItems.length > 0) {
+        await trx(TB_TRAVEL_NOTE_ITEM).insert(
+          noteItems.map((n: any, i: number) => this._noteInsertRow(itineraryId, n, i, now)),
+        );
+      }
+
       return map;
     });
 
@@ -479,6 +510,8 @@ export class ItineraryService {
       _bookingIdsToDelete,
       packingItems = [],
       _packingIdsToDelete = [],
+      noteItems = [],
+      _noteIdsToDelete = [],
     } = body;
 
     const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
@@ -527,6 +560,7 @@ export class ItineraryService {
             .where({ id: Number(item.id) })
             .update({
               category: item.category || undefined,
+              list_type: item.listType ?? item.list_type ?? undefined,
               title: item.title,
               desc: item.desc || undefined,
               city: item.city || undefined,
@@ -565,6 +599,7 @@ export class ItineraryService {
           const [newItemId] = await trx(TB_TRAVEL_AGENDA_ITEM).insert({
             itinerary_id: itinerary.id!,
             category: item.category || undefined,
+            list_type: item.listType ?? item.list_type ?? undefined,
             title: item.title,
             desc: item.desc || undefined,
             city: item.city || undefined,
@@ -644,6 +679,29 @@ export class ItineraryService {
         }
       }
 
+      if (_noteIdsToDelete.length > 0) {
+        await trx(TB_TRAVEL_NOTE_ITEM)
+          .whereIn("id", _noteIdsToDelete.map(Number))
+          .update({ record_status: "D" });
+      }
+
+      for (let i = 0; i < noteItems.length; i++) {
+        const n = noteItems[i];
+        if (n.id) {
+          await trx(TB_TRAVEL_NOTE_ITEM)
+            .where({ id: Number(n.id) })
+            .update({
+              label: n.label,
+              category: n.category || undefined,
+              url: n.url || undefined,
+              done: n.done ? 1 : 0,
+              sort_order: i,
+            });
+        } else {
+          await trx(TB_TRAVEL_NOTE_ITEM).insert(this._noteInsertRow(itinerary.id!, n, i, now));
+        }
+      }
+
       return map;
     });
 
@@ -659,6 +717,19 @@ export class ItineraryService {
       category: p.category || "misc",
       packed: p.packed ? 1 : 0,
       quantity: p.quantity ?? null,
+      sort_order: sortOrder,
+      created_dt: now,
+      record_status: "A",
+    };
+  }
+
+  private _noteInsertRow(itineraryId: number, n: any, sortOrder: number, now: number) {
+    return {
+      itinerary_id: itineraryId,
+      label: n.label,
+      category: n.category || undefined,
+      url: n.url || undefined,
+      done: n.done ? 1 : 0,
       sort_order: sortOrder,
       created_dt: now,
       record_status: "A",

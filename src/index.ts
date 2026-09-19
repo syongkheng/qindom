@@ -24,6 +24,7 @@ import createLtaController from "./lta/Lta.controller.js";
 import createAuthController from "./auth/Auth.controller.js";
 import createPfpController from "./profile/Pfp.controller.js";
 import createItineraryController from "./itinerary/Itinerary.controller.js";
+import createBudgetController from "./budget/Budget.controller.js";
 import createFileController from "./file/File.controller.js";
 import createDouyinController from "./douyin/Douyin.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
@@ -31,19 +32,26 @@ import { createTgImageGetController, createTgImageController } from "./tgimage/T
 import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
 import createTrailController from "./trail/Trail.controller.js";
 import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller.js";
+import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createBabyApiKeyController from "./baby/BabyApiKey.controller.js";
 import createAigApiKeyController from "./aig/AigApiKey.controller.js";
 import createIotController from "./iot/Iot.controller.js";
 import createIotApiKeyController from "./iot/IotApiKey.controller.js";
 import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
-import { initTgImageBot } from "./tgimage/TgImage.bot.js";
 import { setupTelegramLogSender } from "./tgimage/TgImage.logSender.js";
 
 // Wedding
 import createWeddingController from "./wedding/Wedding.controller.js";
 
+// Garmin
+import createGarminController from "./garmin/Garmin.controller.js";
+import { startGarminScheduler } from "./garmin/Garmin.scheduler.js";
+
 // Suggestion
 import createSuggestionController from "./suggestion/Suggestion.controller.js";
+
+// Places
+import createPlacesController from "./places/Places.controller.js";
 
 async function startServer() {
   const app: Application = express();
@@ -99,6 +107,7 @@ async function startServer() {
     ["/api/auth",      mw.std,                                    createAuthController(db)],
     ["/api/pfp",       mw.std,                                    createPfpController(db)],
     ["/api/itinerary", mw.std,                                    createItineraryController(db)],
+    ["/api/budget",    mw.auth,                                   createBudgetController(db)],
     ["/api/file",      mw.auth,                                   createFileController(db)],
     ["/api/img",       mw.pub,                                    createTgImageGetController(db)],
     ["/api/img",       [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)],  // no RHF — multipart upload
@@ -107,12 +116,15 @@ async function startServer() {
     ["/api/trail",     mw.auth,                                   createTrailController(db)],
     ["/v1/llm",        mw.apiKey,                                 createLlmControllerV1(db)],
     ["/v1/ss",         mw.apiKey,                                 createSsBabyControllerV1(db)],
+    ["/v1/ss",         mw.apiKey,                                 createSsApplePayControllerV1(db)],
     ["/api/baby",      mw.auth,                                   createBabyApiKeyController(db)],
     ["/api/aig",       mw.auth,                                   createAigApiKeyController(db)],
     ["/iot",           mw.apiKey,                                 createIotController(db)],
     ["/api/iot-key",   mw.auth,                                   createIotApiKeyController(db)],
     ["/wedding",         mw.std,                                  createWeddingController(db)],
     ["/api/suggestion",  mw.std,                                  createSuggestionController(db)],
+    ["/api/garmin",      mw.auth,                                 createGarminController(db)],
+    ["/api/places",      mw.std,                                  createPlacesController(db)],
   ];
   routes.forEach(([path, mws, router]) => app.use(path, mws, router));
 
@@ -120,9 +132,14 @@ async function startServer() {
   app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
-    initTgImageBot(db)
-      .then(() => setupTelegramLogSender(db))
-      .catch((err) => LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err)));
+    // CDN admin bot (/start /stats /list) intentionally not started — its
+    // long-polling loop isn't needed for the actual upload/serve path
+    // (TgImageService talks to Telegram's HTTP API directly), and it was
+    // producing periodic "EFATAL: fetch failed" polling-error log noise.
+    // The Telegram-based error-log sender doesn't depend on the bot/polling
+    // at all, so it still starts on its own here.
+    setupTelegramLogSender(db).catch((err) => LoggingUtilities.service.error("TgImageLogSender", err?.message ?? String(err)));
+    startGarminScheduler(db);
   });
 }
 

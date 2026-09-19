@@ -73,7 +73,9 @@ export class GeocodeService {
   // ─────────────────────────────────────────────────────────────
 
   private async fetchNominatim(query: string): Promise<Record<string, unknown>[]> {
-    const url = `${NOMINATIM_BASE}/search?q=${encodeURIComponent(query)}&format=json&limit=10&addressdetails=0`;
+    // addressdetails=1 so callers can resolve a destination's country (e.g.
+    // the trip-creation flow needs it to look up per-country note suggestions).
+    const url = `${NOMINATIM_BASE}/search?q=${encodeURIComponent(query)}&format=json&limit=10&addressdetails=1`;
     LoggingUtilities.service.info("GeocodeService.fetchNominatim", `[EXT-GET] ${url}`);
 
     try {

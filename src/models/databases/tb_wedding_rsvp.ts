@@ -1,5 +1,6 @@
 export interface ITb_wedding_rsvp {
   id: number;
+  pin: string;
   name: string;
   email: string | null;
   contact_number: string | null;
@@ -9,4 +10,5 @@ export interface ITb_wedding_rsvp {
   message: string | null;
   record_status: "A" | "D";
   created_dt: number;
+  updated_dt: number;
 }

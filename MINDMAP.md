@@ -71,11 +71,21 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │
 │   ├── ITINERARY  /api/itinerary
 │   │   ├── Trip plans (shareable via short_code + 6-char PIN)
-│   │   ├── Agenda items (flights, hotels, activities)
+│   │   ├── Agenda items (flights, hotels, activities) — day/date nullable +
+│   │   │     unknown_time flag, so an item can be an unscheduled "thing to
+│   │   │     do"/"place to visit" (see fndom TravelPlannerView); assigning
+│   │   │     a date later just updates the row. `list_type` ('todo'|'place',
+│   │   │     nullable) discriminates the two — both can carry coordinates
+│   │   │     (Things-to-do gets client-side geocoded for map display too),
+│   │   │     so coordinate-presence alone can't tell them apart
+│   │   ├── Note items — tb_travel_note_item (per-trip checklist, mirrors
+│   │   │     packing_item shape: label/category/url/done/sort_order),
+│   │   │     bulk create/edit alongside agendaItems/bookings/packingItems
 │   │   ├── File attachments (base64, 5MB) — auth required
 │   │   └── DB: tb_travel_itinerary, tb_travel_agenda_item,
 │   │           tb_travel_agenda_file, tb_travel_itinerary_booking,
-│   │           tb_travel_itinerary_view
+│   │           tb_travel_itinerary_view, tb_travel_packing_item,
+│   │           tb_travel_note_item
 │   │
 │   ├── FILE UPLOAD  /api/file  [AUTH REQUIRED]
 │   │   ├── Upload base64 files for itinerary items
@@ -83,9 +93,29 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │
 │   │
 │   ├── GEOCODE  /api/geocode
-│   │   ├── Google Geocoding API wrapper
-│   │   ├── Results cached in DB
+│   │   ├── GET /api/geocode?q=... — Nominatim (OpenStreetMap) search proxy,
+│   │   │     addressdetails=1 (so callers can resolve a destination's
+│   │   │     country, e.g. for Suggestion's note lookup)
+│   │   ├── Results cached in DB (by normalized query string, no TTL)
 │   │   └── DB: tb_geocode_cache
+│   │
+│   ├── PLACES  /api/places
+│   │   ├── GET /api/places?destination=... — public; resolves destination
+│   │   │     via GeocodeService, then queries OpenStreetMap Overpass API
+│   │   │     (tourism/leisure/historic tagged POIs within 3km) — free, no
+│   │   │     API key, same ecosystem as Geocode's Nominatim use
+│   │   ├── Merges in admin-curated places (SuggestionService.getPlacesByDestination,
+│   │   │     tb_suggestion_place — same fuzzy destination_tag match as
+│   │   │     activities) — curated rows carry id/description/images and
+│   │   │     win on exact-title collision with a live Overpass hit; not
+│   │   │     affected by the Overpass response cache, so admin edits via
+│   │   │     /admin/suggestions (fndom) show up immediately
+│   │   ├── Maps raw OSM tags onto the app's category vocabulary
+│   │   │     (attraction/entertainment/nature/other) via
+│   │   │     OVERPASS_TAG_TO_CATEGORY in Places.service.ts
+│   │   ├── Results cached by rounded lat/lng + radius (no TTL) — Overpass
+│   │   │     portion only; curated merge happens after the cache read
+│   │   └── DB: tb_place_cache
 │   │
 │   ├── HDB HOUSING  /api/hdb  (Singapore)
 │   │   ├── Property search by query
@@ -157,32 +187,80 @@ qindom (Express 5 + TypeScript + MySQL)
 │
 │   ├── SUGGESTION  /api/suggestion
 │   │   ├── GET  /activity?destination=... — fuzzy search (LOWER LIKE), public
-│   │   ├── POST /activity — admin-only (JWT + role "admin")
+│   │   ├── POST /activity, PUT /activity/:id — admin-only (JWT + role "admin")
 │   │   ├── DELETE /activity/:id — admin-only
+│   │   ├── GET  /activity/admin/list — admin-only; full catalogue (incl.
+│   │   │     images) for the fndom /admin/suggestions management UI
 │   │   ├── GET  /packing — all active packing suggestions, public
 │   │   ├── POST /packing — admin-only
 │   │   ├── DELETE /packing/:id — admin-only
-│   │   └── DB: tb_suggestion_activity (destination_tag, category, estimated_hours)
+│   │   ├── GET  /note?country=... — exact (case-insensitive) match, public;
+│   │   │     pre-trip reminders (e.g. arrival cards) — link + deadline copy
+│   │   │     only, never an integration that submits anything for the user
+│   │   ├── POST /note — admin-only
+│   │   ├── DELETE /note/:id — admin-only
+│   │   ├── GET  /place?destination=... — curated-only, fuzzy match, public
+│   │   │     (the live-merged view used by the map is /api/places, not this)
+│   │   ├── POST /place, PUT /place/:id, DELETE /place/:id — admin-only
+│   │   ├── GET  /place/admin/list — admin-only; full catalogue for the
+│   │   │     fndom /admin/suggestions management UI
+│   │   └── DB: tb_suggestion_activity (destination_tag, category, estimated_hours,
+│   │             images_json — string[] image URLs, admin-editable)
 │   │           tb_suggestion_packing (trip_type, label, category)
+│   │           tb_suggestion_note (country, mandatory, min_days_before_arrival,
+│   │             max_advance_hours — seeded: SG Arrival Card, Thailand TDAC,
+│   │             Japan Visit Japan Web)
+│   │           tb_suggestion_place (destination_tag, title, category, description,
+│   │             images_json, lat, lng — admin-curated "places to visit",
+│   │             merged into /api/places alongside live Overpass results)
 │   │       Seeded with 18 Singapore activities + 15 general/city packing items
 │   │
-│   └── WEDDING  /api/wedding
-│       ├── POST /rsvp — self-service guest RSVP (OptionalTokenFilter)
-│       │     Fields: name, email, attending (bool), contactNumber?,
-│       │     dietaryRestrictions?, mealPreference?, additionalGuestContact[]
-│       │     Duplicate email guard (400 on re-submit)
-│       └── DB: tb_wedding_rsvp, tb_wedding_rsvp_guest
+│   ├── WEDDING  /api/wedding
+│   │   ├── POST /rsvp — self-service guest RSVP (OptionalTokenFilter)
+│   │   │     Fields: name, email, attending (bool), contactNumber?,
+│   │   │     dietaryRestrictions?, mealPreference?, additionalGuestContact[]
+│   │   │     Duplicate email guard (400 on re-submit)
+│   │   └── DB: tb_wedding_rsvp, tb_wedding_rsvp_guest
+│   │
+│   └── GARMIN HEALTH  /api/garmin  [JWT AUTH]
+│       ├── GET /today — today's intraday stress/body-battery/heart-rate
+│       │     series + last night's sleep (computed live, not persisted)
+│       ├── GET /summary?days=N — persisted daily summaries for trend
+│       │     charts (default 7, max 90)
+│       ├── Garmin.client.ts — wraps unofficial `garmin-connect` npm lib;
+│       │     session (oauth1/oauth2) cached in tb_garmin_session so the
+│       │     scheduler doesn't log in every poll; stress/body-battery use
+│       │     undocumented `wellness-service` endpoints via the lib's
+│       │     generic .get() escape hatch — can break if Garmin changes them
+│       ├── Garmin.scheduler.ts (node-cron, started in index.ts app.listen)
+│       │     ├── */15 * * * * — poll stress/body-battery/HR → intraday row
+│       │     └── 0 8 * * * (Asia/Singapore) — pull last night's sleep +
+│       │           roll up prior day's intraday polls into a daily summary
+│       ├── High stress = score >75 sustained 2+ consecutive polls (15+ min);
+│       │     surfaced only as highlighted windows on the fndom dashboard —
+│       │     no push notification (see fndom /health, personal/auth-only)
+│       └── DB: tb_garmin_session, tb_garmin_intraday_metric,
+│              tb_garmin_daily_summary
 │
 │
 ├── EXTERNAL SERVICES
 │   ├── MySQL (wuxi DB)
-│   ├── Google Geocoding API (+ Firebase/Firestore)
+│   ├── Nominatim (OpenStreetMap geocoding) — unauthenticated, custom
+│   │     User-Agent; note the MINDMAP previously said "Google Geocoding
+│   │     API" — corrected, the actual implementation has always been
+│   │     Nominatim (see GeocodeService.ts)
+│   ├── Overpass API (OpenStreetMap POI/places lookup) — unauthenticated,
+│   │     custom User-Agent + Accept header (plain fetch without them
+│   │     gets HTTP 406 from overpass-api.de)
+│   ├── Firebase/Firestore
 │   ├── LTA DataMall API (Singapore transport)
 │   ├── Douyin webcast API — SM3/a_bogus auth
 │   ├── Telegram Bot API — polling/webhook (node-telegram-bot-api ^1.1.0,
 │   │     ESM-only, fetch-based client — no longer pulls in `request`)
 │   ├── Discord.js Bot
-│   └── Nodemailer (OTP email delivery)
+│   ├── Nodemailer (OTP email delivery)
+│   └── Garmin Connect (unofficial, via `garmin-connect` npm lib) — GARMIN_EMAIL/
+│         GARMIN_PASSWORD env vars; polled by node-cron (see GARMIN module)
 │
 ├── KEY DB PATTERNS
 │   ├── Soft delete: record_status 'A'/'D'
@@ -199,12 +277,15 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── tb_telegram_media, tb_telegram_link, tb_telegram_link_token
 │   │   ├── tb_tg_image, tb_tg_stats_whitelist
 │   │   ├── tb_baby_feeding_record, tb_baby_diaper_record
-│   │   └── tb_wedding_rsvp, tb_wedding_rsvp_guest
+│   │   ├── tb_wedding_rsvp, tb_wedding_rsvp_guest
+│   │   ├── tb_garmin_session, tb_garmin_intraday_metric, tb_garmin_daily_summary
+│   │   └── tb_place_cache, tb_suggestion_note, tb_travel_note_item
 │   ├── dtos/ — service response shapes (XyzDto suffix)
 │   │   ├── DouyinDto.ts — DouyinRankUser
 │   │   ├── SleepDto.ts — SleepLogDto
 │   │   ├── ScenicDto.ts — ScenicSpotDto, ScenicCheckDto
-│   │   └── TelegramDto.ts — MediaType, MediaDto, LinkTokenDto, MediaUrlDto
+│   │   ├── TelegramDto.ts — MediaType, MediaDto, LinkTokenDto, MediaUrlDto
+│   │   └── GarminDto.ts — TodayDto, DailySummaryDto, SleepDto, HighStressWindow
 │   ├── requests/ — request body shapes (XyzBody suffix)
 │   │   ├── RequestWithUserInfo.ts — Express Request + user field
 │   │   ├── RequestWithLogContext.ts

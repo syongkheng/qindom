@@ -3,7 +3,7 @@
 -- Schema is now managed via Knex migrations in src/migrations/.
 -- Do NOT run this file manually. To apply schema changes, add a migration file
 -- and run: npm run migrate
--- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding
+-- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding | Budget
 -- ══════════════════════════════════════════════════════════════════════════════
 
 USE wuxi;
@@ -631,4 +631,64 @@ CREATE TABLE IF NOT EXISTS tb_telegram_link_token (
   created_dt BIGINT        NOT NULL,
   PRIMARY KEY (token),
   KEY idx_tg_token_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Budget Tracker ───────────────────────────────────────────────────────────
+
+-- A budgeting table (Notion-style: Category/To Buy/Bought/All views). Private to
+-- its owner plus any active collaborators in tb_budget_collaborator.
+DROP TABLE IF EXISTS tb_budget_collaborator;
+DROP TABLE IF EXISTS tb_budget_item;
+DROP TABLE IF EXISTS tb_budget_table;
+
+-- template: 'home_reno' | 'wedding' | 'travel' | 'other' — picked at creation,
+-- fixes which preset category list tb_budget_item.category suggestions come from
+-- (see fndom's BudgetTemplates.ts). Not editable after creation.
+CREATE TABLE IF NOT EXISTS tb_budget_table (
+  id             BIGINT        NOT NULL AUTO_INCREMENT,
+  session_id     VARCHAR(64)   NOT NULL,
+  name           VARCHAR(255)  NOT NULL,
+  template       VARCHAR(32)   NOT NULL DEFAULT 'other',
+  created_dt     BIGINT        NOT NULL,
+  created_by_id  BIGINT        NOT NULL,
+  record_status  CHAR(1)       NOT NULL DEFAULT 'A',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_budget_table_session (session_id),
+  INDEX idx_budget_table_created_by (created_by_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- status: 'to_buy' | 'bought'. Soft-deleted via record_status = 'D' (never hard-deleted).
+-- uuid is the public identifier returned to/accepted from the frontend as
+-- "id" (same pattern as tb_budget_table.session_id) — the auto-increment id
+-- is never exposed in an API response, only used internally for the FK.
+CREATE TABLE IF NOT EXISTS tb_budget_item (
+  id             BIGINT        NOT NULL AUTO_INCREMENT,
+  uuid           VARCHAR(36)   NULL,
+  table_id       BIGINT        NOT NULL,
+  name           VARCHAR(255)  NOT NULL,
+  category       VARCHAR(64)   NULL,
+  status         VARCHAR(16)   NOT NULL DEFAULT 'to_buy',
+  budget_amount  DECIMAL(12,2) NULL,
+  actual_amount  DECIMAL(12,2) NULL,
+  notes          VARCHAR(1024) NULL,
+  sort_order     INT           NOT NULL DEFAULT 0,
+  created_dt     BIGINT        NOT NULL,
+  created_by_id  BIGINT        NOT NULL,
+  record_status  CHAR(1)       NOT NULL DEFAULT 'A',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_budget_item_uuid (uuid),
+  INDEX idx_budget_item_table (table_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per (table, collaborator). Only the table owner can add/remove rows.
+CREATE TABLE IF NOT EXISTS tb_budget_collaborator (
+  id             BIGINT        NOT NULL AUTO_INCREMENT,
+  table_id       BIGINT        NOT NULL,
+  user_id        BIGINT        NOT NULL,
+  added_by_id    BIGINT        NOT NULL,
+  created_dt     BIGINT        NOT NULL,
+  record_status  CHAR(1)       NOT NULL DEFAULT 'A',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_budget_collaborator (table_id, user_id),
+  INDEX idx_budget_collaborator_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

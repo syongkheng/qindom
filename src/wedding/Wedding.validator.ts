@@ -30,26 +30,29 @@ export class WeddingValidator {
     V.optionalString(mealPreference, "mealPreference", loggingEvent);
     V.optionalString(message, "message", loggingEvent);
 
-    // Re-submitting an already-registered email overwrites that person's
+    const trimmedName = (name as string).trim();
+
+    // Re-submitting an already-registered name overwrites that person's
     // previous RSVP (see WeddingService.submitRsvp) rather than being
-    // rejected as a duplicate. Without an email there's nothing to match
-    // against, so this always inserts a fresh row.
-    const existing = email
-      ? (
-          await this.db.find<ITb_wedding_rsvp>(
-            "tb_wedding_rsvp",
-            { email, record_status: "A" },
-            { columns: ["id"] },
-            loggingEvent,
-          )
-        )[0]
-      : undefined;
+    // rejected as a duplicate. Matched case-insensitively and trimmed —
+    // an exact match previously let trivial variations ("YK" vs "yk" vs
+    // "YK " with trailing whitespace) silently create a second row instead
+    // of updating the first.
+    const existing = (
+      await this.db.find<ITb_wedding_rsvp>(
+        "tb_wedding_rsvp",
+        { record_status: "A" },
+        {
+          columns: ["id"],
+          extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmedName]),
+        },
+        loggingEvent,
+      )
+    )[0];
     loggingEvent?.children?.push(
       existing
-        ? `'email' matches existing RSVP #${existing.id} — will update ${LogEmoji.success}`
-        : email
-          ? `'email' is new ${LogEmoji.success}`
-          : `'email' not provided ${LogEmoji.warning}`,
+        ? `'name' matches existing RSVP #${existing.id} — will update ${LogEmoji.success}`
+        : `'name' is new ${LogEmoji.success}`,
     );
 
     const guests: RsvpGuestPayload[] = [];
@@ -60,7 +63,7 @@ export class WeddingValidator {
     loggingEvent?.children?.push(`RSVP payload validated successfully ${LogEmoji.success}`);
 
     return {
-      name,
+      name: trimmedName,
       email: email ?? null,
       contactNumber: contactNumber ?? null,
       attending,
@@ -72,10 +75,38 @@ export class WeddingValidator {
     };
   }
 
-  async findRsvpByEmailQuery(req: Request, loggingEvent?: IRequestLogEvent): Promise<string> {
-    const email = req.query.email;
-    V.requiredEmail(email, "email", loggingEvent);
-    return email as string;
+  async findRsvpByNameQuery(req: Request, loggingEvent?: IRequestLogEvent): Promise<string> {
+    const name = req.query.name;
+    V.requiredString(name, "name", loggingEvent);
+    return name as string;
+  }
+
+  // Accepts either `pin` (the 4-digit reservation pin handed back on
+  // submit) or `name` (checked against both the primary registrant and
+  // guest names) — exactly one of the two, so the caller can't send both
+  // and get an ambiguous lookup.
+  async validateRsvpStatusQuery(
+    req: Request,
+    loggingEvent?: IRequestLogEvent,
+  ): Promise<{ pin?: string; name?: string }> {
+    const { pin, name } = req.query;
+
+    if (pin !== undefined) {
+      if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
+        loggingEvent?.children?.push(`'pin' must be exactly 4 digits ${LogEmoji.error}`);
+        throw new InvalidRequestException("pin", "format");
+      }
+      loggingEvent?.children?.push(`'pin' validated ${LogEmoji.success}`);
+      return { pin };
+    }
+
+    if (name !== undefined) {
+      V.requiredString(name, "name", loggingEvent);
+      return { name: (name as string).trim() };
+    }
+
+    loggingEvent?.children?.push(`Either 'pin' or 'name' must be provided ${LogEmoji.error}`);
+    throw new InvalidRequestException("pin", "mandatory");
   }
 
   private validateAdditionalGuestContact(
@@ -106,7 +137,7 @@ export class WeddingValidator {
       loggingEvent?.children?.push(`${prefix} validated ${LogEmoji.success}`);
 
       out.push({
-        name: name as string,
+        name: (name as string).trim(),
         email: (email as string | undefined) ?? null,
         contactNumber: (contactNumber as string | undefined) ?? null,
         dietaryRestrictions: (dietaryRestrictions as string | undefined) ?? null,
