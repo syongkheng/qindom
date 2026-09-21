@@ -4,17 +4,20 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
 
-export interface BabyApiKeyStatusDto {
+export interface SsApiKeyStatusDto {
   hasKey: boolean;
   name: string | null;
   createdDt: number | null;
   keyHint: string | null;
 }
 
-export class BabyApiKeyService {
+// Generic "ss_" prefixed API key used by every Siri Shortcuts integration
+// (currently Apple Pay transaction logging — previously also Baby Tracker,
+// removed) — one active key per user regardless of which Shortcut uses it.
+export class SsApiKeyService {
   constructor(private readonly db: KnexSqlUtilities) {}
 
-  async getKeyStatus(userId: number, logEvent?: IRequestLogEvent): Promise<BabyApiKeyStatusDto> {
+  async getKeyStatus(userId: number, logEvent?: IRequestLogEvent): Promise<SsApiKeyStatusDto> {
     const existing = await this.db.findOne<ITbSsApiKey>(
       "tb_ss_api_key",
       { user_id: userId, record_status: "A" },
@@ -50,7 +53,7 @@ export class BabyApiKeyService {
         api_key_prefix: "ss",
         api_key_hash: keyHash,
         key_hint: keyHint,
-        name: "Baby Tracker",
+        name: "Siri Shortcuts",
         created_dt: now,
         created_by_id: userId,
         record_status: "A",

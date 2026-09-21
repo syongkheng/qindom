@@ -5,11 +5,11 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { handleException, getUser } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { BabyApiKeyService } from "./BabyApiKey.service.js";
+import { SsApiKeyService } from "./SsApiKey.service.js";
 
-export default function createBabyApiKeyController(db: KnexSqlUtilities) {
+export default function createSsApiKeyController(db: KnexSqlUtilities) {
   const router = Router();
-  const service = new BabyApiKeyService(db);
+  const service = new SsApiKeyService(db);
 
   router.get("/api-key", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
@@ -22,7 +22,7 @@ export default function createBabyApiKeyController(db: KnexSqlUtilities) {
       const result = await service.getKeyStatus(user.id, logEvent);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "BabyApiKeyController.GET /api-key", "Failed to get API key status");
+      return handleException(err, cr, "SsApiKeyController.GET /api-key", "Failed to get API key status");
     }
   });
 
@@ -34,7 +34,7 @@ export default function createBabyApiKeyController(db: KnexSqlUtilities) {
       const result = await service.generateKey(user.id, logContext);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "BabyApiKeyController.POST /api-key", "Failed to generate API key");
+      return handleException(err, cr, "SsApiKeyController.POST /api-key", "Failed to generate API key");
     }
   });
 
@@ -46,7 +46,7 @@ export default function createBabyApiKeyController(db: KnexSqlUtilities) {
       const result = await service.revokeKey(user.id, logContext);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "BabyApiKeyController.DELETE /api-key", "Failed to revoke API key");
+      return handleException(err, cr, "SsApiKeyController.DELETE /api-key", "Failed to revoke API key");
     }
   });
 

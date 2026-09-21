@@ -50,6 +50,24 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── POST /logout — clears jwt_token + csrf_token cookies
 │   │   ├── POST /verification — reads the cookie via MandatoryTokenFilter,
 │   │   │     no body needed (was: client POSTed token from localStorage)
+│   │   ├── GET /admin/request-logs/:requestId (SYSTEM_R5 only) — searches
+│   │   │     qindom's own request-log file (src/utils/logging/RequestLogSearch.ts)
+│   │   │     for the rendered ASCII tree matching a req_xxxxx Request ID.
+│   │   │     Purely read-only: no new table, no redaction changes — the log
+│   │   │     text is already redacted at capture time (see RestRequestLogger/
+│   │   │     ControllerResponse below). Returns 404 if no match, matches
+│   │   │     ordered newest-first, capped at 20.
+│   │   │     Log source: LoggingUtilities.request.flush() writes the same
+│   │   │     rendered lines it console.logs to a dedicated file via
+│   │   │     RequestLogFileWriter.ts — deliberately NOT reading PM2's
+│   │   │     qindom.out.log, since that only exists in prod (PM2 captures
+│   │   │     stdout there) and is empty/absent when running `npm run dev`
+│   │   │     (tsx watch just prints to the terminal, nothing captures it to
+│   │   │     a file). RequestLogFileWriter picks its own directory —
+│   │   │     /home/ubuntu/.pm2/logs/qindom-request-tree.log in prod (NODE_ENV
+│   │   │     "prd"), ./logs/qindom-request-tree.log (gitignored) in dev — so
+│   │   │     search works identically in both environments. 50MB rotation,
+│   │   │     best-effort (try/catch, never blocks the response).
 │   │   ├── bcrypt (10 rounds), SHA-256 OTP hash, 15-min TTL
 │   │   ├── Max 5 OTP attempts (429 lock)
 │   │   ├── Rate limits: 5 reg/hr, 10 login/15min
@@ -151,19 +169,35 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── DB: tb_telegram_link, tb_telegram_media,
 │   │          tb_telegram_link_token
 │   │
-│   ├── SIRI SHORTCUT (BABY TRACKING)  /v1/ss/baby  [API-KEY AUTH]
-│   │   ├── Feeding: POST/GET /baby/feeding — DB: tb_baby_feeding_record
-│   │   ├── Diaper:  POST/GET /baby/diaper  — DB: tb_baby_diaper_record
-│   │   │     (has_stool/has_urine bool + stool_load/urine_load ENUM
-│   │   │      light/medium/heavy; changed_dt = event time, distinct
-│   │   │      from created_dt insert-audit time)
+│   ├── SIRI SHORTCUT (APPLE PAY)  /v1/ss/ap  [API-KEY AUTH]
+│   │   ├── "When Apple Pay is used" automation → POST /ap/transaction
+│   │   │     { amount, merchant, name } — occurred_dt is stamped server-side
+│   │   │     (Date.now()), not trusted from the Shortcut's own date format
+│   │   ├── GET /ap/transaction — ApplePay.v1.controller.ts's own list route
+│   │   │     (the dashboard instead uses /api/applepay below)
+│   │   ├── DB: tb_applepay_transaction — uuid is the public id (see
+│   │   │     ApplePayDashboard.controller.ts), category user-assigned via
+│   │   │     the dashboard, NULL until then
 │   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_ss_api_key lookup
+│   │         (Baby Tracker used to share this same key/route prefix — removed;
+│   │         see SS API KEY MGMT below, which the key itself now belongs to
+│   │         independent of any one feature)
 │   │
-│   ├── BABY API KEY MGMT  /api/baby  [JWT AUTH]
+│   ├── APPLE PAY DASHBOARD  /api/applepay  [JWT AUTH]
+│   │   ├── GET  / — list current user's transactions (ApplePayDashboard.controller.ts)
+│   │   ├── POST /:transactionId/category — set/clear category, matched by uuid
+│   │   └── Both reuse SsApplePayV1Service (siri-shortcut/ApplePay.v1.service.ts)
+│   │
+│   ├── SS API KEY MGMT  /api/ss-key  [JWT AUTH]
 │   │   ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
 │   │   ├── POST   /api-key → revokes existing, generates new ss_ key, returns { key }
 │   │   ├── DELETE /api-key → soft-deletes active key (record_status D)
-│   │   └── DB: tb_ss_api_key (same table as siri-shortcut auth)
+│   │   ├── DB: tb_ss_api_key — one active "ss_" key per user, generic across
+│   │   │     whichever Siri Shortcut integration uses it (currently Apple Pay
+│   │   │     only; previously also Baby Tracker, removed — src/ss-api-key/,
+│   │   │     was src/baby/BabyApiKey.* before the rename)
+│   │   └── Not to be confused with /v1/ss/ap above — that's the Shortcut
+│   │         presenting the key; this is the authenticated dashboard managing it
 │   │
 │   ├── IOT DEVICES  /iot  [API-KEY AUTH]
 │   │   ├── POST /iot — body { deviceId, deviceName?, lat?, lon?, alt?, temp?,
@@ -276,7 +310,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── tb_aa_user, tb_scenic_*, tb_trail_*, tb_travel_*, etc.
 │   │   ├── tb_telegram_media, tb_telegram_link, tb_telegram_link_token
 │   │   ├── tb_tg_image, tb_tg_stats_whitelist
-│   │   ├── tb_baby_feeding_record, tb_baby_diaper_record
+│   │   ├── tb_applepay_transaction, tb_ss_api_key
 │   │   ├── tb_wedding_rsvp, tb_wedding_rsvp_guest
 │   │   ├── tb_garmin_session, tb_garmin_intraday_metric, tb_garmin_daily_summary
 │   │   └── tb_place_cache, tb_suggestion_note, tb_travel_note_item

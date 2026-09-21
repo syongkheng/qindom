@@ -3,7 +3,7 @@
 -- Schema is now managed via Knex migrations in src/migrations/.
 -- Do NOT run this file manually. To apply schema changes, add a migration file
 -- and run: npm run migrate
--- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding | Budget
+-- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding | Budget | Apple Pay
 -- ══════════════════════════════════════════════════════════════════════════════
 
 USE wuxi;
@@ -691,4 +691,32 @@ CREATE TABLE IF NOT EXISTS tb_budget_collaborator (
   PRIMARY KEY (id),
   UNIQUE KEY uq_budget_collaborator (table_id, user_id),
   INDEX idx_budget_collaborator_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Apple Pay Transaction Log ────────────────────────────────────────────────
+
+-- Ingested from the "When Apple Pay is used" Shortcuts automation
+-- (v1/ss/ap/transaction, api-key gated) and browsable/categorisable via the
+-- authenticated dashboard (/api/applepay). uuid is the public identifier
+-- (same pattern as tb_budget_item) — the auto-increment id is never exposed.
+-- category is free text (user-assigned in the dashboard; NULL until then).
+CREATE TABLE IF NOT EXISTS tb_applepay_transaction (
+  id            INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  uuid          VARCHAR(36)   NULL,
+  amount        DECIMAL(10,2) NOT NULL,
+  merchant      VARCHAR(255)  NOT NULL,
+  name          VARCHAR(255)  NOT NULL,
+  category      VARCHAR(64)   NULL,
+  occurred_dt   BIGINT        NOT NULL,
+  record_status VARCHAR(255)  NOT NULL DEFAULT 'A',
+  created_dt    BIGINT        NOT NULL,
+  created_by_id BIGINT        NOT NULL,
+  updated_dt    BIGINT        DEFAULT NULL,
+  updated_by_id BIGINT        DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_applepay_transaction_uuid (uuid),
+  KEY FK_tb_applepay_transaction_created_by (created_by_id),
+  KEY FK_tb_applepay_transaction_updated_by (updated_by_id),
+  CONSTRAINT FK_tb_applepay_transaction_created_by FOREIGN KEY (created_by_id) REFERENCES tb_aa_user (id),
+  CONSTRAINT FK_tb_applepay_transaction_updated_by FOREIGN KEY (updated_by_id) REFERENCES tb_aa_user (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

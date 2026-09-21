@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { IRequestLogContext, IRequestLogEvent } from "../../models/IRequestLogContext.js";
+import { appendRequestLog } from "./RequestLogFileWriter.js";
 
 dotenv.config();
 
@@ -178,8 +179,10 @@ export class LoggingUtilities {
      */
     static flush(context: IRequestLogContext, options?: { skipTelegram?: boolean }): void {
       const duration = Date.now() - context.startTime;
+      const renderedLines = this.render(context, duration, true);
 
-      this.render(context, duration, true).forEach((line: string) => console.log(line));
+      renderedLines.forEach((line: string) => console.log(line));
+      appendRequestLog(renderedLines.join("\n"));
 
       if (LoggingUtilities.logSender && !options?.skipTelegram) {
         LoggingUtilities.logSender(this.render(context, duration, false).join("\n"));

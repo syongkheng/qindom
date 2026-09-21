@@ -1,8 +1,10 @@
 export interface ITB_APPLEPAY_TRANSACTION {
   id?: number;
+  uuid: string;
   amount: number;
   merchant: string;
   name: string;
+  category?: string | null;
   occurred_dt: number;
   record_status?: string;
   created_dt?: number;

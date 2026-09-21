@@ -25,15 +25,15 @@ import createAuthController from "./auth/Auth.controller.js";
 import createPfpController from "./profile/Pfp.controller.js";
 import createItineraryController from "./itinerary/Itinerary.controller.js";
 import createBudgetController from "./budget/Budget.controller.js";
+import createApplePayDashboardController from "./applepay/ApplePayDashboard.controller.js";
 import createFileController from "./file/File.controller.js";
 import createDouyinController from "./douyin/Douyin.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
 import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
 import createTrailController from "./trail/Trail.controller.js";
-import createSsBabyControllerV1 from "./siri-shortcut/Baby.v1.controller.js";
 import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
-import createBabyApiKeyController from "./baby/BabyApiKey.controller.js";
+import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
 import createAigApiKeyController from "./aig/AigApiKey.controller.js";
 import createIotController from "./iot/Iot.controller.js";
 import createIotApiKeyController from "./iot/IotApiKey.controller.js";
@@ -108,6 +108,7 @@ async function startServer() {
     ["/api/pfp",       mw.std,                                    createPfpController(db)],
     ["/api/itinerary", mw.std,                                    createItineraryController(db)],
     ["/api/budget",    mw.auth,                                   createBudgetController(db)],
+    ["/api/applepay",  mw.auth,                                   createApplePayDashboardController(db)],
     ["/api/file",      mw.auth,                                   createFileController(db)],
     ["/api/img",       mw.pub,                                    createTgImageGetController(db)],
     ["/api/img",       [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)],  // no RHF — multipart upload
@@ -115,9 +116,8 @@ async function startServer() {
     ["/api/geocode",   mw.std,                                    createGeocodeController(db)],
     ["/api/trail",     mw.auth,                                   createTrailController(db)],
     ["/v1/llm",        mw.apiKey,                                 createLlmControllerV1(db)],
-    ["/v1/ss",         mw.apiKey,                                 createSsBabyControllerV1(db)],
     ["/v1/ss",         mw.apiKey,                                 createSsApplePayControllerV1(db)],
-    ["/api/baby",      mw.auth,                                   createBabyApiKeyController(db)],
+    ["/api/ss-key",    mw.auth,                                   createSsApiKeyController(db)],
     ["/api/aig",       mw.auth,                                   createAigApiKeyController(db)],
     ["/iot",           mw.apiKey,                                 createIotController(db)],
     ["/api/iot-key",   mw.auth,                                   createIotApiKeyController(db)],

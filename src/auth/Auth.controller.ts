@@ -15,6 +15,7 @@ import { AuthValidator } from "./Auth.validator.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { RequestLogSearch } from "../utils/logging/RequestLogSearch.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { setAuthCookies, clearAuthCookies } from "../utils/AuthCookieUtilities.js";
 
@@ -48,6 +49,25 @@ export default function createAuthController(db: KnexSqlUtilities) {
         return cr.ok(await svc.updateUserRoles(id, roles));
       } catch (err) {
         return handleException(err, cr, "AuthController.POST /admin/users/:id/roles", "Failed to update roles");
+      }
+    },
+  );
+
+  // GET /admin/request-logs/:requestId — search PM2 log files for a request's rendered tree (SYSTEM_R5 only)
+  router.get(
+    "/admin/request-logs/:requestId",
+    [MandatoryTokenFilter, adminLimiter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const cr = new ControllerResponse(req, res);
+      try {
+        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        const requestId = req.params.requestId;
+        if (!/^req_[0-9a-f]{5}$/i.test(requestId)) return cr.result(400, "Bad Request", "Invalid Request ID format");
+        const matches = RequestLogSearch.find(requestId);
+        if (!matches.length) return cr.result(404, "Not Found", "No log entries found for that Request ID");
+        return cr.ok(matches);
+      } catch (err) {
+        return handleException(err, cr, "AuthController.GET /admin/request-logs/:requestId", "Failed to search logs");
       }
     },
   );
@@ -143,8 +163,12 @@ export default function createAuthController(db: KnexSqlUtilities) {
     }
   });
 
-  // POST /logout — clear the auth + CSRF cookies
-  router.post("/logout", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+  // POST /logout — clear the auth + CSRF cookies. Deliberately not gated behind
+  // MandatoryTokenFilter: logout's whole job is to reset a broken/expired
+  // session to a clean slate, so it must succeed even when the token or CSRF
+  // check would otherwise fail — gating it meant the frontend's best-effort
+  // logout-on-401 silently no-op'd exactly when cookies most needed clearing.
+  router.post("/logout", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     clearAuthCookies(res);
     return cr.ok({ loggedOut: true });
