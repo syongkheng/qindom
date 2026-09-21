@@ -35,7 +35,10 @@ export default function createSsApplePayControllerV1(db: KnexSqlUtilities) {
       StructuralValidationUtilities.requiredString(merchant, "merchant", requestBodyStructuralValidationLoggingEvent);
       StructuralValidationUtilities.requiredString(name, "name", requestBodyStructuralValidationLoggingEvent);
 
-      const parsedAmount = Number(amount);
+      // Accept "$12.50" or "12.50" — the Shortcut sometimes includes the
+      // currency symbol depending on how the automation formats it. Only the
+      // parsed numeric value is ever stored; the $ is never persisted.
+      const parsedAmount = Number(String(amount).trim().replace(/^\$/, ""));
       if (Number.isNaN(parsedAmount)) throw new Exceptions.InvalidRequest("amount", "format");
 
       const userId = logContext?.metadata?.userId as number;

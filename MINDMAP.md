@@ -172,7 +172,10 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── SIRI SHORTCUT (APPLE PAY)  /v1/ss/ap  [API-KEY AUTH]
 │   │   ├── "When Apple Pay is used" automation → POST /ap/transaction
 │   │   │     { amount, merchant, name } — occurred_dt is stamped server-side
-│   │   │     (Date.now()), not trusted from the Shortcut's own date format
+│   │   │     (Date.now()), not trusted from the Shortcut's own date format.
+│   │   │     amount accepts "$12.50" or "12.50" (Shortcut sometimes includes
+│   │   │     the currency symbol) — leading "$" stripped before Number()
+│   │   │     parsing; only the numeric value is ever stored, never the symbol.
 │   │   ├── GET /ap/transaction — ApplePay.v1.controller.ts's own list route
 │   │   │     (the dashboard instead uses /api/applepay below)
 │   │   ├── DB: tb_applepay_transaction — uuid is the public id (see
