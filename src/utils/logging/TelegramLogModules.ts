@@ -25,7 +25,6 @@ export const TELEGRAM_LOG_MODULES: TelegramLogModule[] = [
   { key: "llm", label: "LLM Marketplace", prefix: "/v1/llm" },
   { key: "siri-shortcut", label: "Siri Shortcut Ingestion", prefix: "/v1/ss" },
   { key: "ss-api-key", label: "Siri Shortcuts API Keys", prefix: "/api/ss-key" },
-  { key: "aig", label: "AIG API Keys", prefix: "/api/aig" },
   { key: "iot", label: "IoT", prefix: "/iot" },
   { key: "iot", label: "IoT", prefix: "/api/iot-key" },
   { key: "wedding", label: "Wedding", prefix: "/wedding" },

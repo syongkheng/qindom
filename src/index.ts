@@ -33,7 +33,6 @@ import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
 import createTrailController from "./trail/Trail.controller.js";
 import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
-import createAigApiKeyController from "./aig/AigApiKey.controller.js";
 import createIotController from "./iot/Iot.controller.js";
 import createIotApiKeyController from "./iot/IotApiKey.controller.js";
 import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
@@ -116,7 +115,6 @@ async function startServer() {
     ["/v1/llm",        mw.apiKey,                                 createLlmControllerV1(db)],
     ["/v1/ss",         mw.apiKey,                                 createSsApplePayControllerV1(db)],
     ["/api/ss-key",    mw.auth,                                   createSsApiKeyController(db)],
-    ["/api/aig",       mw.auth,                                   createAigApiKeyController(db)],
     ["/iot",           mw.apiKey,                                 createIotController(db)],
     ["/api/iot-key",   mw.auth,                                   createIotApiKeyController(db)],
     ["/wedding",         mw.std,                                  createWeddingController(db)],

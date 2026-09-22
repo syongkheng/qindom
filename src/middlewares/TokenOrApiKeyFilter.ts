@@ -5,7 +5,7 @@ import { RequestApiKeyFilter } from "./ApiKeyFilter.js";
 
 /**
  * Accepts either a JWT (httpOnly cookie) for normal app users,
- * or an x-api-key (e.g. aig_... for AI agents) — whichever is present.
+ * or an x-api-key — whichever is present.
  */
 export const MandatoryTokenOrApiKeyFilter = (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   if (req.headers["x-api-key"]) {

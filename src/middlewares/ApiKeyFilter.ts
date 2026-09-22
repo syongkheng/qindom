@@ -8,7 +8,6 @@ import db from "../config/db/mysql.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
-import { ITbAigApiKey } from "../models/databases/tb_aig_api_key.js";
 import { ITbIotApiKey } from "../models/databases/tb_iot_api_key.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
@@ -62,44 +61,6 @@ export const RequestApiKeyFilter = async function (req: RequestWithUserInfo, res
       };
     }
 
-    if (apiKeyPrefix === "aig") {
-      const validKeys = await db.findOne<ITbAigApiKey>(
-        "tb_aig_api_keys",
-        { api_key_prefix: apiKeyPrefix, api_key_hash: apiKeyHash, record_status: "A" },
-        ["*"],
-        apiKeyValidationLoggingEvent,
-      );
-      if (!validKeys) {
-        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
-        throw new Exceptions.InvalidRequest("Invalid API key");
-      }
-      apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
-      const user = await db.findOne<ITB_AA_USER>(
-        "tb_aa_user",
-        { id: validKeys.user_id },
-        ["id", "username"],
-        apiKeyValidationLoggingEvent,
-      );
-      if (!user) {
-        apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.error} `);
-        throw new Exceptions.InvalidRequest("Invalid API key");
-      }
-      apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.success} `);
-      logContext.metadata = {
-        ...logContext.metadata,
-        username: user.username,
-        userId: validKeys.user_id,
-      };
-      req.user = {
-        id: validKeys.user_id,
-        username: user.username!,
-        system: "aig",
-        roles: [],
-        lastLoggedInDt: Date.now(),
-      };
-      req.isPublicKey = true;
-    }
-
     if (apiKeyPrefix === "iot") {
       const validKeys = await db.findOne<ITbIotApiKey>(
         "tb_iot_api_key",
@@ -119,7 +80,7 @@ export const RequestApiKeyFilter = async function (req: RequestWithUserInfo, res
       };
     }
 
-    if (!["ss", "aig", "iot"].includes(apiKeyPrefix)) {
+    if (!["ss", "iot"].includes(apiKeyPrefix)) {
       apiKeyValidationLoggingEvent?.children?.push(`Key Prefix: ${LogEmoji.error} unrecognised '${apiKeyPrefix}'`);
       throw new Exceptions.InvalidRequest("Invalid API key");
     }
