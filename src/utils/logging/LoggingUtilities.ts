@@ -51,6 +51,15 @@ export class LoggingUtilities {
     return value.length >= width ? value : value.padEnd(width);
   }
 
+  // Console/Telegram are plain text — an emoji is the only "color" available
+  // there, unlike the Log Searcher frontend which renders its own icon.
+  private static statusIcon(code?: number): string {
+    if (code === undefined) return "";
+    if (code >= 500) return "❌";
+    if (code >= 400) return "⚠️";
+    return "✅";
+  }
+
   // =========================================================
   // Request Tree Logger
   // =========================================================
@@ -158,7 +167,7 @@ export class LoggingUtilities {
         lines.push("");
       }
 
-      lines.push(`${LoggingUtilities.END} RESPONSE ${context.statusCode}`);
+      lines.push(`${LoggingUtilities.END} RESPONSE ${context.statusCode} ${LoggingUtilities.statusIcon(context.statusCode)}`);
 
       if (includeBodies && context.response !== undefined) {
         const respLines = JSON.stringify(context.response, null, 2).split("\n");
