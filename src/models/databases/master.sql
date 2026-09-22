@@ -720,3 +720,26 @@ CREATE TABLE IF NOT EXISTS tb_applepay_transaction (
   CONSTRAINT FK_tb_applepay_transaction_created_by FOREIGN KEY (created_by_id) REFERENCES tb_aa_user (id),
   CONSTRAINT FK_tb_applepay_transaction_updated_by FOREIGN KEY (updated_by_id) REFERENCES tb_aa_user (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Telegram Log Subscriptions ───────────────────────────────────────────────
+-- Per-(chat, module) on/off toggle for whether that module's request logs get
+-- pushed to the Telegram chat (see src/utils/logging/TelegramLogModules.ts for
+-- the module registry and src/middlewares/RestRequestLogger.ts for the
+-- enforcement point). A pair with no row (or no active row) defaults to
+-- enabled. Errors (4xx/5xx) always alert regardless of this setting — this
+-- only gates routine/successful traffic. chat_id is kept as its own column
+-- (rather than a single global on/off) so more than one subscribed chat can
+-- be supported later without a schema change, even though only one chat
+-- (tb_tg_stats_whitelist's first active telegram_chat_id) exists today.
+CREATE TABLE IF NOT EXISTS tb_telegram_log_subscription (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  chat_id       BIGINT       NOT NULL,
+  module_key    VARCHAR(64)  NOT NULL,
+  is_enabled    TINYINT(1)   NOT NULL DEFAULT 1,
+  updated_dt    BIGINT       DEFAULT NULL,
+  updated_by_id BIGINT       DEFAULT NULL,
+  created_dt    BIGINT       NOT NULL,
+  record_status VARCHAR(1)   NOT NULL DEFAULT 'A',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_telegram_log_sub_chat_module (chat_id, module_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

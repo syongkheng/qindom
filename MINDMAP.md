@@ -27,9 +27,19 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── globalLimiter (100 req/min per IP)
 │   ├── express.json (5MB)
 │   ├── RestRequestLogger (logs all requests; redacts password/blob/token/email;
-│   │     console+Telegram by default — TELEGRAM_SILENT_ROUTES list in
-│   │     RestRequestLogger.ts skips the Telegram send only for noisy routes
-│   │     on success, e.g. POST /iot; still logs to console, still alerts on 4xx/5xx)
+│   │     console+Telegram by default — TWO independent mechanisms can skip the
+│   │     Telegram send only (console/request-log file always unaffected),
+│   │     both only ever suppress non-error traffic (4xx/5xx always alert):
+│   │       1. TELEGRAM_SILENT_ROUTES — hardcoded {method,path} exact-match
+│   │          list in RestRequestLogger.ts (e.g. POST /iot), edited in code.
+│   │       2. Per-module DB toggle — TelegramLogSubscriptionService checks
+│   │          (chat_id, module_key) in tb_telegram_log_subscription; module_key
+│   │          resolved via TelegramLogModules.ts's resolveModuleKey() (prefix
+│   │          match against the same route table as index.ts's mounts).
+│   │          Admin-editable via fndom's /admin/telegram-log-subscriptions
+│   │          (GET/POST /api/auth/admin/telegram-log-subscriptions*, SYSTEM_R5
+│   │          only). 30s in-memory cache on both the chat-id lookup
+│   │          (TgImageService.getStorageChatId) and the enabled-check.
 │   ├── RequestHeaderFilter (POST must have Content-Type: application/json)
 │   ├── cookieParser (reads jwt_token / csrf_token cookies into req.cookies)
 │   ├── MandatoryTokenFilter (JWT cookie required → 401 if missing;
