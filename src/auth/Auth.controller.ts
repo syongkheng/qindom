@@ -18,7 +18,6 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { RequestLogSearch } from "../utils/logging/RequestLogSearch.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { TELEGRAM_LOG_MODULE_KEYS } from "../utils/logging/TelegramLogModules.js";
-import { TgImageService } from "../tgimage/TgImage.service.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { setAuthCookies, clearAuthCookies } from "../utils/AuthCookieUtilities.js";
 
@@ -26,7 +25,6 @@ export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();
   const svc = new AuthService(db);
   const telegramLogSubscriptionSvc = new TelegramLogSubscriptionService(db);
-  const tgImageSvc = new TgImageService(db);
 
   // GET /admin/users — list all users (SYSTEM_R5 only)
   router.get("/admin/users", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
@@ -58,6 +56,30 @@ export default function createAuthController(db: KnexSqlUtilities) {
     },
   );
 
+  // GET /admin/recent-request-logs — newest N requests overall, for the dashboard's
+  // compact log widget (SYSTEM_R5 only). Registered before /admin/request-logs/:requestId
+  // as a distinct path segment so there's no route-matching ambiguity between them.
+  router.get(
+    "/admin/recent-request-logs",
+    [MandatoryTokenFilter, adminLimiter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const cr = new ControllerResponse(req, res);
+      try {
+        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        const limit = Math.min(Math.max(Number(req.query.limit) || 3, 1), 20);
+        const matches = RequestLogSearch.recent(limit).map(({ timestamp, method, path, statusCode }) => ({
+          timestamp,
+          method,
+          path,
+          statusCode,
+        }));
+        return cr.ok(matches);
+      } catch (err) {
+        return handleException(err, cr, "AuthController.GET /admin/recent-request-logs", "Failed to load recent logs");
+      }
+    },
+  );
+
   // GET /admin/request-logs/:requestId — search PM2 log files for a request's rendered tree (SYSTEM_R5 only)
   router.get(
     "/admin/request-logs/:requestId",
@@ -77,8 +99,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
     },
   );
 
-  // GET /admin/telegram-log-subscriptions — list per-module Telegram alert toggles
-  // for the currently subscribed chat (SYSTEM_R5 only)
+  // GET /admin/telegram-log-subscriptions — full chat × module matrix
+  // (every whitelisted admin who has an active telegram_chat_id, not just one) (SYSTEM_R5 only)
   router.get(
     "/admin/telegram-log-subscriptions",
     [MandatoryTokenFilter, adminLimiter],
@@ -86,9 +108,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
       const cr = new ControllerResponse(req, res);
       try {
         if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
-        const chatId = await tgImageSvc.getStorageChatId();
-        if (!chatId) return cr.result(404, "Not Found", "No Telegram chat is currently subscribed");
-        return cr.ok(await telegramLogSubscriptionSvc.listForChat(chatId));
+        return cr.ok(await telegramLogSubscriptionSvc.listMatrix());
       } catch (err) {
         return handleException(
           err,
@@ -100,10 +120,10 @@ export default function createAuthController(db: KnexSqlUtilities) {
     },
   );
 
-  // POST /admin/telegram-log-subscriptions/:moduleKey — toggle a module's Telegram
-  // alerts on/off for the currently subscribed chat (SYSTEM_R5 only)
+  // POST /admin/telegram-log-subscriptions/:chatId/:moduleKey — toggle one chat's
+  // alerts for one module on/off (SYSTEM_R5 only)
   router.post(
-    "/admin/telegram-log-subscriptions/:moduleKey",
+    "/admin/telegram-log-subscriptions/:chatId/:moduleKey",
     [MandatoryTokenFilter, adminLimiter],
     async (req: RequestWithUserInfo, res: Response) => {
       const cr = new ControllerResponse(req, res);
@@ -113,17 +133,17 @@ export default function createAuthController(db: KnexSqlUtilities) {
         if (!TELEGRAM_LOG_MODULE_KEYS.some((m) => m.key === moduleKey)) {
           return cr.result(400, "Bad Request", "Unknown module key");
         }
+        const chatId = Number(req.params.chatId);
+        if (!Number.isInteger(chatId) || chatId <= 0) return cr.result(400, "Bad Request", "Invalid chat ID");
         const { enabled } = req.body;
         if (typeof enabled !== "boolean") throw new Exceptions.InvalidRequest("enabled");
-        const chatId = await tgImageSvc.getStorageChatId();
-        if (!chatId) return cr.result(404, "Not Found", "No Telegram chat is currently subscribed");
         await telegramLogSubscriptionSvc.setEnabled(chatId, moduleKey, enabled);
-        return cr.ok(await telegramLogSubscriptionSvc.listForChat(chatId));
+        return cr.ok(await telegramLogSubscriptionSvc.listMatrix());
       } catch (err) {
         return handleException(
           err,
           cr,
-          "AuthController.POST /admin/telegram-log-subscriptions/:moduleKey",
+          "AuthController.POST /admin/telegram-log-subscriptions/:chatId/:moduleKey",
           "Failed to update Telegram log subscription",
         );
       }

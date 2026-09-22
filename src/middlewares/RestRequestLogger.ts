@@ -2,11 +2,9 @@ import crypto from "crypto";
 import { NextFunction, Request, Response } from "express";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import db from "../config/db/mysql.js";
-import { TgImageService } from "../tgimage/TgImage.service.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { resolveModuleKey } from "../utils/logging/TelegramLogModules.js";
 
-const tgImageService = new TgImageService(db);
 const telegramLogSubscriptionService = new TelegramLogSubscriptionService(db);
 
 // Routes that fire frequently and add noise to Telegram — still logged to console/DB,
@@ -22,31 +20,30 @@ function isTelegramSilentRoute(req: Request, statusCode: number): boolean {
   return TELEGRAM_SILENT_ROUTES.some((r) => r.method === req.method && r.path === path);
 }
 
-// getStorageChatId() is a DB query — cached alongside the subscription cache
-// (TelegramLogSubscriptionService) so it isn't re-queried on every request.
-const CHAT_ID_CACHE_TTL_MS = 30_000;
-let cachedChatId: { value: number | null; expiresAt: number } | null = null;
+// Resolves which subscribed chats (see tb_tg_stats_whitelist via
+// TelegramLogSubscriptionService.listSubscribedChats) should receive this
+// request's Telegram alert. Errors and unmapped routes always broadcast to
+// every subscribed chat — a chat's per-module toggle only ever suppresses its
+// own view of routine/successful traffic, mirroring the hardcoded silent-route
+// override above (best-effort: never blocks flushing on a lookup failure).
+async function resolveTelegramTargets(req: Request, statusCode: number): Promise<number[]> {
+  if (isTelegramSilentRoute(req, statusCode)) return [];
 
-async function getCachedStorageChatId(): Promise<number | null> {
-  if (cachedChatId && cachedChatId.expiresAt > Date.now()) return cachedChatId.value;
-  const value = await tgImageService.getStorageChatId();
-  cachedChatId = { value, expiresAt: Date.now() + CHAT_ID_CACHE_TTL_MS };
-  return value;
-}
-
-// Module-disabled check only ever suppresses non-error traffic — same
-// "errors always alert" override the hardcoded silent-route list already has.
-async function isModuleDisabled(req: Request, statusCode: number): Promise<boolean> {
-  if (statusCode >= 400) return false;
-  const moduleKey = resolveModuleKey(req.originalUrl.split("?")[0]);
-  if (!moduleKey) return false;
   try {
-    const chatId = await getCachedStorageChatId();
-    if (!chatId) return false;
-    return !(await telegramLogSubscriptionService.isEnabled(chatId, moduleKey));
+    const allChatIds = await telegramLogSubscriptionService.listSubscribedChatIdsCached();
+    if (!allChatIds.length) return [];
+
+    const isError = statusCode >= 400;
+    const moduleKey = resolveModuleKey(req.originalUrl.split("?")[0]);
+    if (isError || !moduleKey) return allChatIds;
+
+    const enabled: number[] = [];
+    for (const chatId of allChatIds) {
+      if (await telegramLogSubscriptionService.isEnabled(chatId, moduleKey)) enabled.push(chatId);
+    }
+    return enabled;
   } catch {
-    // best-effort — never block flushing on a subscription-lookup failure
-    return false;
+    return [];
   }
 }
 
@@ -76,10 +73,9 @@ export const RestRequestLogger = function (req: Request, res: Response, next: Ne
   res.on("finish", async () => {
     req.logContext.statusCode = res.statusCode;
 
-    const skipTelegram =
-      isTelegramSilentRoute(req, res.statusCode) || (await isModuleDisabled(req, res.statusCode));
+    const telegramChatIds = await resolveTelegramTargets(req, res.statusCode);
 
-    LoggingUtilities.request.flush(req.logContext, { skipTelegram });
+    LoggingUtilities.request.flush(req.logContext, { telegramChatIds });
   });
 
   next();

@@ -32,14 +32,25 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     both only ever suppress non-error traffic (4xx/5xx always alert):
 │   │       1. TELEGRAM_SILENT_ROUTES — hardcoded {method,path} exact-match
 │   │          list in RestRequestLogger.ts (e.g. POST /iot), edited in code.
-│   │       2. Per-module DB toggle — TelegramLogSubscriptionService checks
-│   │          (chat_id, module_key) in tb_telegram_log_subscription; module_key
-│   │          resolved via TelegramLogModules.ts's resolveModuleKey() (prefix
-│   │          match against the same route table as index.ts's mounts).
-│   │          Admin-editable via fndom's /admin/telegram-log-subscriptions
-│   │          (GET/POST /api/auth/admin/telegram-log-subscriptions*, SYSTEM_R5
-│   │          only). 30s in-memory cache on both the chat-id lookup
-│   │          (TgImageService.getStorageChatId) and the enabled-check.
+│   │       2. Per-(chat,module) DB toggle — fans out to EVERY subscribed chat
+│   │          (every tb_tg_stats_whitelist row with an active telegram_chat_id —
+│   │          each whitelisted admin captures their own chat_id the moment they
+│   │          DM the bot /start, see TgImage.bot.ts; NOT just "the first" one —
+│   │          that single-pick behavior, TgImageService.getStorageChatId(),
+│   │          stays but is now only used by the unrelated CDN-upload flow).
+│   │          TelegramLogSubscriptionService checks (chat_id, module_key) in
+│   │          tb_telegram_log_subscription per chat; module_key resolved via
+│   │          TelegramLogModules.ts's resolveModuleKey() (prefix match against
+│   │          the same route table as index.ts's mounts). A chat's own toggle
+│   │          only ever suppresses that chat's view of non-error traffic for
+│   │          that module — errors/unmapped routes always broadcast to every
+│   │          subscribed chat. LoggingUtilities.logSender is (text, chatId) =>
+│   │          void now (was a single-chat closure) — flush() calls it once per
+│   │          resolved target chat id. Admin-editable via fndom's matrix page
+│   │          at /admin/telegram-log-subscriptions (GET returns the full
+│   │          chat×module matrix; POST /:chatId/:moduleKey toggles one cell,
+│   │          SYSTEM_R5 only). 30s in-memory cache on both the subscribed-chats
+│   │          list and each (chat,module) enabled-check.
 │   ├── RequestHeaderFilter (POST must have Content-Type: application/json)
 │   ├── cookieParser (reads jwt_token / csrf_token cookies into req.cookies)
 │   ├── MandatoryTokenFilter (JWT cookie required → 401 if missing;
@@ -60,6 +71,11 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── POST /logout — clears jwt_token + csrf_token cookies
 │   │   ├── POST /verification — reads the cookie via MandatoryTokenFilter,
 │   │   │     no body needed (was: client POSTed token from localStorage)
+│   │   ├── GET /admin/recent-request-logs?limit=3 (SYSTEM_R5 only) — newest N
+│   │   │     requests overall (RequestLogSearch.recent()), lightweight DTO
+│   │   │     (timestamp/method/path/statusCode only, no raw tree) for the
+│   │   │     dashboard's compact LogSearchCard widget. Registered before the
+│   │   │     :requestId route below (distinct path segment, no ambiguity).
 │   │   ├── GET /admin/request-logs/:requestId (SYSTEM_R5 only) — searches
 │   │   │     qindom's own request-log file (src/utils/logging/RequestLogSearch.ts)
 │   │   │     for the rendered ASCII tree matching a req_xxxxx Request ID.

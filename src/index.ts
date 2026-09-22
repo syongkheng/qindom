@@ -138,7 +138,7 @@ async function startServer() {
     // producing periodic "EFATAL: fetch failed" polling-error log noise.
     // The Telegram-based error-log sender doesn't depend on the bot/polling
     // at all, so it still starts on its own here.
-    setupTelegramLogSender(db).catch((err) => LoggingUtilities.service.error("TgImageLogSender", err?.message ?? String(err)));
+    setupTelegramLogSender();
     startGarminScheduler(db);
   });
 }

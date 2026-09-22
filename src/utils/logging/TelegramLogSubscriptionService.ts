@@ -3,18 +3,32 @@ import { ITbTelegramLogSubscription } from "../../models/databases/tb_telegram_l
 import { TELEGRAM_LOG_MODULE_KEYS } from "./TelegramLogModules.js";
 
 const TABLE = "tb_telegram_log_subscription";
+const WHITELIST_TABLE = "tb_tg_stats_whitelist";
 
-export interface TelegramLogSubscriptionRow {
-  key: string;
+export interface TelegramSubscribedChat {
+  chatId: number;
   label: string;
-  enabled: boolean;
 }
 
-// Short-lived in-memory cache so the per-request enforcement check
+export interface TelegramLogMatrixRow {
+  chatId: number;
+  label: string;
+  enabled: Record<string, boolean>;
+}
+
+export interface TelegramLogMatrix {
+  modules: { key: string; label: string }[];
+  chats: TelegramLogMatrixRow[];
+}
+
+// Short-lived in-memory caches so the per-request enforcement check
 // (RestRequestLogger's res.on("finish", ...)) doesn't hit the DB on every
-// single request — invalidated immediately on any toggle.
+// single request — invalidated immediately on any toggle (enabledCache only;
+// the subscribed-chats list simply expires and re-queries, since new chats
+// only ever appear via a whitelisted admin DMing the bot, not urgently live).
 const CACHE_TTL_MS = 30_000;
 const enabledCache = new Map<string, { value: boolean; expiresAt: number }>();
+let subscribedChatsCache: { value: number[]; expiresAt: number } | null = null;
 
 function cacheKey(chatId: number, moduleKey: string): string {
   return `${chatId}:${moduleKey}`;
@@ -23,18 +37,48 @@ function cacheKey(chatId: number, moduleKey: string): string {
 export class TelegramLogSubscriptionService {
   constructor(private db: KnexSqlUtilities) {}
 
-  async listForChat(chatId: number): Promise<TelegramLogSubscriptionRow[]> {
-    const rows = await this.db.raw<ITbTelegramLogSubscription[]>(
-      `SELECT module_key, is_enabled FROM ${TABLE} WHERE chat_id = ? AND record_status = 'A'`,
-      [chatId],
+  // Every whitelisted admin who has DM'd the bot (and so has a captured
+  // telegram_chat_id) — NOT just the first one, unlike TgImageService's
+  // getStorageChatId() (which stays as-is for its own unrelated CDN-upload use).
+  async listSubscribedChats(): Promise<TelegramSubscribedChat[]> {
+    const rows = await this.db.raw<{ telegram_user_id: number; telegram_chat_id: number }[]>(
+      `SELECT telegram_user_id, telegram_chat_id FROM ${WHITELIST_TABLE}
+       WHERE record_status = 'A' AND telegram_chat_id IS NOT NULL
+       ORDER BY added_dt ASC`,
     );
-    const overrides = new Map(rows.map((r) => [r.module_key, !!r.is_enabled]));
+    return rows.map((r) => ({ chatId: r.telegram_chat_id, label: `User ${r.telegram_user_id}` }));
+  }
 
-    return TELEGRAM_LOG_MODULE_KEYS.map(({ key, label }) => ({
-      key,
-      label,
-      enabled: overrides.get(key) ?? true,
-    }));
+  async listSubscribedChatIdsCached(): Promise<number[]> {
+    if (subscribedChatsCache && subscribedChatsCache.expiresAt > Date.now()) return subscribedChatsCache.value;
+    const chats = await this.listSubscribedChats();
+    const value = chats.map((c) => c.chatId);
+    subscribedChatsCache = { value, expiresAt: Date.now() + CACHE_TTL_MS };
+    return value;
+  }
+
+  async listMatrix(): Promise<TelegramLogMatrix> {
+    const chats = await this.listSubscribedChats();
+    const rows = await this.db.raw<ITbTelegramLogSubscription[]>(
+      `SELECT chat_id, module_key, is_enabled FROM ${TABLE} WHERE record_status = 'A'`,
+    );
+    const overridesByChat = new Map<number, Map<string, boolean>>();
+    for (const row of rows) {
+      if (!overridesByChat.has(row.chat_id)) overridesByChat.set(row.chat_id, new Map());
+      overridesByChat.get(row.chat_id)!.set(row.module_key, !!row.is_enabled);
+    }
+
+    return {
+      modules: TELEGRAM_LOG_MODULE_KEYS,
+      chats: chats.map(({ chatId, label }) => {
+        const overrides = overridesByChat.get(chatId);
+        const enabled: Record<string, boolean> = {};
+        for (const { key } of TELEGRAM_LOG_MODULE_KEYS) {
+          enabled[key] = overrides?.get(key) ?? true;
+        }
+        return { chatId, label, enabled };
+      }),
+    };
   }
 
   async setEnabled(chatId: number, moduleKey: string, enabled: boolean): Promise<void> {

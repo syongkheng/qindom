@@ -86,6 +86,35 @@ function findInFile(filePath: string, requestId: string, remaining: number): IRe
   return matches;
 }
 
+function collectRecentInFile(filePath: string, remaining: number): IRequestLogMatch[] {
+  const content = fs.readFileSync(filePath, "utf-8");
+  const lines = content.split("\n");
+
+  const headerIndices: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (HEADER_RE.test(lines[i])) headerIndices.push(i);
+  }
+
+  const matches: IRequestLogMatch[] = [];
+
+  // Newest header first within the file.
+  for (const headerIndex of headerIndices.reverse()) {
+    if (matches.length >= remaining) break;
+
+    let endIndex = lines.length;
+    for (let i = headerIndex + 1; i < lines.length; i++) {
+      if (HEADER_RE.test(lines[i])) {
+        endIndex = i;
+        break;
+      }
+    }
+
+    matches.push(parseMatch(lines, headerIndex, endIndex));
+  }
+
+  return matches;
+}
+
 export class RequestLogSearch {
   static find(requestId: string): IRequestLogMatch[] {
     const matches: IRequestLogMatch[] = [];
@@ -93,6 +122,20 @@ export class RequestLogSearch {
     for (const file of listLogFiles()) {
       if (matches.length >= MAX_MATCHES) break;
       matches.push(...findInFile(file, requestId, MAX_MATCHES - matches.length));
+    }
+
+    return matches;
+  }
+
+  // Newest requests overall, regardless of Request ID — used by the dashboard's
+  // compact "last N logs" widget.
+  static recent(limit: number): IRequestLogMatch[] {
+    const capped = Math.min(limit, MAX_MATCHES);
+    const matches: IRequestLogMatch[] = [];
+
+    for (const file of listLogFiles()) {
+      if (matches.length >= capped) break;
+      matches.push(...collectRecentInFile(file, capped - matches.length));
     }
 
     return matches;

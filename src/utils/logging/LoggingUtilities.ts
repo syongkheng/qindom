@@ -11,9 +11,9 @@ export class LoggingUtilities {
   private static readonly BRANCH = "├─";
   private static readonly END = "└─";
 
-  private static logSender: ((text: string) => void) | null = null;
+  private static logSender: ((text: string, chatId: number) => void) | null = null;
 
-  static setLogSender(fn: (text: string) => void): void {
+  static setLogSender(fn: (text: string, chatId: number) => void): void {
     LoggingUtilities.logSender = fn;
   }
 
@@ -184,17 +184,23 @@ export class LoggingUtilities {
 
     /**
      * Flush request tree.
-     * `skipTelegram` suppresses the Telegram send only — console output is unaffected.
+     * `telegramChatIds` — one Telegram send per chat id in this list (each chat
+     * may have muted this request's module independently); console/file output
+     * is always written regardless of this list being empty.
      */
-    static flush(context: IRequestLogContext, options?: { skipTelegram?: boolean }): void {
+    static flush(context: IRequestLogContext, options?: { telegramChatIds?: number[] }): void {
       const duration = Date.now() - context.startTime;
       const renderedLines = this.render(context, duration, true);
 
       renderedLines.forEach((line: string) => console.log(line));
       appendRequestLog(renderedLines.join("\n"));
 
-      if (LoggingUtilities.logSender && !options?.skipTelegram) {
-        LoggingUtilities.logSender(this.render(context, duration, false).join("\n"));
+      const chatIds = options?.telegramChatIds;
+      if (LoggingUtilities.logSender && chatIds?.length) {
+        const bodyFreeText = this.render(context, duration, false).join("\n");
+        for (const chatId of chatIds) {
+          LoggingUtilities.logSender(bodyFreeText, chatId);
+        }
       }
     }
   };
