@@ -48,9 +48,6 @@ import { startGarminScheduler } from "./garmin/Garmin.scheduler.js";
 // Suggestion
 import createSuggestionController from "./suggestion/Suggestion.controller.js";
 
-// Places
-import createPlacesController from "./places/Places.controller.js";
-
 async function startServer() {
   const app: Application = express();
   const port: number = Number(process.env.PORT) || 3000;
@@ -120,7 +117,6 @@ async function startServer() {
     ["/wedding",         mw.std,                                  createWeddingController(db)],
     ["/api/suggestion",  mw.std,                                  createSuggestionController(db)],
     ["/api/garmin",      mw.auth,                                 createGarminController(db)],
-    ["/api/places",      mw.std,                                  createPlacesController(db)],
   ];
   routes.forEach(([path, mws, router]) => app.use(path, mws, router));
 

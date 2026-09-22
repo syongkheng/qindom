@@ -556,23 +556,11 @@ CREATE TABLE IF NOT EXISTS tb_wedding_rsvp_guest (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Suggestion Pool ─────────────────────────────────────────────────────────
--- Admin-curated activity and packing suggestions shown in the travel planner.
+-- Admin-curated packing suggestions shown in the travel planner. (The
+-- activity/place suggestion tables were dropped with the Trip
+-- Recommendation feature — see migrations 20260922000300/000301.)
 
 DROP TABLE IF EXISTS tb_suggestion_packing;
-DROP TABLE IF EXISTS tb_suggestion_activity;
-
-CREATE TABLE IF NOT EXISTS tb_suggestion_activity (
-  id              BIGINT        NOT NULL AUTO_INCREMENT,
-  destination_tag VARCHAR(255)  NOT NULL,
-  title           VARCHAR(255)  NOT NULL,
-  category        VARCHAR(64)   NULL,
-  estimated_hours DECIMAL(4,1)  NULL,
-  description     TEXT          NULL,
-  record_status   CHAR(1)       NOT NULL DEFAULT 'A',
-  created_dt      BIGINT        NOT NULL,
-  PRIMARY KEY (id),
-  INDEX idx_suggestion_activity_dest (destination_tag)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tb_suggestion_packing (
   id            BIGINT       NOT NULL AUTO_INCREMENT,
