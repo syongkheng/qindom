@@ -51,7 +51,6 @@ Set `NODE_ENV=prd` to load `.env` (production). Any other value loads `.env.dev`
 | `/api/itinerary` | Itinerary | RestRequestLogger, RequestHeaderFilter |
 | `/api/file` | File | RestRequestLogger, RequestHeaderFilter |
 | `/api/feature` | Feature | RestRequestLogger, RequestHeaderFilter, featureLimiter |
-| `/api/douyin` | Douyin | RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter, douyinLimiter |
 | `/api/meal` | Meal | RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter |
 | `/api/geocode` | Geocode | RestRequestLogger, RequestHeaderFilter |
 | `/api/expense` | Expense | RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter |
@@ -69,7 +68,6 @@ Set `NODE_ENV=prd` to load `.env` (production). Any other value loads `.env.dev`
 | `resendVerifyLimiter` | 15 min | 3 | `POST /api/auth/resend-verify` |
 | `identityLimiter` | 15 min | 20 | `POST /api/fnd/identity` |
 | `apptLimiter` | 1 hour | 5 | `POST /api/fnd/appt` |
-| `douyinLimiter` | 1 min | 15 | `GET /api/douyin/live`, `GET /api/douyin/ranklist` |
 | `featureLimiter` | 1 min | 60 | `GET /api/feature`, `POST /api/feature/:key/toggle` |
 
 ---
@@ -114,7 +112,6 @@ Error responses use non-200 codes and a descriptive status string or error objec
 - [Itinerary / Travel Planner](src/itinerary/README.md)
 - [File Upload](src/file/README.md)
 - [Feature Flags](src/feature/README.md)
-- [Douyin](src/douyin/README.md)
 - [Meal Tracker](src/meal/README.md)
 - [Geocode](src/geocode/README.md)
 - [Expense Tracker](src/expense/README.md)

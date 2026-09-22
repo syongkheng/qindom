@@ -20,7 +20,6 @@ export const TELEGRAM_LOG_MODULES: TelegramLogModule[] = [
   { key: "applepay", label: "Apple Pay", prefix: "/api/applepay" },
   { key: "file", label: "File Upload", prefix: "/api/file" },
   { key: "imghost", label: "Image Hosting (CDN)", prefix: "/api/img" },
-  { key: "douyin", label: "Douyin Live", prefix: "/api/douyin" },
   { key: "geocode", label: "Geocode", prefix: "/api/geocode" },
   { key: "trail", label: "Trail", prefix: "/api/trail" },
   { key: "llm", label: "LLM Marketplace", prefix: "/v1/llm" },

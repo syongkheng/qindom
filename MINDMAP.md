@@ -181,12 +181,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │       │   posts results to PRD #secretary channel
 │   │       └── Discord user ↔ governor ID via Firestore
 │   │
-│   ├── DOUYIN  /api/douyin  [AUTH REQUIRED]
-│   │   ├── Live stream status check
-│   │   ├── Supporter top-up rankings
-│   │   ├── Custom SM3 hash + a_bogus token (Evil0ctal port)
-│   │   └── Rate limit: 15 req/min
-│   │
 │   ├── TELEGRAM STORAGE  /api/telegram  [AUTH REQUIRED]
 │   │   ├── Link qindom account to Telegram (ephemeral 10-min token)
 │   │   ├── Upload / list / delete / expire media via bot
@@ -317,7 +311,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     gets HTTP 406 from overpass-api.de)
 │   ├── Firebase/Firestore
 │   ├── LTA DataMall API (Singapore transport)
-│   ├── Douyin webcast API — SM3/a_bogus auth
 │   ├── Telegram Bot API — polling/webhook (node-telegram-bot-api ^1.1.0,
 │   │     ESM-only, fetch-based client — no longer pulls in `request`)
 │   ├── Discord.js Bot
@@ -344,7 +337,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── tb_garmin_session, tb_garmin_intraday_metric, tb_garmin_daily_summary
 │   │   └── tb_place_cache, tb_suggestion_note, tb_travel_note_item
 │   ├── dtos/ — service response shapes (XyzDto suffix)
-│   │   ├── DouyinDto.ts — DouyinRankUser
 │   │   ├── SleepDto.ts — SleepLogDto
 │   │   ├── ScenicDto.ts — ScenicSpotDto, ScenicCheckDto
 │   │   ├── TelegramDto.ts — MediaType, MediaDto, LinkTokenDto, MediaUrlDto

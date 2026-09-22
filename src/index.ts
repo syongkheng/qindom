@@ -13,7 +13,7 @@ import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
 import { initializeDatabase } from "./config/db/mysql.js";
 import { RestRequestLogger } from "./middlewares/RestRequestLogger.js";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter.js";
-import { globalLimiter, douyinLimiter } from "./middlewares/RateLimiter.js";
+import { globalLimiter } from "./middlewares/RateLimiter.js";
 import { mw } from "./middlewares/presets.js";
 
 // Controllers
@@ -27,7 +27,6 @@ import createItineraryController from "./itinerary/Itinerary.controller.js";
 import createBudgetController from "./budget/Budget.controller.js";
 import createApplePayDashboardController from "./applepay/ApplePayDashboard.controller.js";
 import createFileController from "./file/File.controller.js";
-import createDouyinController from "./douyin/Douyin.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
 import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
@@ -112,7 +111,6 @@ async function startServer() {
     ["/api/file",      mw.auth,                                   createFileController(db)],
     ["/api/img",       mw.pub,                                    createTgImageGetController(db)],
     ["/api/img",       [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)],  // no RHF — multipart upload
-    ["/api/douyin",    [...mw.auth, douyinLimiter],               createDouyinController(db)],
     ["/api/geocode",   mw.std,                                    createGeocodeController(db)],
     ["/api/trail",     mw.auth,                                   createTrailController(db)],
     ["/v1/llm",        mw.apiKey,                                 createLlmControllerV1(db)],
