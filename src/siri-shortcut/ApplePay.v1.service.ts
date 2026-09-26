@@ -12,8 +12,12 @@ export interface ApplePayTransactionResponse {
   id: string;
   amount: number;
   merchant: string;
-  name: string;
+  name: string | null;
   category?: string;
+  // 'v1' = NFC-tap automation, 'v2' = bank transaction-alert email
+  // forwarding. cardLast4 is only ever populated by V2.
+  source: string;
+  cardLast4: string | null;
   occurredDt: number;
   createdDt: number;
 }
@@ -27,17 +31,23 @@ function buildTransactionResponse(row: ITB_APPLEPAY_TRANSACTION): ApplePayTransa
     id: row.uuid,
     amount: Number(row.amount),
     merchant: row.merchant,
-    name: row.name,
+    name: row.name ?? null,
     category: row.category ?? undefined,
+    source: row.source ?? "v1",
+    cardLast4: row.card_last4 ?? null,
     occurredDt: row.occurred_dt,
     createdDt: row.created_dt!,
   };
 }
 
 /**
- * Service to handle Apple Pay transaction ingestion from the iOS Shortcuts
- * automation ("When Apple Pay is used" → POST to this endpoint) and the
- * authenticated web dashboard (list + categorise).
+ * Service to handle Apple Pay transaction ingestion from both the V1 iOS
+ * Shortcuts automation ("When Apple Pay is used" — NFC taps only, →
+ * recordTransaction) and the V2 automation (bank transaction-alert email
+ * forwarding — covers online + NFC transactions, → recordEmailTransaction),
+ * as well as the authenticated web dashboard (list + categorise). Both
+ * automations write into the same table so the dashboard shows one combined
+ * feed regardless of which one logged a given row.
  */
 export class SsApplePayV1Service {
   constructor(private readonly db: KnexSqlUtilities) {}
@@ -70,6 +80,49 @@ export class SsApplePayV1Service {
         amount,
         merchant,
         name,
+        occurred_dt: now,
+        created_dt: now,
+        created_by_id: userId,
+      },
+      serviceProcessingLoggingEvent,
+    );
+
+    return buildTransactionResponse(insertedRow);
+  }
+
+  // V2: called by the "forward bank transaction email" Shortcuts automation
+  // (see ApplePay.v2.controller.ts), which does the raw-email parsing and
+  // hands this already-extracted amount/merchant/cardLast4. Unlike V1 this
+  // covers every transaction the bank alerts on (online purchases included,
+  // not just NFC taps), so it has no Apple Pay device `name` to store.
+  async recordEmailTransaction(
+    userId: number,
+    amount: number,
+    merchant: string,
+    cardLast4: string | null,
+    loggingContext?: IRequestLogContext,
+  ): Promise<ApplePayTransactionResponse> {
+    const serviceProcessingLoggingEvent = loggingContext
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Inserting transaction from bank email")
+      : undefined;
+
+    if (!userId) {
+      serviceProcessingLoggingEvent?.children?.push(`Invalid userId ${LogEmoji.error}`);
+      throw new Error("Invalid API key user");
+    }
+
+    // occurred_dt uses receipt time, same rationale as V1 — the bank sends
+    // the alert email right after the transaction posts, so "now" is an
+    // accurate stand-in without needing to parse the email's own date text.
+    const now = Date.now();
+    const insertedRow = await this.db.insert<ITB_APPLEPAY_TRANSACTION>(
+      TB_APPLEPAY_TRANSACTION,
+      {
+        uuid: crypto.randomUUID(),
+        amount,
+        merchant,
+        source: "v2",
+        card_last4: cardLast4,
         occurred_dt: now,
         created_dt: now,
         created_by_id: userId,

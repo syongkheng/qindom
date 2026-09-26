@@ -14,7 +14,7 @@ export const globalLimiter = rateLimit({
   message: rateLimitResponse("Too many requests. Please slow down."),
 });
 
-/** POST /api/auth/login */
+/** POST /auth/login */
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,      // 15 minutes
   limit: 10,
@@ -23,7 +23,7 @@ export const loginLimiter = rateLimit({
   message: rateLimitResponse("Too many login attempts. Please try again in 15 minutes."),
 });
 
-/** POST /api/auth/register */
+/** POST /auth/register */
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,      // 1 hour
   limit: 5,
@@ -32,7 +32,7 @@ export const registerLimiter = rateLimit({
   message: rateLimitResponse("Too many registration attempts. Please try again in an hour."),
 });
 
-/** POST /api/auth/verify-email */
+/** POST /auth/verify-email */
 export const verifyEmailLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,      // 15 minutes
   limit: 10,
@@ -41,7 +41,7 @@ export const verifyEmailLimiter = rateLimit({
   message: rateLimitResponse("Too many verification attempts. Please try again in 15 minutes."),
 });
 
-/** POST /api/auth/resend-verify */
+/** POST /auth/resend-verify */
 export const resendVerifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,      // 15 minutes
   limit: 3,
@@ -50,7 +50,7 @@ export const resendVerifyLimiter = rateLimit({
   message: rateLimitResponse("Too many resend requests. Please try again in 15 minutes."),
 });
 
-/** GET|POST /api/auth/admin/* */
+/** GET|POST /auth/admin/* */
 export const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,      // 15 minutes
   limit: 60,

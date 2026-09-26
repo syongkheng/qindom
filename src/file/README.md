@@ -7,7 +7,7 @@
 #### Upload a file blob
 
 <details>
- <summary><code>POST</code> <code>/api/file</code></summary>
+ <summary><code>POST</code> <code>/file</code></summary>
 
 ##### Payload Format
 ```
@@ -39,7 +39,7 @@
 #### Soft-delete files by UUID
 
 <details>
- <summary><code>POST</code> <code>/api/file/delete</code></summary>
+ <summary><code>POST</code> <code>/file/delete</code></summary>
 
 ##### Payload Format
 ```

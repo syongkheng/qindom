@@ -35,9 +35,13 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │       2. Per-(chat,module) DB toggle — fans out to EVERY subscribed chat
 │   │          (every tb_tg_stats_whitelist row with an active telegram_chat_id —
 │   │          each whitelisted admin captures their own chat_id the moment they
-│   │          DM the bot /start, see TgImage.bot.ts; NOT just "the first" one —
+│   │          DM the bot /start, see TgLog.bot.ts's initTgLogBot() (started
+│   │          in index.ts's app.listen callback) — NOT just "the first" one;
 │   │          that single-pick behavior, TgImageService.getStorageChatId(),
-│   │          stays but is now only used by the unrelated CDN-upload flow).
+│   │          stays but is now only used by the unrelated CDN-upload flow.
+│   │          /start also replies with contact info (yongkhengs@gmail.com)
+│   │          for both whitelisted admins (fine-tune alerts) and rejected
+│   │          users (request access, quoting their Telegram user ID).
 │   │          TelegramLogSubscriptionService checks (chat_id, module_key) in
 │   │          tb_telegram_log_subscription per chat; module_key resolved via
 │   │          TelegramLogModules.ts's resolveModuleKey() (prefix match against
@@ -63,7 +67,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │
 ├── MODULES
 │   │
-│   ├── AUTH  /api/auth
+│   ├── AUTH  /auth
 │   │   ├── Preflight → Register → OTP email → Verify → JWT
 │   │   ├── login/verify-email/username-change set the JWT via Set-Cookie
 │   │   │     (src/utils/AuthCookieUtilities.ts setAuthCookies) — token
@@ -99,11 +103,11 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── Rate limits: 5 reg/hr, 10 login/15min
 │   │   └── DB: tb_aa_user
 │   │
-│   ├── PROFILE  /api/pfp
+│   ├── PROFILE  /pfp
 │   │   ├── Get/update profile, avatar upload
 │   │   └── DB: tb_aa_user
 │   │
-│   ├── ANALYTICS  /api/analytics
+│   ├── ANALYTICS  /analytics
 │   │   ├── POST /heartbeat — session activity ping (upserted by session_id); requires system field
 │   │   ├── POST /event     — ingest structured event (event, properties, page, referrer,
 │   │   │                     sessionId, timestamp, system); fire-and-forget from any frontend
@@ -113,7 +117,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── CONNECTIVITY  /connectivity
 │   │   └── Health check (no auth)
 │   │
-│   ├── ITINERARY  /api/itinerary
+│   ├── ITINERARY  /itinerary
 │   │   ├── Trip plans (shareable via short_code + 6-char PIN)
 │   │   ├── Agenda items (flights, hotels, activities) — day/date nullable +
 │   │   │     unknown_time flag, so an item can be an unscheduled "thing to
@@ -131,13 +135,13 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │           tb_travel_itinerary_view, tb_travel_packing_item,
 │   │           tb_travel_note_item
 │   │
-│   ├── FILE UPLOAD  /api/file  [AUTH REQUIRED]
+│   ├── FILE UPLOAD  /file  [AUTH REQUIRED]
 │   │   ├── Upload base64 files for itinerary items
 │   │   └── DB: tb_travel_agenda_file
 │   │
 │   │
-│   ├── GEOCODE  /api/geocode
-│   │   ├── GET /api/geocode?q=... — Nominatim (OpenStreetMap) search proxy,
+│   ├── GEOCODE  /geocode
+│   │   ├── GET /geocode?q=... — Nominatim (OpenStreetMap) search proxy,
 │   │   │     addressdetails=1 (so callers can resolve a destination's
 │   │   │     country, e.g. for Suggestion's note lookup)
 │   │   ├── Results cached in DB (by normalized query string, no TTL)
@@ -161,12 +165,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     portion only; curated merge happens after the cache read
 │   │   └── DB: tb_place_cache
 │   │
-│   ├── HDB HOUSING  /api/hdb  (Singapore)
+│   ├── HDB HOUSING  /hdb  (Singapore)
 │   │   ├── Property search by query
 │   │   ├── Nearest properties by coordinates (Haversine)
 │   │   └── DB: tb_hdb_pphs, tb_hdb_pphs_coordinate
 │   │
-│   ├── LTA TRANSPORT  /api/lta  (Singapore)
+│   ├── LTA TRANSPORT  /lta  (Singapore)
 │   │   ├── Bus arrival timings (LTA DataMall API)
 │   │   ├── Nearest bus stops / MRT stations
 │   │   └── DB: tb_lta_busstop, tb_lta_bus_info, tb_lrt_mrt_station
@@ -189,29 +193,49 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── DB: tb_telegram_link, tb_telegram_media,
 │   │          tb_telegram_link_token
 │   │
-│   ├── SIRI SHORTCUT (APPLE PAY)  /v1/ss/ap  [API-KEY AUTH]
+│   ├── SIRI SHORTCUT (APPLE PAY) V1  /v1/ss/ap  [API-KEY AUTH]
 │   │   ├── "When Apple Pay is used" automation → POST /ap/transaction
 │   │   │     { amount, merchant, name } — occurred_dt is stamped server-side
 │   │   │     (Date.now()), not trusted from the Shortcut's own date format.
 │   │   │     amount accepts "$12.50" or "12.50" (Shortcut sometimes includes
 │   │   │     the currency symbol) — leading "$" stripped before Number()
 │   │   │     parsing; only the numeric value is ever stored, never the symbol.
+│   │   │     NFC taps only. Kept fully intact (not removed) even though the
+│   │   │     automation itself may be disabled device-side in favor of V2 —
+│   │   │     see V2 below.
 │   │   ├── GET /ap/transaction — ApplePay.v1.controller.ts's own list route
-│   │   │     (the dashboard instead uses /api/applepay below)
+│   │   │     (the dashboard instead uses /applepay below)
 │   │   ├── DB: tb_applepay_transaction — uuid is the public id (see
 │   │   │     ApplePayDashboard.controller.ts), category user-assigned via
-│   │   │     the dashboard, NULL until then
+│   │   │     the dashboard, NULL until then; source col defaults 'v1'
 │   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_ss_api_key lookup
 │   │         (Baby Tracker used to share this same key/route prefix — removed;
 │   │         see SS API KEY MGMT below, which the key itself now belongs to
 │   │         independent of any one feature)
 │   │
-│   ├── APPLE PAY DASHBOARD  /api/applepay  [JWT AUTH]
-│   │   ├── GET  / — list current user's transactions (ApplePayDashboard.controller.ts)
-│   │   ├── POST /:transactionId/category — set/clear category, matched by uuid
-│   │   └── Both reuse SsApplePayV1Service (siri-shortcut/ApplePay.v1.service.ts)
+│   ├── SIRI SHORTCUT (BANK EMAIL) V2  /v2/ss/ap  [API-KEY AUTH]
+│   │   ├── POST /ap/email { emailBody } — fed by a Mail-rule Shortcut
+│   │   │     automation that forwards the raw text of any bank
+│   │   │     transaction-alert email as-is (not just Apple Pay/NFC — covers
+│   │   │     online transactions too). ApplePay.v2.controller.ts regex-parses
+│   │   │     amount (currency code + 2dp), merchant (text after " at ", before
+│   │   │     the "If unauthorised" boilerplate or end of string), and card
+│   │   │     last 3-4 digits ("Card ending NNNN", best-effort) out of the
+│   │   │     email body; occurred_dt stamped server-side same as V1
+│   │   ├── DB: tb_applepay_transaction — same table as V1, source='v2',
+│   │   │     card_last4 set, name NULL (no Apple Pay device name to report)
+│   │   └── Auth: same RequestApiKeyFilter / tb_ss_api_key as V1
 │   │
-│   ├── SS API KEY MGMT  /api/ss-key  [JWT AUTH]
+│   ├── APPLE PAY DASHBOARD  /applepay  [JWT AUTH]
+│   │   ├── GET  / — list current user's transactions from both V1 and V2
+│   │   │     (single combined feed; UI shows a source badge NFC/Email and
+│   │   │     either the device name or card last4 per row) — ApplePayDashboard.controller.ts
+│   │   ├── POST /:transactionId/category — set/clear category, matched by uuid
+│   │   └── Both V1/V2 ingestion and the dashboard reuse SsApplePayV1Service
+│   │         (siri-shortcut/ApplePay.v1.service.ts) — recordTransaction (V1)
+│   │         vs recordEmailTransaction (V2), shared getTransactions/updateCategory
+│   │
+│   ├── SS API KEY MGMT  /ss-key  [JWT AUTH]
 │   │   ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
 │   │   ├── POST   /api-key → revokes existing, generates new ss_ key, returns { key }
 │   │   ├── DELETE /api-key → soft-deletes active key (record_status D)
@@ -236,13 +260,13 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_iot_api_key lookup
 │   │           (built for the hike-hitcher ESP32 + SSD1306 OLED hiking tracker)
 │   │
-│   └── IOT API KEY MGMT  /api/iot-key  [JWT AUTH]
+│   └── IOT API KEY MGMT  /iot-key  [JWT AUTH]
 │       ├── GET    /api-key → { hasKey, name, createdDt, keyHint }
 │       ├── POST   /api-key { deviceName } → revokes existing, generates new iot_ key, returns { key }
 │       ├── DELETE /api-key → soft-deletes active key (record_status D)
 │       └── DB: tb_iot_api_key
 │
-│   ├── SUGGESTION  /api/suggestion
+│   ├── SUGGESTION  /suggestion
 │   │   ├── GET  /activity?destination=... — fuzzy search (LOWER LIKE), public
 │   │   ├── POST /activity, PUT /activity/:id — admin-only (JWT + role "admin")
 │   │   ├── DELETE /activity/:id — admin-only
@@ -279,7 +303,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     Duplicate email guard (400 on re-submit)
 │   │   └── DB: tb_wedding_rsvp, tb_wedding_rsvp_guest
 │   │
-│   └── GARMIN HEALTH  /api/garmin  [JWT AUTH]
+│   └── GARMIN HEALTH  /garmin  [JWT AUTH]
 │       ├── GET /today — today's intraday stress/body-battery/heart-rate
 │       │     series + last night's sleep (computed live, not persisted)
 │       ├── GET /summary?days=N — persisted daily summaries for trend

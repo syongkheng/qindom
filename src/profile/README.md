@@ -7,7 +7,7 @@
 #### Get user's country
 
 <details>
- <summary><code>GET</code> <code>/api/pfp/user/country</code></summary>
+ <summary><code>GET</code> <code>/pfp/user/country</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -26,7 +26,7 @@ Header: Authorization: Bearer <Token>
 #### Update user's country
 
 <details>
- <summary><code>POST</code> <code>/api/pfp/user/country</code></summary>
+ <summary><code>POST</code> <code>/pfp/user/country</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -53,7 +53,7 @@ Header: Authorization: Bearer <Token>
 #### Get user's profile photo
 
 <details>
- <summary><code>GET</code> <code>/api/pfp/user/photo</code></summary>
+ <summary><code>GET</code> <code>/pfp/user/photo</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -72,7 +72,7 @@ Header: Authorization: Bearer <Token>
 #### Upload / replace profile photo
 
 <details>
- <summary><code>POST</code> <code>/api/pfp/user/photo</code></summary>
+ <summary><code>POST</code> <code>/pfp/user/photo</code></summary>
 
 Header: Authorization: Bearer <Token>
 

@@ -12,7 +12,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
   const router = Router();
   const svc = new SuggestionService(db);
 
-  // GET /api/suggestion/packing
+  // GET /suggestion/packing
   router.get("/packing", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     const logContext = req.logContext;
@@ -25,7 +25,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
     }
   });
 
-  // POST /api/suggestion/packing (admin)
+  // POST /suggestion/packing (admin)
   router.post("/packing", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");
@@ -40,7 +40,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
     }
   });
 
-  // DELETE /api/suggestion/packing/:id (admin)
+  // DELETE /suggestion/packing/:id (admin)
   router.delete("/packing/:id", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");
@@ -55,7 +55,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
     }
   });
 
-  // GET /api/suggestion/note?country=Singapore
+  // GET /suggestion/note?country=Singapore
   router.get("/note", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     const logContext = req.logContext;
@@ -69,7 +69,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
     }
   });
 
-  // POST /api/suggestion/note (admin)
+  // POST /suggestion/note (admin)
   router.post("/note", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");
@@ -84,7 +84,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
     }
   });
 
-  // DELETE /api/suggestion/note/:id (admin)
+  // DELETE /suggestion/note/:id (admin)
   router.delete("/note/:id", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");

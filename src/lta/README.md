@@ -6,7 +6,7 @@
 #### Get bus arrival timings for a stop
 
 <details>
- <summary><code>GET</code> <code>/api/lta/timing</code></summary>
+ <summary><code>GET</code> <code>/lta/timing</code></summary>
 
 ##### Query Parameters
 ```
@@ -36,7 +36,7 @@ busStopCode: string   // required, e.g. "83139"
 #### Get bus services for a stop
 
 <details>
- <summary><code>POST</code> <code>/api/lta/bus/services</code></summary>
+ <summary><code>POST</code> <code>/lta/bus/services</code></summary>
 
 ##### Payload Format
 ```

@@ -18,7 +18,7 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
     return Array.isArray(raw) ? raw[0] : raw;
   }
 
-  // POST /api/analytics — ingest a structured event from any frontend system.
+  // POST /analytics — ingest a structured event from any frontend system.
   // Mirrors the mock server's POST /analytics so frontends switch between dev/prod
   // by changing only VITE_ANALYTICS_ENDPOINT; no route change needed.
   router.post("/", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
@@ -47,7 +47,7 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
     }
   });
 
-  // POST /api/analytics/heartbeat — legacy session-activity ping, kept for compatibility.
+  // POST /analytics/heartbeat — legacy session-activity ping, kept for compatibility.
   router.post("/heartbeat", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {

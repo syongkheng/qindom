@@ -3,20 +3,22 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { TgImageService } from "./TgImage.service.js";
 
+const CONTACT_EMAIL = "yongkhengs@gmail.com";
+
 const ADMIN_MENU =
   "Commands:\n  /stats — hosting statistics\n  /list — recent files\n  /help — show this message";
 
-export async function initTgImageBot(db: KnexSqlUtilities): Promise<void> {
+export async function initTgLogBot(db: KnexSqlUtilities): Promise<void> {
   const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
   if (!token) {
-    LoggingUtilities.service.info("TgImageBot", "AWENSE_CDN_TELEGRAM_BOT_TOKEN not set — CDN bot not started");
+    LoggingUtilities.service.info("TgLogBot", "AWENSE_CDN_TELEGRAM_BOT_TOKEN not set — bot not started");
     return;
   }
 
   const svc = new TgImageService(db);
   const bot = new TelegramBot(token, { polling: true });
 
-  LoggingUtilities.service.info("TgImageBot", "CDN bot started (polling)");
+  LoggingUtilities.service.info("TgLogBot", "Telegram bot started (polling)");
 
   async function checkAdmin(fromId: number): Promise<boolean> {
     return svc.isWhitelisted(fromId);
@@ -29,13 +31,22 @@ export async function initTgImageBot(db: KnexSqlUtilities): Promise<void> {
     const fromId = msg.from!.id;
     const isAdmin = await checkAdmin(fromId);
     if (!isAdmin) {
-      await bot.sendMessage(chatId, "⛔ You don't have access to this bot.");
+      await bot.sendMessage(
+        chatId,
+        "⛔ You don't have access to this bot.\n\n" +
+          `If you should have access (e.g. to receive Telegram log alerts), contact ${CONTACT_EMAIL} ` +
+          `and include your Telegram user ID: ${fromId}`,
+      );
       return;
     }
     if (msg.chat.type === "private") {
       await svc.storeAdminChatId(fromId, chatId);
     }
-    await bot.sendMessage(chatId, `👋 Welcome, admin!\n\n${ADMIN_MENU}`);
+    await bot.sendMessage(
+      chatId,
+      "👋 Welcome, admin! You're now set up to receive Telegram log alerts for all backend " +
+        `modules by default — contact ${CONTACT_EMAIL} to fine-tune which modules alert you.\n\n${ADMIN_MENU}`,
+    );
   });
 
   // ─── /help ────────────────────────────────────────────────────────────────
@@ -88,6 +99,6 @@ export async function initTgImageBot(db: KnexSqlUtilities): Promise<void> {
   });
 
   bot.on("polling_error", (err) => {
-    LoggingUtilities.service.error("TgImageBot.polling", err.message);
+    LoggingUtilities.service.error("TgLogBot.polling", err.message);
   });
 }

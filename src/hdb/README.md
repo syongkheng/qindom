@@ -6,7 +6,7 @@
 #### Get HDB PPHS data for a batch
 
 <details>
- <summary><code>POST</code> <code>/api/hdb/pphs</code></summary>
+ <summary><code>POST</code> <code>/hdb/pphs</code></summary>
 
 ##### Payload Format
 ```
@@ -37,7 +37,7 @@
 #### Update building coordinates (Admin only)
 
 <details>
- <summary><code>POST</code> <code>/api/hdb/pphs/update</code></summary>
+ <summary><code>POST</code> <code>/hdb/pphs/update</code></summary>
 
 Header: Authorization: Bearer <Token>  (requires R5 role)
 
@@ -66,7 +66,7 @@ Header: Authorization: Bearer <Token>  (requires R5 role)
 #### Find nearest bus stops by location
 
 <details>
- <summary><code>POST</code> <code>/api/hdb/pphs/busstops</code></summary>
+ <summary><code>POST</code> <code>/hdb/pphs/busstops</code></summary>
 
 ##### Payload Format
 ```
@@ -101,7 +101,7 @@ Header: Authorization: Bearer <Token>  (requires R5 role)
 #### Find nearest MRT stations by location
 
 <details>
- <summary><code>POST</code> <code>/api/hdb/pphs/mrt</code></summary>
+ <summary><code>POST</code> <code>/hdb/pphs/mrt</code></summary>
 
 ##### Payload Format
 ```

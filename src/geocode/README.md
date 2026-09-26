@@ -7,7 +7,7 @@
 #### Search for a location
 
 <details>
- <summary><code>GET</code> <code>/api/geocode</code></summary>
+ <summary><code>GET</code> <code>/geocode</code></summary>
 
 ##### Query Parameters
 ```
@@ -36,7 +36,7 @@ q: string   // required, search query e.g. "Marina Bay Sands, Singapore"
 
 ##### Example
 ```
-GET /api/geocode?q=Changi+Airport+Singapore
+GET /geocode?q=Changi+Airport+Singapore
 
 {
     "code": 200,

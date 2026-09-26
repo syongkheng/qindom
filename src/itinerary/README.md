@@ -7,7 +7,7 @@
 #### List all itineraries for the authenticated user
 
 <details>
- <summary><code>GET</code> <code>/api/itinerary</code></summary>
+ <summary><code>GET</code> <code>/itinerary</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -40,7 +40,7 @@ Header: Authorization: Bearer <Token>
 #### Create a new itinerary
 
 <details>
- <summary><code>POST</code> <code>/api/itinerary</code></summary>
+ <summary><code>POST</code> <code>/itinerary</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -123,7 +123,7 @@ Header: Authorization: Bearer <Token>
 If the itinerary has a challenge (access code), only `{ "hasChallenge": true }` is returned — use the challenge endpoint to unlock it.
 
 <details>
- <summary><code>GET</code> <code>/api/itinerary/v/:shortCode</code></summary>
+ <summary><code>GET</code> <code>/itinerary/v/:shortCode</code></summary>
 
 ##### Response Format
 ```
@@ -188,7 +188,7 @@ If the itinerary has a challenge (access code), only `{ "hasChallenge": true }` 
 #### Get itinerary for editing (auth required, no blobs)
 
 <details>
- <summary><code>GET</code> <code>/api/itinerary/:sessionId</code></summary>
+ <summary><code>GET</code> <code>/itinerary/:sessionId</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -209,7 +209,7 @@ Same shape as public viewer but files contain metadata only (no `blob` field).
 #### Update an existing itinerary
 
 <details>
- <summary><code>POST</code> <code>/api/itinerary/edit/:sessionId</code></summary>
+ <summary><code>POST</code> <code>/itinerary/edit/:sessionId</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -257,7 +257,7 @@ Header: Authorization: Bearer <Token>
 #### Delete an itinerary (soft delete)
 
 <details>
- <summary><code>POST</code> <code>/api/itinerary/delete/:sessionId</code></summary>
+ <summary><code>POST</code> <code>/itinerary/delete/:sessionId</code></summary>
 
 Header: Authorization: Bearer <Token>
 
@@ -276,7 +276,7 @@ Header: Authorization: Bearer <Token>
 #### Unlock a password-protected itinerary
 
 <details>
- <summary><code>POST</code> <code>/api/itinerary/challenge</code></summary>
+ <summary><code>POST</code> <code>/itinerary/challenge</code></summary>
 
 ##### Payload Format
 ```

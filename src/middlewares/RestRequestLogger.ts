@@ -11,7 +11,7 @@ const telegramLogSubscriptionService = new TelegramLogSubscriptionService(db);
 // just not pushed to the Telegram log chat. Errors from these routes still alert.
 const TELEGRAM_SILENT_ROUTES: { method: string; path: string }[] = [
   { method: "POST", path: "/iot" },
-  { method: "POST", path: "/api/analytics/heartbeat" },
+  { method: "POST", path: "/analytics/heartbeat" },
 ];
 
 function isTelegramSilentRoute(req: Request, statusCode: number): boolean {

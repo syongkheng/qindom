@@ -17,7 +17,7 @@ export interface TelegramLogMatrixRow {
 }
 
 export interface TelegramLogMatrix {
-  modules: { key: string; label: string }[];
+  modules: { key: string; label: string; paths: string[] }[];
   chats: TelegramLogMatrixRow[];
 }
 

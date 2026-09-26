@@ -1,19 +1,19 @@
 ## Analytics Controller
 
-- `POST /api/analytics` — ingest a structured event from any frontend system
-- `POST /api/analytics/heartbeat` — legacy session-activity ping (kept for compatibility)
+- `POST /analytics` — ingest a structured event from any frontend system
+- `POST /analytics/heartbeat` — legacy session-activity ping (kept for compatibility)
 - Authentication is optional on both routes — anonymous sessions are accepted
 
-The base `POST /api/analytics` endpoint mirrors the mock server's `POST /analytics` path, so
+The base `POST /analytics` endpoint mirrors the mock server's `POST /analytics` path, so
 frontends switch between dev (`http://localhost:3000/analytics`) and production
-(`https://<qindom-host>/api/analytics`) by changing only `VITE_ANALYTICS_ENDPOINT`.
+(`https://<qindom-host>/analytics`) by changing only `VITE_ANALYTICS_ENDPOINT`.
 
 ------------------------------------------------------------------------------------------
 
 #### Ingest an analytics event
 
 <details>
- <summary><code>POST</code> <code>/api/analytics</code></summary>
+ <summary><code>POST</code> <code>/analytics</code></summary>
 
 Header: Authorization: Bearer &lt;Token&gt;  (optional)
 
@@ -41,7 +41,7 @@ Header: Authorization: Bearer &lt;Token&gt;  (optional)
 #### Record a heartbeat (legacy)
 
 <details>
- <summary><code>POST</code> <code>/api/analytics/heartbeat</code></summary>
+ <summary><code>POST</code> <code>/analytics/heartbeat</code></summary>
 
 Header: Authorization: Bearer &lt;Token&gt;  (optional)
 

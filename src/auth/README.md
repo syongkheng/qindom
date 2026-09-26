@@ -6,7 +6,7 @@
 #### Determining whether the next step should be register or login
 
 <details>
- <summary><code>POST</code> <code>/api/auth/preflight</code></summary>
+ <summary><code>POST</code> <code>/auth/preflight</code></summary>
 
 ##### Payload Format
 ```
@@ -29,7 +29,7 @@
 #### Logging in
 
 <details>
- <summary><code>POST</code> <code>/api/auth/login</code></summary>
+ <summary><code>POST</code> <code>/auth/login</code></summary>
 
 ##### Payload Format
 ```
@@ -54,7 +54,7 @@ On success, sets the `jwt_token` (httpOnly) and `csrf_token` cookies via `Set-Co
 #### Creating a new account
 
 <details>
- <summary><code>POST</code> <code>/api/auth/register</code></summary>
+ <summary><code>POST</code> <code>/auth/register</code></summary>
 
 ##### Payload Format
 ```
@@ -79,7 +79,7 @@ On success, sets the `jwt_token` (httpOnly) and `csrf_token` cookies via `Set-Co
 #### Verify token validity
 
 <details>
- <summary><code>POST</code> <code>/api/auth/verification</code></summary>
+ <summary><code>POST</code> <code>/auth/verification</code></summary>
 
 Requires the `jwt_token` cookie (sent automatically by the browser) — no payload.
 
@@ -96,7 +96,7 @@ Requires the `jwt_token` cookie (sent automatically by the browser) — no paylo
 #### Log out
 
 <details>
- <summary><code>POST</code> <code>/api/auth/logout</code></summary>
+ <summary><code>POST</code> <code>/auth/logout</code></summary>
 
 Requires the `jwt_token` cookie. Clears the `jwt_token` and `csrf_token` cookies.
 
@@ -113,7 +113,7 @@ Requires the `jwt_token` cookie. Clears the `jwt_token` and `csrf_token` cookies
 #### Validate password (Current password)
 
 <details>
- <summary><code>POST</code> <code>/api/auth/password/validate</code></summary>
+ <summary><code>POST</code> <code>/auth/password/validate</code></summary>
 
 Requires the `jwt_token` cookie plus a matching `X-CSRF-Token` header (value of the `csrf_token` cookie).
 ##### Payload Format
@@ -136,7 +136,7 @@ Requires the `jwt_token` cookie plus a matching `X-CSRF-Token` header (value of 
 #### Change password
 
 <details>
- <summary><code>POST</code> <code>/api/auth/password/update</code></summary>
+ <summary><code>POST</code> <code>/auth/password/update</code></summary>
 
 ##### Payload Format
 ```

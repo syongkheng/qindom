@@ -128,7 +128,7 @@ export class TgImageService {
       record_status: "A",
     });
 
-    return { shortCode, url: `/api/img/${shortCode}` };
+    return { shortCode, url: `/img/${shortCode}` };
   }
 
   async getByShortCode(shortCode: string): Promise<Pick<ITbTgImage, "telegram_file_id" | "mime_type"> | undefined> {
