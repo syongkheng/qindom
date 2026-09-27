@@ -40,5 +40,27 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
     }
   });
 
+  // Sets (or clears) a nickname for a V2 card, identified by its last 3-4
+  // digits (e.g. "5244" → "DBS Debit"), so the dashboard can show that
+  // instead of the raw "•• 5244" for every transaction on that card.
+  router.post("/card-label/:cardLast4", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { cardLast4, label } = ApplePayDashboardValidator.validateSetCardLabelRequest(
+        req.params.cardLast4,
+        req.body,
+        validationEvent,
+      );
+      const result = await service.setCardLabel(getUser(req).id, cardLast4, label, logContext);
+      return cr.ok(result);
+    } catch (err) {
+      return handleException(err, cr, "ApplePayDashboardController.POST /card-label/:cardLast4", "Failed to update card label");
+    }
+  });
+
   return router;
 }

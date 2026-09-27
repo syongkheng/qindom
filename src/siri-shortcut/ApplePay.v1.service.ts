@@ -1,12 +1,14 @@
 import crypto from "crypto";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { ITB_APPLEPAY_TRANSACTION } from "../models/databases/tb_applepay_transaction.js";
+import { ITB_APPLEPAY_CARD_LABEL } from "../models/databases/tb_applepay_card_label.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 const TB_APPLEPAY_TRANSACTION = "tb_applepay_transaction";
+const TB_APPLEPAY_CARD_LABEL = "tb_applepay_card_label";
 
 export interface ApplePayTransactionResponse {
   id: string;
@@ -18,6 +20,10 @@ export interface ApplePayTransactionResponse {
   // forwarding. cardLast4 is only ever populated by V2.
   source: string;
   cardLast4: string | null;
+  // User-assigned nickname for this card_last4 (e.g. "DBS Debit"), shared
+  // across every row with the same card_last4 — see tb_applepay_card_label.
+  // Null until the user sets one via the dashboard.
+  cardLabel: string | null;
   occurredDt: number;
   createdDt: number;
 }
@@ -26,7 +32,12 @@ export interface ApplePayTransactionResponse {
 // pattern as the budget module's session_id/item uuid) is the only public
 // identifier, and this also drops internal-only bookkeeping columns
 // (record_status, created_by_id, updated_*) that the dashboard has no use for.
-function buildTransactionResponse(row: ITB_APPLEPAY_TRANSACTION): ApplePayTransactionResponse {
+// `labelsByCardLast4` is an optional lookup (built by getCardLabelMap) so
+// callers that don't need it — e.g. a bare insert response — can omit it.
+function buildTransactionResponse(
+  row: ITB_APPLEPAY_TRANSACTION,
+  labelsByCardLast4: Record<string, string> = {},
+): ApplePayTransactionResponse {
   return {
     id: row.uuid,
     amount: Number(row.amount),
@@ -35,6 +46,7 @@ function buildTransactionResponse(row: ITB_APPLEPAY_TRANSACTION): ApplePayTransa
     category: row.category ?? undefined,
     source: row.source ?? "v1",
     cardLast4: row.card_last4 ?? null,
+    cardLabel: (row.card_last4 && labelsByCardLast4[row.card_last4]) || null,
     occurredDt: row.occurred_dt,
     createdDt: row.created_dt!,
   };
@@ -51,6 +63,24 @@ function buildTransactionResponse(row: ITB_APPLEPAY_TRANSACTION): ApplePayTransa
  */
 export class SsApplePayV1Service {
   constructor(private readonly db: KnexSqlUtilities) {}
+
+  private async getCardLabelMap(userId: number, loggingContext?: IRequestLogContext): Promise<Record<string, string>> {
+    const serviceProcessingLoggingEvent = loggingContext
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Retrieving Apple Pay card labels")
+      : undefined;
+
+    const rows = await this.db.find<ITB_APPLEPAY_CARD_LABEL>(
+      TB_APPLEPAY_CARD_LABEL,
+      { created_by_id: userId },
+      {},
+      serviceProcessingLoggingEvent,
+    );
+
+    return rows.reduce<Record<string, string>>((map, row) => {
+      map[row.card_last4] = row.label;
+      return map;
+    }, {});
+  }
 
   async recordTransaction(
     userId: number,
@@ -150,7 +180,8 @@ export class SsApplePayV1Service {
       serviceProcessingLoggingEvent,
     );
 
-    return rows.map(buildTransactionResponse);
+    const labelsByCardLast4 = await this.getCardLabelMap(userId, loggingContext);
+    return rows.map((row) => buildTransactionResponse(row, labelsByCardLast4));
   }
 
   async updateCategory(
@@ -177,6 +208,57 @@ export class SsApplePayV1Service {
       serviceProcessingLoggingEvent,
     );
 
-    return buildTransactionResponse(updated);
+    const labelsByCardLast4 = await this.getCardLabelMap(userId, loggingContext);
+    return buildTransactionResponse(updated, labelsByCardLast4);
+  }
+
+  // Sets (or clears, when label is null/empty) the user's nickname for a
+  // given card_last4. Shared across every transaction row with that
+  // card_last4 — there's no per-transaction card identity beyond the last
+  // 4 digits the bank alert reports, so the label lives keyed on
+  // (user, card_last4) rather than on the transaction itself.
+  async setCardLabel(
+    userId: number,
+    cardLast4: string,
+    label: string | null,
+    loggingContext?: IRequestLogContext,
+  ): Promise<{ cardLast4: string; label: string | null }> {
+    const serviceProcessingLoggingEvent = loggingContext
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Setting Apple Pay card label")
+      : undefined;
+
+    const existing = (await this.db.findOne<ITB_APPLEPAY_CARD_LABEL>(TB_APPLEPAY_CARD_LABEL, {
+      created_by_id: userId,
+      card_last4: cardLast4,
+    })) as ITB_APPLEPAY_CARD_LABEL | undefined;
+
+    if (!label) {
+      if (existing) {
+        await this.db.delete<ITB_APPLEPAY_CARD_LABEL>(
+          TB_APPLEPAY_CARD_LABEL,
+          { created_by_id: userId, card_last4: cardLast4 },
+          serviceProcessingLoggingEvent,
+        );
+      }
+      return { cardLast4, label: null };
+    }
+
+    if (existing) {
+      await this.db.update<ITB_APPLEPAY_CARD_LABEL>(
+        TB_APPLEPAY_CARD_LABEL,
+        { created_by_id: userId, card_last4: cardLast4 },
+        { label, updated_dt: Date.now(), updated_by_id: userId },
+        serviceProcessingLoggingEvent,
+      );
+    } else {
+      const now = Date.now();
+      await this.db.insert<ITB_APPLEPAY_CARD_LABEL>(
+        TB_APPLEPAY_CARD_LABEL,
+        { card_last4: cardLast4, label, created_dt: now, created_by_id: userId },
+        serviceProcessingLoggingEvent,
+      );
+    }
+
+    return { cardLast4, label };
   }
 }

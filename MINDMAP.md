@@ -230,12 +230,19 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │
 │   ├── APPLE PAY DASHBOARD  /applepay  [JWT AUTH]
 │   │   ├── GET  / — list current user's transactions from both V1 and V2
-│   │   │     (single combined feed; UI shows a source badge NFC/Email and
-│   │   │     either the device name or card last4 per row) — ApplePayDashboard.controller.ts
+│   │   │     (single combined feed; UI shows a source badge NFC/SMS and
+│   │   │     either the device name, a user-set card label, or the raw
+│   │   │     "•• NNNN" card last4 per row) — ApplePayDashboard.controller.ts
 │   │   ├── POST /:transactionId/category — set/clear category, matched by uuid
+│   │   ├── POST /card-label/:cardLast4 { label } — set/clear the user's
+│   │   │     nickname for a V2 card (e.g. "5244" → "DBS Debit"); applies to
+│   │   │     every transaction row sharing that card_last4, not just one
+│   │   ├── DB: tb_applepay_card_label — one row per (user, card_last4);
+│   │   │     null/empty label deletes the row rather than storing empty
 │   │   └── Both V1/V2 ingestion and the dashboard reuse SsApplePayV1Service
 │   │         (siri-shortcut/ApplePay.v1.service.ts) — recordTransaction (V1)
-│   │         vs recordSmsTransaction (V2), shared getTransactions/updateCategory
+│   │         vs recordSmsTransaction (V2), shared getTransactions/updateCategory/
+│   │         setCardLabel
 │   │
 │   ├── SS API KEY MGMT  /ss-key  [JWT AUTH]
 │   │   ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
@@ -358,7 +365,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── tb_aa_user, tb_scenic_*, tb_trail_*, tb_travel_*, etc.
 │   │   ├── tb_telegram_media, tb_telegram_link, tb_telegram_link_token
 │   │   ├── tb_tg_image, tb_tg_stats_whitelist
-│   │   ├── tb_applepay_transaction, tb_ss_api_key
+│   │   ├── tb_applepay_transaction, tb_applepay_card_label, tb_ss_api_key
 │   │   ├── tb_wedding_rsvp, tb_wedding_rsvp_guest
 │   │   ├── tb_garmin_session, tb_garmin_intraday_metric, tb_garmin_daily_summary
 │   │   └── tb_place_cache, tb_suggestion_note, tb_travel_note_item
