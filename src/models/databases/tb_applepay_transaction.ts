@@ -4,11 +4,11 @@ export interface ITB_APPLEPAY_TRANSACTION {
   amount: number;
   merchant: string;
   // Apple Pay device/payment label — only ever populated by the V1 NFC-tap
-  // automation; the V2 email-parsing automation has no equivalent field.
+  // automation; the V2 SMS-parsing automation has no equivalent field.
   name?: string | null;
   category?: string | null;
   // 'v1' = "When Apple Pay is used" Shortcut (NFC taps only), 'v2' = bank
-  // transaction-alert email forwarding (covers online + NFC transactions).
+  // transaction-alert SMS forwarding (covers online + NFC transactions).
   source?: string;
   card_last4?: string | null;
   occurred_dt: number;

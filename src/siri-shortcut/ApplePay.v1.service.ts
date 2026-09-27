@@ -14,7 +14,7 @@ export interface ApplePayTransactionResponse {
   merchant: string;
   name: string | null;
   category?: string;
-  // 'v1' = NFC-tap automation, 'v2' = bank transaction-alert email
+  // 'v1' = NFC-tap automation, 'v2' = bank transaction-alert SMS
   // forwarding. cardLast4 is only ever populated by V2.
   source: string;
   cardLast4: string | null;
@@ -43,8 +43,8 @@ function buildTransactionResponse(row: ITB_APPLEPAY_TRANSACTION): ApplePayTransa
 /**
  * Service to handle Apple Pay transaction ingestion from both the V1 iOS
  * Shortcuts automation ("When Apple Pay is used" — NFC taps only, →
- * recordTransaction) and the V2 automation (bank transaction-alert email
- * forwarding — covers online + NFC transactions, → recordEmailTransaction),
+ * recordTransaction) and the V2 automation (bank transaction-alert SMS
+ * forwarding — covers online + NFC transactions, → recordSmsTransaction),
  * as well as the authenticated web dashboard (list + categorise). Both
  * automations write into the same table so the dashboard shows one combined
  * feed regardless of which one logged a given row.
@@ -90,12 +90,12 @@ export class SsApplePayV1Service {
     return buildTransactionResponse(insertedRow);
   }
 
-  // V2: called by the "forward bank transaction email" Shortcuts automation
-  // (see ApplePay.v2.controller.ts), which does the raw-email parsing and
+  // V2: called by the "forward bank transaction SMS" Shortcuts automation
+  // (see ApplePay.v2.controller.ts), which does the raw-SMS parsing and
   // hands this already-extracted amount/merchant/cardLast4. Unlike V1 this
   // covers every transaction the bank alerts on (online purchases included,
   // not just NFC taps), so it has no Apple Pay device `name` to store.
-  async recordEmailTransaction(
+  async recordSmsTransaction(
     userId: number,
     amount: number,
     merchant: string,
@@ -103,7 +103,7 @@ export class SsApplePayV1Service {
     loggingContext?: IRequestLogContext,
   ): Promise<ApplePayTransactionResponse> {
     const serviceProcessingLoggingEvent = loggingContext
-      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Inserting transaction from bank email")
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Inserting transaction from bank SMS")
       : undefined;
 
     if (!userId) {
@@ -112,8 +112,8 @@ export class SsApplePayV1Service {
     }
 
     // occurred_dt uses receipt time, same rationale as V1 — the bank sends
-    // the alert email right after the transaction posts, so "now" is an
-    // accurate stand-in without needing to parse the email's own date text.
+    // the alert SMS right after the transaction posts, so "now" is an
+    // accurate stand-in without needing to parse the SMS's own date text.
     const now = Date.now();
     const insertedRow = await this.db.insert<ITB_APPLEPAY_TRANSACTION>(
       TB_APPLEPAY_TRANSACTION,

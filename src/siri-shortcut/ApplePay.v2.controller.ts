@@ -10,31 +10,35 @@ import { SsApplePayV1Service } from "./ApplePay.v1.service.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 // "SGD 1.99", "USD 12.50" — the currency amount in a bank transaction-alert
-// email.
+// SMS.
 const AMOUNT_REGEX = /\b[A-Z]{3}\s*([\d,]+\.\d{2})\b/;
-// "...UOB Card ending 1986..." — the last 3-4 digits the bank includes in
-// these alerts; the full PAN is never sent in the email or stored here.
+// "...UOB Card ending 1986...", "...DBS/POSB card ending 5244..." — the
+// last 3-4 digits the bank includes in these alerts; the full PAN is never
+// sent in the SMS or stored here.
 const CARD_LAST4_REGEX = /card\s+ending\s+(\d{3,4})/i;
-// "...at Douyin Live. If unauthorised..." — merchant sits between " at "
-// and the sentence boundary before the fraud-hotline boilerplate, falling
-// back to end-of-string if that boilerplate isn't present.
-const MERCHANT_REGEX = /\bat\s+(.+?)\.\s*(?:if unauthorised|$)/i;
+// Merchant sits after "at " (UOB: "...at Douyin Live. If unauthorised...")
+// or "to " (DBS: "...to 7-ELEVEN -TAMPINES MAR on 27 SEP 12:44 (SGT) was
+// completed. If unauthorised..."), lazily captured up to whichever
+// boundary comes first: a trailing "on <day> <MON>" date, "was completed",
+// the "If unauthorised" boilerplate, or end-of-string. Lookahead so none of
+// those boundary words end up inside the captured merchant.
+const MERCHANT_REGEX = /\b(?:at|to)\s+(.+?)(?=\s+on\s+\d{1,2}\s+[A-Z]{3}\b|\s+was\s+completed\b|\.\s*(?:if unauthorised|$)|$)/i;
 
 // V2 of the Siri Shortcut Apple Pay/card transaction ingestion. V1
 // (ApplePay.v1.controller.ts) is fed by the "When Apple Pay is used"
 // automation, which only fires on NFC taps and arrives pre-structured
-// (amount/merchant/name as separate fields). V2 is fed by a Mail-rule
-// Shortcut automation that forwards the raw text of any bank
-// transaction-alert email as-is, so it also picks up online transactions —
-// this endpoint does the parsing V1 never had to. V1 is left fully intact
-// (not removed) so it keeps working for anyone still using that automation;
-// both write into the same tb_applepay_transaction table (tagged via
-// `source`), so the dashboard already shows a single combined feed.
+// (amount/merchant/name as separate fields). V2 is fed by a Shortcut
+// automation that forwards the raw text of any bank transaction-alert SMS
+// as-is, so it also picks up online transactions — this endpoint does the
+// parsing V1 never had to. V1 is left fully intact (not removed) so it
+// keeps working for anyone still using that automation; both write into
+// the same tb_applepay_transaction table (tagged via `source`), so the
+// dashboard already shows a single combined feed.
 export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
   const router = Router();
   const service = new SsApplePayV1Service(db);
 
-  router.post("/ap/email", async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/ap/sms", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;
@@ -43,10 +47,10 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
         : undefined;
 
-      const { emailBody } = req.body;
-      StructuralValidationUtilities.requiredString(emailBody, "emailBody", requestBodyStructuralValidationLoggingEvent);
+      const { smsBody } = req.body;
+      StructuralValidationUtilities.requiredString(smsBody, "smsBody", requestBodyStructuralValidationLoggingEvent);
 
-      const text = String(emailBody);
+      const text = String(smsBody);
 
       const amountMatch = AMOUNT_REGEX.exec(text);
       if (!amountMatch) throw new Exceptions.InvalidRequest("amount", "mandatory");
@@ -63,9 +67,9 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
       const cardLast4 = cardMatch ? cardMatch[1] : null;
 
       const userId = logContext?.metadata?.userId as number;
-      const serviceResponse = await service.recordEmailTransaction(userId, parsedAmount, merchant, cardLast4, logContext);
+      const serviceResponse = await service.recordSmsTransaction(userId, parsedAmount, merchant, cardLast4, logContext);
 
-      // Shortcut-friendly shape — just the fields extracted from the email,
+      // Shortcut-friendly shape — just the fields extracted from the SMS,
       // for the automation to show back as a confirmation (e.g. via "Show
       // Result"). The full row (id/category/source/etc.) is still available
       // to the authenticated dashboard via GET /applepay.
@@ -81,7 +85,7 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
       // { code, status, data } envelope via handleException, never a bare
       // status code with no body, so the Shortcut always has something to
       // show the user on failure too.
-      return handleException(err, cr, "SsApplePayControllerV2.POST /ap/email", "Failed to record transaction from email");
+      return handleException(err, cr, "SsApplePayControllerV2.POST /ap/sms", "Failed to record transaction from SMS");
     }
   });
 

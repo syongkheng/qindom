@@ -213,15 +213,17 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │         see SS API KEY MGMT below, which the key itself now belongs to
 │   │         independent of any one feature)
 │   │
-│   ├── SIRI SHORTCUT (BANK EMAIL) V2  /v2/ss/ap  [API-KEY AUTH]
-│   │   ├── POST /ap/email { emailBody } — fed by a Mail-rule Shortcut
-│   │   │     automation that forwards the raw text of any bank
-│   │   │     transaction-alert email as-is (not just Apple Pay/NFC — covers
-│   │   │     online transactions too). ApplePay.v2.controller.ts regex-parses
-│   │   │     amount (currency code + 2dp), merchant (text after " at ", before
-│   │   │     the "If unauthorised" boilerplate or end of string), and card
-│   │   │     last 3-4 digits ("Card ending NNNN", best-effort) out of the
-│   │   │     email body; occurred_dt stamped server-side same as V1
+│   ├── SIRI SHORTCUT (BANK SMS) V2  /v2/ss/ap  [API-KEY AUTH]
+│   │   ├── POST /ap/sms { smsBody } — fed by a Shortcut automation
+│   │   │     that forwards the raw text of any bank transaction-alert
+│   │   │     SMS as-is (not just Apple Pay/NFC — covers online
+│   │   │     transactions too). ApplePay.v2.controller.ts regex-parses
+│   │   │     amount (currency code + 2dp), merchant (text after "at "/
+│   │   │     "to ", before the "If unauthorised" boilerplate, a trailing
+│   │   │     date, "was completed", or end of string — handles both UOB-
+│   │   │     and DBS-style alerts), and card last 3-4 digits ("Card
+│   │   │     ending NNNN", best-effort) out of the SMS body; occurred_dt
+│   │   │     stamped server-side same as V1
 │   │   ├── DB: tb_applepay_transaction — same table as V1, source='v2',
 │   │   │     card_last4 set, name NULL (no Apple Pay device name to report)
 │   │   └── Auth: same RequestApiKeyFilter / tb_ss_api_key as V1
@@ -233,7 +235,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── POST /:transactionId/category — set/clear category, matched by uuid
 │   │   └── Both V1/V2 ingestion and the dashboard reuse SsApplePayV1Service
 │   │         (siri-shortcut/ApplePay.v1.service.ts) — recordTransaction (V1)
-│   │         vs recordEmailTransaction (V2), shared getTransactions/updateCategory
+│   │         vs recordSmsTransaction (V2), shared getTransactions/updateCategory
 │   │
 │   ├── SS API KEY MGMT  /ss-key  [JWT AUTH]
 │   │   ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
