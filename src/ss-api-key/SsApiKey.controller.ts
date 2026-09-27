@@ -6,6 +6,7 @@ import { handleException, getUser } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { SsApiKeyService } from "./SsApiKey.service.js";
+import { SsApiKeyValidator } from "./SsApiKey.validator.js";
 
 export default function createSsApiKeyController(db: KnexSqlUtilities) {
   const router = Router();
@@ -35,6 +36,22 @@ export default function createSsApiKeyController(db: KnexSqlUtilities) {
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "SsApiKeyController.POST /api-key", "Failed to generate API key");
+    }
+  });
+
+  router.post("/api-key/name", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const logContext: IRequestLogContext = req.logContext;
+      const user = getUser(req);
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const { name } = SsApiKeyValidator.validateRenameRequest(req.body, validationEvent);
+      const result = await service.renameKey(user.id, name, logContext);
+      return cr.ok(result);
+    } catch (err) {
+      return handleException(err, cr, "SsApiKeyController.POST /api-key/name", "Failed to rename API key");
     }
   });
 

@@ -3,6 +3,7 @@ import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogConte
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 
 export interface SsApiKeyStatusDto {
   hasKey: boolean;
@@ -62,6 +63,27 @@ export class SsApiKeyService {
     );
 
     return { key: `ss_${rawValue}` };
+  }
+
+  // Renames the active key's display label only — the key value/hash is
+  // untouched, so this never breaks an already-configured Shortcut
+  // automation (unlike generateKey, which revokes and replaces the key).
+  async renameKey(userId: number, name: string, logContext?: IRequestLogContext): Promise<SsApiKeyStatusDto> {
+    const serviceEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "SERVICE", "Renaming API key")
+      : undefined;
+
+    const existing = await this.db.findOne<ITbSsApiKey>("tb_ss_api_key", { user_id: userId, record_status: "A" });
+    if (!existing) throw new Exceptions.NotFound();
+
+    await this.db.update<ITbSsApiKey>(
+      "tb_ss_api_key",
+      { user_id: userId, record_status: "A" },
+      { name, updated_dt: Date.now(), updated_by_id: userId },
+      serviceEvent,
+    );
+
+    return this.getKeyStatus(userId, serviceEvent);
   }
 
   async revokeKey(userId: number, logContext?: IRequestLogContext): Promise<{ revoked: boolean }> {

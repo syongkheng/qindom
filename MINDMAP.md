@@ -245,8 +245,14 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │         setCardLabel
 │   │
 │   ├── SS API KEY MGMT  /ss-key  [JWT AUTH]
-│   │   ├── GET    /api-key → { hasKey, name, createdDt } (hash never exposed)
+│   │   ├── GET    /api-key → { hasKey, name, createdDt, keyHint } (hash never exposed)
 │   │   ├── POST   /api-key → revokes existing, generates new ss_ key, returns { key }
+│   │   │     (new keys default name="Siri Shortcuts"; old Baby Tracker-era
+│   │   │     keys may still say "Baby Tracker" until renamed)
+│   │   ├── POST   /api-key/name { name } → renames the active key's label
+│   │   │     only (key value/hash untouched, so it never breaks an
+│   │   │     already-configured Shortcut automation) — SsApiKey.validator.ts
+│   │   │     caps name at 100 chars to match the DB column
 │   │   ├── DELETE /api-key → soft-deletes active key (record_status D)
 │   │   ├── DB: tb_ss_api_key — one active "ss_" key per user, generic across
 │   │   │     whichever Siri Shortcut integration uses it (currently Apple Pay
