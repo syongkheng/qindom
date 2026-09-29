@@ -175,6 +175,25 @@ export class AuthService {
       return this._issueToken(user, authEvent);
     }
 
+    // Dev bypass: fndom skips the real OTP send outside prod, so accept the fixed
+    // code here instead of the DB-stored one, regardless of expiry/attempt state.
+    if (process.env.NODE_ENV !== "prd" && code === "111111") {
+      await this.db.update<ITB_AA_USER>(
+        "tb_aa_user",
+        { email, system, record_status: "A" },
+        {
+          email_verified: 1,
+          verify_code: null,
+          verify_code_expires_at: null,
+          verify_attempts: 0,
+          state: "ACTIVE",
+        },
+        authEvent,
+      );
+      if (authEvent) authEvent.detail = "email verified (dev OTP bypass)";
+      return this._issueToken(user, authEvent);
+    }
+
     if ((user.verify_attempts ?? 0) >= MAX_VERIFY_ATTEMPTS) {
       if (authEvent) authEvent.detail = "max attempts exceeded";
       LoggingUtilities.service.warn("AuthService.verifyEmail", `Max attempts exceeded for ${email}`);

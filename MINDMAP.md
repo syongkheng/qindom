@@ -99,6 +99,13 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     search works identically in both environments. 50MB rotation,
 │   │   │     best-effort (try/catch, never blocks the response).
 │   │   ├── bcrypt (10 rounds), SHA-256 OTP hash, 15-min TTL
+│   │   ├── Dev OTP bypass: verifyEmail() accepts code "111111" whenever
+│   │   │     NODE_ENV !== "prd", regardless of the real DB-stored code,
+│   │   │     expiry, or attempt count — lets fndom's dev build skip
+│   │   │     sending real verification emails (see fndom's
+│   │   │     handleResendCode / LoginView.vue verify-step watcher,
+│   │   │     which skip the RESEND_VERIFY call and show a "use 111111"
+│   │   │     hint instead, only when import.meta.env.DEV)
 │   │   ├── Max 5 OTP attempts (429 lock)
 │   │   ├── Rate limits: 5 reg/hr, 10 login/15min
 │   │   └── DB: tb_aa_user
