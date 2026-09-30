@@ -243,8 +243,9 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── POST / { amount, merchant, occurredDt, category? } — manual entry
 │   │   │     (cash / missed alerts), source='manual', user-supplied
 │   │   │     occurred_dt (future dates rejected, 5-min skew allowed)
-│   │   ├── DELETE /:transactionId — soft delete (record_status 'D'), scoped
-│   │   │     to the owner; used for duplicates/refunds. Duplicate detection
+│   │   ├── POST /:transactionId/delete — soft delete (record_status 'D'),
+│   │   │     scoped to the owner; used for duplicates/refunds (POST, not
+│   │   │     DELETE, by choice — matches /:transactionId/category). Duplicate detection
 │   │   │     (v1 tap + v2 SMS, same amount, ≤10 min apart) and CSV export are
 │   │   │     frontend-only in fndom's ApplePayDashboardView
 │   │   ├── POST /:transactionId/category — set/clear category, matched by uuid

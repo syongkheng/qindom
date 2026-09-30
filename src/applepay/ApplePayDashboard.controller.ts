@@ -41,13 +41,13 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
   });
 
   // Soft delete (record_status 'D') — for duplicates, refunds, or mis-parsed SMS rows.
-  router.delete("/:transactionId", async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/:transactionId/delete", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const result = await service.deleteTransaction(getUser(req).id, req.params.transactionId, req.logContext);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "ApplePayDashboardController.DELETE /:transactionId", "Failed to delete transaction");
+      return handleException(err, cr, "ApplePayDashboardController.POST /:transactionId/delete", "Failed to delete transaction");
     }
   });
 
