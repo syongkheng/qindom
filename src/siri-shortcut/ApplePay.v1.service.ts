@@ -6,6 +6,7 @@ import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
+import { CreateManualTransactionBody } from "../models/requests/ApplePayBody.js";
 
 const TB_APPLEPAY_TRANSACTION = "tb_applepay_transaction";
 const TB_APPLEPAY_CARD_LABEL = "tb_applepay_card_label";
@@ -17,7 +18,8 @@ export interface ApplePayTransactionResponse {
   name: string | null;
   category?: string;
   // 'v1' = NFC-tap automation, 'v2' = bank transaction-alert SMS
-  // forwarding. cardLast4 is only ever populated by V2.
+  // forwarding, 'manual' = entered on the dashboard. cardLast4 is only ever
+  // populated by V2.
   source: string;
   cardLast4: string | null;
   // User-assigned nickname for this card_last4 (e.g. "DBS Debit"), shared
@@ -161,6 +163,61 @@ export class SsApplePayV1Service {
     );
 
     return buildTransactionResponse(insertedRow);
+  }
+
+  // Dashboard-entered transaction (cash, missed alerts) — unlike V1/V2 the
+  // user supplies occurred_dt, since it's usually logged after the fact.
+  async recordManualTransaction(
+    userId: number,
+    body: CreateManualTransactionBody,
+    loggingContext?: IRequestLogContext,
+  ): Promise<ApplePayTransactionResponse> {
+    const serviceProcessingLoggingEvent = loggingContext
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Inserting manual transaction")
+      : undefined;
+
+    const insertedRow = await this.db.insert<ITB_APPLEPAY_TRANSACTION>(
+      TB_APPLEPAY_TRANSACTION,
+      {
+        uuid: crypto.randomUUID(),
+        amount: body.amount,
+        merchant: body.merchant,
+        category: body.category,
+        source: "manual",
+        occurred_dt: body.occurredDt,
+        created_dt: Date.now(),
+        created_by_id: userId,
+      },
+      serviceProcessingLoggingEvent,
+    );
+
+    return buildTransactionResponse(insertedRow);
+  }
+
+  async deleteTransaction(
+    userId: number,
+    transactionUuid: string,
+    loggingContext?: IRequestLogContext,
+  ): Promise<{ id: string; deleted: true }> {
+    const serviceProcessingLoggingEvent = loggingContext
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Deleting Apple Pay transaction")
+      : undefined;
+
+    const existing = await this.db.findOne<ITB_APPLEPAY_TRANSACTION>(TB_APPLEPAY_TRANSACTION, {
+      uuid: transactionUuid,
+      created_by_id: userId,
+      record_status: "A",
+    });
+    if (!existing) throw new Exceptions.NotFound();
+
+    await this.db.update<ITB_APPLEPAY_TRANSACTION>(
+      TB_APPLEPAY_TRANSACTION,
+      { uuid: transactionUuid, created_by_id: userId },
+      { record_status: "D", updated_dt: Date.now(), updated_by_id: userId },
+      serviceProcessingLoggingEvent,
+    );
+
+    return { id: transactionUuid, deleted: true };
   }
 
   async getTransactions(userId: number, loggingContext?: IRequestLogContext): Promise<ApplePayTransactionResponse[]> {

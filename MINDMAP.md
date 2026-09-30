@@ -240,6 +240,13 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     (single combined feed; UI shows a source badge NFC/SMS and
 │   │   │     either the device name, a user-set card label, or the raw
 │   │   │     "•• NNNN" card last4 per row) — ApplePayDashboard.controller.ts
+│   │   ├── POST / { amount, merchant, occurredDt, category? } — manual entry
+│   │   │     (cash / missed alerts), source='manual', user-supplied
+│   │   │     occurred_dt (future dates rejected, 5-min skew allowed)
+│   │   ├── DELETE /:transactionId — soft delete (record_status 'D'), scoped
+│   │   │     to the owner; used for duplicates/refunds. Duplicate detection
+│   │   │     (v1 tap + v2 SMS, same amount, ≤10 min apart) and CSV export are
+│   │   │     frontend-only in fndom's ApplePayDashboardView
 │   │   ├── POST /:transactionId/category — set/clear category, matched by uuid
 │   │   ├── POST /card-label/:cardLast4 { label } — set/clear the user's
 │   │   │     nickname for a V2 card (e.g. "5244" → "DBS Debit"); applies to
@@ -390,7 +397,8 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── requests/ — request body shapes (XyzBody suffix)
 │   │   ├── RequestWithUserInfo.ts — Express Request + user field
 │   │   ├── RequestWithLogContext.ts
-│   │   └── SleepBody.ts — CreateSleepLogBody
+│   │   ├── SleepBody.ts — CreateSleepLogBody
+│   │   └── ApplePayBody.ts — CreateManualTransactionBody
 │   └── responses/
 │       └── ControllerResponse.ts
 │

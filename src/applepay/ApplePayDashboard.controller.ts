@@ -25,6 +25,32 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
     }
   });
 
+  router.post("/", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const logContext: IRequestLogContext = req.logContext;
+      const validationEvent = logContext
+        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+        : undefined;
+      const body = ApplePayDashboardValidator.validateCreateManualTransactionRequest(req.body, validationEvent);
+      const result = await service.recordManualTransaction(getUser(req).id, body, logContext);
+      return cr.ok(result);
+    } catch (err) {
+      return handleException(err, cr, "ApplePayDashboardController.POST /", "Failed to add transaction");
+    }
+  });
+
+  // Soft delete (record_status 'D') — for duplicates, refunds, or mis-parsed SMS rows.
+  router.delete("/:transactionId", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const result = await service.deleteTransaction(getUser(req).id, req.params.transactionId, req.logContext);
+      return cr.ok(result);
+    } catch (err) {
+      return handleException(err, cr, "ApplePayDashboardController.DELETE /:transactionId", "Failed to delete transaction");
+    }
+  });
+
   router.post("/:transactionId/category", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
