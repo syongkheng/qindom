@@ -2,6 +2,8 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
 import { ITb_wedding_rsvp_guest } from "../models/databases/tb_wedding_rsvp_guest.js";
+import { MaskingUtilities } from "../utils/MaskingUtilities.js";
+import { MailerUtilities } from "../utils/MailerUtilities.js";
 
 export interface RsvpGuestPayload {
   name: string;
@@ -27,15 +29,34 @@ export interface RsvpPayload {
   existingRsvpId?: number | null;
 }
 
-export interface RsvpLookupResult {
-  name: string;
-  email: string | null;
-  contactNumber: string | null;
-  attending: boolean;
-  dietaryRestrictions: string | null;
-  mealPreference: string | null;
-  message: string | null;
-  additionalGuestContact: RsvpGuestPayload[];
+// PDPA retention notice surfaced to guests at collection (POST /rsvp) and at
+// lookup (GET /rsvp). NOTE: this text PROMISES deletion — an actual purge job
+// must enforce it for the statement to be truthful. That job is not yet
+// implemented; see Wedding module TODO.
+export const WEDDING_PDPA_NOTICE =
+  "Your RSVP details are collected only for this wedding and will be permanently deleted the day after the event.";
+
+// Returned by the name+pin lookup. Shows only the requester's OWN details plus
+// whose RSVP they are on ("guest of YK") — never the other guests' details.
+export interface RsvpSelfView {
+  role: "primary" | "guest";
+  // The primary registrant's name when the requester is a guest on someone
+  // else's RSVP (e.g. "YK"); null when the requester IS the primary registrant.
+  guestOf: string | null;
+  you: {
+    name: string;
+    email: string | null;
+    contactNumber: string | null;
+    attending: boolean;
+    dietaryRestrictions: string | null;
+    mealPreference: string | null;
+    message: string | null;
+  };
+  // The registrant's OWN guest names, for editing — populated only when the
+  // requester IS the primary registrant (they created and manage these). Empty
+  // for a guest requester, who never sees the other guests on the RSVP.
+  guestNames: string[];
+  notice: string;
 }
 
 // Deliberately minimal — unlike RsvpLookupResult (used to pre-fill the RSVP
@@ -60,84 +81,150 @@ export interface RsvpStatusMatch {
 export class WeddingService {
   constructor(private readonly db: KnexSqlUtilities) {}
 
-  // Name isn't unique, so this just takes whichever active RSVP matches
-  // first — good enough for a convenience pre-fill lookup. Matched
-  // case-insensitively and trimmed so "YK" and "yk " resolve to the same
-  // record instead of missing each other.
-  async findRsvpByName(name: string): Promise<RsvpLookupResult | null> {
+  // Step-1 existence check for the RSVP form: given only a name, report whether
+  // a primary-registrant RSVP exists and whether it has an email on file (so the
+  // UI can offer "forgot PIN → email it", or fall back to "contact the couple").
+  // Returns booleans ONLY — never any personal data.
+  async checkRsvpExistsByName(name: string): Promise<{ exists: boolean; hasEmail: boolean }> {
+    const trimmed = name.trim();
     const rsvp = (
       await this.db.find<ITb_wedding_rsvp>(
         "tb_wedding_rsvp",
         { record_status: "A" },
-        { limit: 1, extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [name.trim()]) },
+        {
+          limit: 1,
+          columns: ["id", "email"],
+          extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmed]),
+        },
       )
     )[0];
-    return rsvp ? this.toLookupResult(rsvp) : null;
+    return { exists: Boolean(rsvp), hasEmail: Boolean(rsvp?.email) };
   }
 
-  private async toLookupResult(rsvp: ITb_wedding_rsvp): Promise<RsvpLookupResult> {
+  // "Forgot PIN": email the pin to the RSVP's registered address (the only
+  // party who can read it). The pin is never returned in the HTTP response.
+  async recoverPinByName(name: string): Promise<{ exists: boolean; hasEmail: boolean; sent: boolean }> {
+    const trimmed = name.trim();
+    const rsvp = (
+      await this.db.find<ITb_wedding_rsvp>(
+        "tb_wedding_rsvp",
+        { record_status: "A" },
+        { limit: 1, extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmed]) },
+      )
+    )[0];
+
+    if (!rsvp) return { exists: false, hasEmail: false, sent: false };
+    if (!rsvp.email) return { exists: true, hasEmail: false, sent: false };
+
+    try {
+      await MailerUtilities.sendMail({
+        to: rsvp.email,
+        subject: "Your wedding RSVP PIN",
+        html: `
+          <p>Hi <strong>${rsvp.name}</strong>,</p>
+          <p>Your RSVP PIN is:</p>
+          <h2 style="letter-spacing:0.2em;">${rsvp.pin}</h2>
+          <p>Use it to view or edit your RSVP. Please don't share it with anyone.</p>
+          <p>— no-reply-awense</p>
+        `,
+      });
+      return { exists: true, hasEmail: true, sent: true };
+    } catch {
+      return { exists: true, hasEmail: true, sent: false };
+    }
+  }
+
+  // Locked-down lookup: the requester must prove BOTH their name and the RSVP
+  // pin. A pin alone, or a name alone, reveals nothing. On success we return
+  // only the requester's own details plus whose RSVP they're on — never the
+  // other guests' details. Returns null when the pin doesn't exist or the name
+  // doesn't match anyone on that pin's RSVP (caller maps both to "not found",
+  // so the two cases are indistinguishable to the client).
+  async lookupRsvpByNameAndPin(name: string, pin: string): Promise<RsvpSelfView | null> {
+    const rsvp = await this.db.findOne<ITb_wedding_rsvp>("tb_wedding_rsvp", { pin, record_status: "A" });
+    if (!rsvp) return null;
+
+    const target = name.trim().toLowerCase();
+
     const guestRows = await this.db.find<ITb_wedding_rsvp_guest>("tb_wedding_rsvp_guest", {
       rsvp_id: rsvp.id,
       record_status: "A",
     });
 
-    return {
-      name: rsvp.name,
-      email: rsvp.email,
-      contactNumber: rsvp.contact_number,
-      attending: rsvp.attending === 1,
-      dietaryRestrictions: rsvp.dietary_restrictions,
-      mealPreference: rsvp.meal_preference,
-      message: rsvp.message,
-      additionalGuestContact: guestRows.map((guest) => ({
-        name: guest.name,
-        email: guest.email,
-        contactNumber: guest.contact_number,
-        dietaryRestrictions: guest.dietary_restrictions,
-        mealPreference: guest.meal_preference,
-      })),
-    };
+    // Primary registrant on this RSVP — gets their own details plus their guest
+    // names so the RSVP form can pre-fill for editing.
+    if (rsvp.name.trim().toLowerCase() === target) {
+      return {
+        role: "primary",
+        guestOf: null,
+        you: {
+          name: rsvp.name,
+          email: rsvp.email,
+          contactNumber: rsvp.contact_number,
+          attending: rsvp.attending === 1,
+          dietaryRestrictions: rsvp.dietary_restrictions,
+          mealPreference: rsvp.meal_preference,
+          message: rsvp.message,
+        },
+        guestNames: guestRows.map((g) => g.name),
+        notice: WEDDING_PDPA_NOTICE,
+      };
+    }
+
+    // Additional guest on this RSVP — only their own details, never the others'.
+    const guest = guestRows.find((g) => g.name.trim().toLowerCase() === target);
+    if (guest) {
+      return {
+        role: "guest",
+        guestOf: rsvp.name, // "you are a guest of YK"
+        you: {
+          name: guest.name,
+          email: guest.email,
+          contactNumber: guest.contact_number,
+          attending: rsvp.attending === 1, // attendance is tracked at the RSVP level
+          dietaryRestrictions: guest.dietary_restrictions,
+          mealPreference: guest.meal_preference,
+          message: null, // message is a primary-registrant field only
+        },
+        guestNames: [],
+        notice: WEDDING_PDPA_NOTICE,
+      };
+    }
+
+    // Pin is valid but the supplied name isn't on this RSVP.
+    return null;
   }
 
-  async findRsvpStatusByPin(pin: string): Promise<RsvpStatusMatch | null> {
+  // Locked-down status check: requires BOTH the guest's name and the 4-digit
+  // pin, and the name must be on that pin's RSVP (primary registrant or a
+  // listed guest). A pin alone, a name alone, or a name that isn't on that
+  // pin's RSVP returns null — so the pin can no longer be used on its own to
+  // reveal whether/how someone RSVP'd. Names in the result stay masked.
+  async findRsvpStatusByNameAndPin(name: string, pin: string): Promise<RsvpStatusMatch | null> {
     const rsvp = await this.db.findOne<ITb_wedding_rsvp>("tb_wedding_rsvp", { pin, record_status: "A" });
-    return rsvp ? this.toStatusMatch(rsvp) : null;
-  }
+    if (!rsvp) return null;
 
-  // A name can match the primary registrant on one RSVP and/or a guest
-  // listed on another (or the same) RSVP — collects every distinct RSVP
-  // that comes up either way, case-insensitively.
-  async findRsvpStatusByName(name: string): Promise<RsvpStatusMatch[]> {
-    const trimmed = name.trim();
-    const results = new Map<number, RsvpStatusMatch>();
+    const target = name.trim().toLowerCase();
 
-    const primaryMatches = await this.db.find<ITb_wedding_rsvp>(
-      "tb_wedding_rsvp",
-      { record_status: "A" },
-      { extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmed]) },
-    );
-    for (const rsvp of primaryMatches) {
-      results.set(rsvp.id, await this.toStatusMatch(rsvp));
+    // Primary registrant on this RSVP.
+    if (rsvp.name.trim().toLowerCase() === target) {
+      return this.toStatusMatch(rsvp);
     }
 
-    const guestMatches = await this.db.find<ITb_wedding_rsvp_guest>(
-      "tb_wedding_rsvp_guest",
-      { record_status: "A" },
-      { extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmed]) },
-    );
-    for (const guest of guestMatches) {
-      if (results.has(guest.rsvp_id)) continue;
-      const rsvp = await this.db.findOne<ITb_wedding_rsvp>("tb_wedding_rsvp", {
-        id: guest.rsvp_id,
-        record_status: "A",
-      });
-      if (!rsvp) continue;
+    // A listed guest on this RSVP.
+    const guestRows = await this.db.find<ITb_wedding_rsvp_guest>("tb_wedding_rsvp_guest", {
+      rsvp_id: rsvp.id,
+      record_status: "A",
+    });
+    const guest = guestRows.find((g) => g.name.trim().toLowerCase() === target);
+    if (guest) {
       const match = await this.toStatusMatch(rsvp);
-      match.matchedGuestName = guest.name;
-      results.set(rsvp.id, match);
+      match.matchedGuestName = MaskingUtilities.maskName(guest.name);
+      return match;
     }
 
-    return Array.from(results.values());
+    // Pin is valid but the supplied name isn't on this RSVP.
+    return null;
   }
 
   private async toStatusMatch(rsvp: ITb_wedding_rsvp): Promise<RsvpStatusMatch> {
@@ -146,11 +233,13 @@ export class WeddingService {
       record_status: "A",
     });
 
+    // PDPA: this is an unauthenticated public status lookup, so names are
+    // masked before they leave the server (see MaskingUtilities.maskName).
     return {
       pin: rsvp.pin,
-      name: rsvp.name,
+      name: MaskingUtilities.maskName(rsvp.name),
       attending: rsvp.attending === 1,
-      additionalGuestNames: guestRows.map((guest) => guest.name),
+      additionalGuestNames: guestRows.map((guest) => MaskingUtilities.maskName(guest.name)),
       createdAt: rsvp.created_dt,
       updatedAt: rsvp.updated_dt,
     };

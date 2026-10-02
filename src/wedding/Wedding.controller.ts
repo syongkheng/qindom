@@ -4,7 +4,7 @@ import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { OptionalTokenFilter } from "../middlewares/TokenFilter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { WeddingValidator } from "./Wedding.validator.js";
-import { WeddingService } from "./Wedding.service.js";
+import { WeddingService, WEDDING_PDPA_NOTICE } from "./Wedding.service.js";
 import { handleException } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
@@ -29,15 +29,49 @@ export default function createWeddingController(db: KnexSqlUtilities) {
       // share/use, and a sequential id would make every other guest's
       // record trivially enumerable.
       const { pin } = await weddingService.submitRsvp(payload, logContext);
-      return cr.ok({ pin });
+      return cr.ok({ pin, notice: WEDDING_PDPA_NOTICE });
     } catch (err) {
       return handleException(err, cr, "WeddingController.POST /rsvp", "Failed to submit RSVP");
     }
   });
 
-  // Lets the frontend check whether a name already has an RSVP and, if so,
-  // fetch it to pre-fill the form for editing rather than the user
-  // re-entering everything from scratch.
+  // Step-1 existence check for the RSVP form: name → { exists, hasEmail }.
+  // Booleans only, no personal data.
+  router.post("/rsvp/preflight", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    const logContext: IRequestLogContext = req.logContext;
+    const validationEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+      : undefined;
+    try {
+      const { name } = weddingValidator.validateNameBody(req, validationEvent);
+      return cr.ok(await weddingService.checkRsvpExistsByName(name));
+    } catch (err) {
+      return handleException(err, cr, "WeddingController.POST /rsvp/preflight", "Failed to check RSVP");
+    }
+  });
+
+  // "Forgot PIN": emails the pin to the RSVP's registered address if there is
+  // one. Returns { exists, hasEmail, sent } — never the pin itself.
+  router.post("/rsvp/recover-pin", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    const logContext: IRequestLogContext = req.logContext;
+    const validationEvent = logContext
+      ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
+      : undefined;
+    try {
+      const { name } = weddingValidator.validateNameBody(req, validationEvent);
+      return cr.ok(await weddingService.recoverPinByName(name));
+    } catch (err) {
+      return handleException(err, cr, "WeddingController.POST /rsvp/recover-pin", "Failed to recover PIN");
+    }
+  });
+
+  // Locked-down lookup: a guest proves their identity with BOTH their name and
+  // the 4-digit RSVP pin. On success they see only their own details plus whose
+  // RSVP they're on ("guest of YK") — never the other guests' details. A pin or
+  // name alone reveals nothing, and a mismatch is reported as a plain
+  // not-found so it can't be used to enumerate names or pins.
   router.get("/rsvp", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     const logContext: IRequestLogContext = req.logContext;
@@ -47,8 +81,8 @@ export default function createWeddingController(db: KnexSqlUtilities) {
       : undefined;
 
     try {
-      const name = await weddingValidator.findRsvpByNameQuery(req, validationEvent);
-      const rsvp = await weddingService.findRsvpByName(name);
+      const { name, pin } = await weddingValidator.validateRsvpLookupQuery(req, validationEvent);
+      const rsvp = await weddingService.lookupRsvpByNameAndPin(name, pin);
       return cr.ok({ found: rsvp !== null, rsvp });
     } catch (err) {
       return handleException(err, cr, "WeddingController.GET /rsvp", "Failed to look up RSVP");
@@ -67,12 +101,9 @@ export default function createWeddingController(db: KnexSqlUtilities) {
       : undefined;
 
     try {
-      const query = await weddingValidator.validateRsvpStatusQuery(req, validationEvent);
-      const matches =
-        query.pin !== undefined
-          ? await weddingService.findRsvpStatusByPin(query.pin).then((match) => (match ? [match] : []))
-          : await weddingService.findRsvpStatusByName(query.name as string);
-      return cr.ok({ matches });
+      const { name, pin } = await weddingValidator.validateRsvpStatusQuery(req, validationEvent);
+      const match = await weddingService.findRsvpStatusByNameAndPin(name, pin);
+      return cr.ok({ matches: match ? [match] : [] });
     } catch (err) {
       return handleException(err, cr, "WeddingController.GET /rsvp/status", "Failed to look up RSVP status");
     }

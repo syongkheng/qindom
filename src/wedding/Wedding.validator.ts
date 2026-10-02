@@ -75,38 +75,49 @@ export class WeddingValidator {
     };
   }
 
-  async findRsvpByNameQuery(req: Request, loggingEvent?: IRequestLogEvent): Promise<string> {
-    const name = req.query.name;
+  // Name-only body — used by the existence check and the "forgot PIN" recovery,
+  // neither of which returns personal data.
+  validateNameBody(req: Request, loggingEvent?: IRequestLogEvent): { name: string } {
+    const { name } = req.body;
     V.requiredString(name, "name", loggingEvent);
-    return name as string;
+    return { name: (name as string).trim() };
   }
 
-  // Accepts either `pin` (the 4-digit reservation pin handed back on
-  // submit) or `name` (checked against both the primary registrant and
-  // guest names) — exactly one of the two, so the caller can't send both
-  // and get an ambiguous lookup.
+  // Locked-down lookup requires BOTH the guest's name and the 4-digit RSVP pin.
+  async validateRsvpLookupQuery(
+    req: Request,
+    loggingEvent?: IRequestLogEvent,
+  ): Promise<{ name: string; pin: string }> {
+    const { name, pin } = req.query;
+
+    V.requiredString(name, "name", loggingEvent);
+
+    if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
+      loggingEvent?.children?.push(`'pin' must be exactly 4 digits ${LogEmoji.error}`);
+      throw new InvalidRequestException("pin", "format");
+    }
+
+    loggingEvent?.children?.push(`'name' + 'pin' validated ${LogEmoji.success}`);
+    return { name: (name as string).trim(), pin };
+  }
+
+  // Status check requires BOTH the guest's name and the 4-digit pin — a pin
+  // alone no longer reveals whether/how someone RSVP'd.
   async validateRsvpStatusQuery(
     req: Request,
     loggingEvent?: IRequestLogEvent,
-  ): Promise<{ pin?: string; name?: string }> {
+  ): Promise<{ name: string; pin: string }> {
     const { pin, name } = req.query;
 
-    if (pin !== undefined) {
-      if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
-        loggingEvent?.children?.push(`'pin' must be exactly 4 digits ${LogEmoji.error}`);
-        throw new InvalidRequestException("pin", "format");
-      }
-      loggingEvent?.children?.push(`'pin' validated ${LogEmoji.success}`);
-      return { pin };
+    V.requiredString(name, "name", loggingEvent);
+
+    if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
+      loggingEvent?.children?.push(`'pin' must be exactly 4 digits ${LogEmoji.error}`);
+      throw new InvalidRequestException("pin", "format");
     }
 
-    if (name !== undefined) {
-      V.requiredString(name, "name", loggingEvent);
-      return { name: (name as string).trim() };
-    }
-
-    loggingEvent?.children?.push(`Either 'pin' or 'name' must be provided ${LogEmoji.error}`);
-    throw new InvalidRequestException("pin", "mandatory");
+    loggingEvent?.children?.push(`'name' + 'pin' validated ${LogEmoji.success}`);
+    return { name: (name as string).trim(), pin };
   }
 
   private validateAdditionalGuestContact(

@@ -369,6 +369,28 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     Fields: name, email, attending (bool), contactNumber?,
 │   │   │     dietaryRestrictions?, mealPreference?, additionalGuestContact[]
 │   │   │     Duplicate email guard (400 on re-submit)
+│   │   │     Response includes WEDDING_PDPA_NOTICE (retention notice)
+│   │   ├── POST /rsvp/preflight {name} — step-1 existence check for the form;
+│   │   │     returns {exists, hasEmail} booleans only (no PII).
+│   │   │     Service: checkRsvpExistsByName().
+│   │   ├── POST /rsvp/recover-pin {name} — "forgot PIN": emails the pin to the
+│   │   │     registered address; returns {exists, hasEmail, sent}, never the pin.
+│   │   │     Service: recoverPinByName().
+│   │   ├── GET /rsvp?name=&pin= — LOCKED-DOWN lookup: requires BOTH name and
+│   │   │     the 4-digit pin. Returns only the requester's OWN details +
+│   │   │     whose RSVP they're on (role primary|guest, guestOf) — never other
+│   │   │     guests' details. For a PRIMARY match, also returns guestNames[]
+│   │   │     (own guest names, for edit pre-fill). Mismatch → plain not-found.
+│   │   │     Service: lookupRsvpByNameAndPin() / RsvpSelfView.
+│   │   ├── GET /rsvp/status?name=&pin= — status check now requires BOTH name
+│   │   │     and pin (name must be on that pin's RSVP); pin-alone / name-alone
+│   │   │     removed. Returned names stay PDPA-masked via
+│   │   │     src/utils/MaskingUtilities.ts (maskName; last 3/2/1 chars → '*').
+│   │   │     Service: findRsvpStatusByNameAndPin().
+│   │   │     Frontend: jessikheng (../jessikheng) RsvpStatusPage — two fields;
+│   │   │     /#/status/:pin deep-link pre-fills pin only, no auto-run.
+│   │   ├── PDPA: WEDDING_PDPA_NOTICE promises deletion the day after the
+│   │   │     wedding — TODO: no purge job yet enforces it (notice only)
 │   │   └── DB: tb_wedding_rsvp, tb_wedding_rsvp_guest
 │   │
 │   └── GARMIN HEALTH  /garmin  [JWT AUTH]
