@@ -170,9 +170,13 @@ export class AuthService {
       throw new Exceptions.InvalidLoginCredentials();
     }
 
+    // An already-verified account must NOT get a session from this endpoint:
+    // the OTP is never checked past this point, so issuing a token here let
+    // anyone log in as any verified user by POSTing an arbitrary code.
+    // Verified users authenticate via /login with their password instead.
     if (user.email_verified === 1) {
-      if (authEvent) authEvent.detail = "already verified, issuing token";
-      return this._issueToken(user, authEvent);
+      if (authEvent) authEvent.detail = "already verified, rejecting (use /login)";
+      throw new Exceptions.EmailAlreadyRegistered();
     }
 
     // Dev bypass: fndom skips the real OTP send outside prod, so accept the fixed
