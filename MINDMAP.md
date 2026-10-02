@@ -26,7 +26,37 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── CORS (ALLOWED_ORIGINS env var)
 │   ├── globalLimiter (100 req/min per IP)
 │   ├── express.json (5MB)
-│   ├── RestRequestLogger (logs all requests; redacts password/blob/token/email;
+│   ├── Two render modes (LoggingUtilities.request): VERBOSE (console + request-
+│   │     log file → Log Searcher) has payload, every event, response body, and
+│   │     for 500s the real exception + trimmed stack; COMPACT (Telegram) is one
+│   │     access-log line — `ip - - [dd/Mon/yyyy HH:MM:SS] "METHOD /path
+│   │     HTTP/1.1" status -` — plus a "View Verbose Logs" link to fndom
+│   │     /admin/log-searcher?requestId=… (awense.com in prd; in dev the
+│   │     localhost URL is shown tap-to-copy, since Telegram won't link it).
+│   │     Successful (<400) response bodies are summarised before logging
+│   │     (arrays >3 items → "[N items]", strings >300 chars trimmed, depth 5,
+│   │     40-line cap); 4xx/5xx bodies are kept verbatim. RequestHeaderFilter
+│   │     only adds its "General headers" event when a check fails.
+│   │     Pipeline stages: every event carries stage middleware | controller |
+│   │     service. RestRequestLogger starts the context in "middleware";
+│   │     index.ts appends `enterController` after each route's middlewares
+│   │     to flip it to "controller"; after that, service-type events (AUTH,
+│   │     SERVICE, SQL, …) are "service", the rest "controller". Filters
+│   │     mounted inside routers use request.middleware() to stay tagged as
+│   │     middleware. render() writes "│ ── <stage>" markers on change;
+│   │     RequestLogParser reads them (and infers stage for older entries) →
+│   │     fndom Log Searcher shows Request → Middleware → Controller →
+│   │     Service → Response.
+│   │     handleException → cr.ko(fallback, { source, error }) →
+│   │     request.exception() records the real cause (client still gets fallback)
+│   ├── Redaction (src/utils/logging/LogRedaction.ts) — by field name across
+│   │     the whole object (payloads, GET query + URL query string, response
+│   │     bodies, SQL find() where-clauses): passwords, token/jwt/secret,
+│   │     apiKey/api_key_hash, verify_code/otp/pin/captcha_code, smsBody (kept
+│   │     as "[REDACTED n chars]"), authorization/cookie, blob; `code` only when
+│   │     OTP-shaped (4–8 digits), `key` only when API-key-shaped (ss_/iot_ or
+│   │     ≥16 chars); emails masked. Free-text (error messages) gets a regex pass.
+│   ├── RestRequestLogger (logs all requests; redaction per LogRedaction.ts;
 │   │     console+Telegram by default — TWO independent mechanisms can skip the
 │   │     Telegram send only (console/request-log file always unaffected),
 │   │     both only ever suppress non-error traffic (4xx/5xx always alert):
@@ -76,17 +106,25 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── POST /verification — reads the cookie via MandatoryTokenFilter,
 │   │   │     no body needed (was: client POSTed token from localStorage)
 │   │   ├── GET /admin/recent-request-logs?limit=3 (SYSTEM_R5 only) — newest N
-│   │   │     requests overall (RequestLogSearch.recent()), lightweight DTO
-│   │   │     (timestamp/method/path/statusCode only, no raw tree) for the
-│   │   │     dashboard's compact LogSearchCard widget. Registered before the
+│   │   │     requests overall (RequestLogSearch.recent()), lightweight
+│   │   │     RecentRequestLogDto (requestId/timestamp/method/path/statusCode,
+│   │   │     no raw tree) for the dashboard's LogSearchCard widget and the Log
+│   │   │     Searcher's "Latest requests" list. Registered before the
 │   │   │     :requestId route below (distinct path segment, no ambiguity).
 │   │   ├── GET /admin/request-logs/:requestId (SYSTEM_R5 only) — searches
 │   │   │     qindom's own request-log file (src/utils/logging/RequestLogSearch.ts)
-│   │   │     for the rendered ASCII tree matching a req_xxxxx Request ID.
+│   │   │     for the rendered ASCII tree matching a Request ID — req_ + 12 hex
+│   │   │     (since Oct 2026; older log files still have 5-hex ids, both
+│   │   │     formats accepted here and in fndom's Log Searcher/LogSearchCard).
 │   │   │     Purely read-only: no new table, no redaction changes — the log
 │   │   │     text is already redacted at capture time (see RestRequestLogger/
 │   │   │     ControllerResponse below). Returns 404 if no match, matches
-│   │   │     ordered newest-first, capped at 20.
+│   │   │     ordered newest-first, capped at 20. Each match (RequestLogMatchDto,
+│   │   │     src/models/dtos/RequestLogDto.ts) carries `raw` plus `entry` — the
+│   │   │     text parsed back into structure by RequestLogParser.ts (header,
+│   │   │     events w/ lines/timings/stack, status + reason phrase, payload and
+│   │   │     response JSON text); `entry` is null if unparseable and fndom
+│   │   │     falls back to raw. Parser must track LoggingUtilities.render().
 │   │   │     Log source: LoggingUtilities.request.flush() writes the same
 │   │   │     rendered lines it console.logs to a dedicated file via
 │   │   │     RequestLogFileWriter.ts — deliberately NOT reading PM2's
@@ -352,6 +390,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │       │     no push notification (see fndom /health, personal/auth-only)
 │       └── DB: tb_garmin_session, tb_garmin_intraday_metric,
 │              tb_garmin_daily_summary
+│
+│   DEBUG  /debug  [OPEN in dev · JWT + SYSTEM_R5 in prd]
+│   └── GET /status/:code (200–599) — test endpoint for the logging/Telegram
+│         pipeline. 500 throws a real Error → handleException (exception +
+│         stack in the request tree); other codes are returned directly
+│         (4xx status name "debug_<code>"). Telegram module key "debug".
 │
 │
 ├── EXTERNAL SERVICES

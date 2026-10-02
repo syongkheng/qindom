@@ -47,6 +47,9 @@ import createWeddingController from "./wedding/Wedding.controller.js";
 import createGarminController from "./garmin/Garmin.controller.js";
 import { startGarminScheduler } from "./garmin/Garmin.scheduler.js";
 
+// Debug (status-code test endpoint)
+import createDebugController from "./debug/Debug.controller.js";
+
 // Suggestion
 import createSuggestionController from "./suggestion/Suggestion.controller.js";
 
@@ -120,8 +123,16 @@ async function startServer() {
     ["/wedding",      mw.std,                                    createWeddingController(db)],
     ["/suggestion",   mw.std,                                    createSuggestionController(db)],
     ["/garmin",       mw.auth,                                   createGarminController(db)],
+    // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
+    ["/debug",        process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController(db)],
   ];
-  routes.forEach(([path, mws, router]) => app.use(path, mws, router));
+  // Marks the request log's pipeline stage: events after the route's middlewares
+  // belong to the controller (or the service layer, by event type).
+  const enterController: RequestHandler = (req, _res, next) => {
+    if (req.logContext) req.logContext.currentStage = "controller";
+    next();
+  };
+  routes.forEach(([path, mws, router]) => app.use(path, [...mws, enterController], router));
 
   // Start server
   app.listen(port, () => {

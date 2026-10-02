@@ -16,6 +16,7 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { RequestLogSearch } from "../utils/logging/RequestLogSearch.js";
+import { RecentRequestLogDto } from "../models/dtos/RequestLogDto.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { TELEGRAM_LOG_MODULE_KEYS } from "../utils/logging/TelegramLogModules.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
@@ -67,12 +68,9 @@ export default function createAuthController(db: KnexSqlUtilities) {
       try {
         if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
         const limit = Math.min(Math.max(Number(req.query.limit) || 3, 1), 20);
-        const matches = RequestLogSearch.recent(limit).map(({ timestamp, method, path, statusCode }) => ({
-          timestamp,
-          method,
-          path,
-          statusCode,
-        }));
+        const matches: RecentRequestLogDto[] = RequestLogSearch.recent(limit).map(
+          ({ requestId, timestamp, method, path, statusCode }) => ({ requestId, timestamp, method, path, statusCode }),
+        );
         return cr.ok(matches);
       } catch (err) {
         return handleException(err, cr, "AuthController.GET /admin/recent-request-logs", "Failed to load recent logs");
@@ -89,7 +87,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
       try {
         if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
         const requestId = req.params.requestId;
-        if (!/^req_[0-9a-f]{5}$/i.test(requestId)) return cr.result(400, "Bad Request", "Invalid Request ID format");
+        // 12 hex = current ids; 5 hex = ids already in older log files
+        if (!/^req_([0-9a-f]{12}|[0-9a-f]{5})$/i.test(requestId)) return cr.result(400, "Bad Request", "Invalid Request ID format");
         const matches = RequestLogSearch.find(requestId);
         if (!matches.length) return cr.result(404, "Not Found", "No log entries found for that Request ID");
         return cr.ok(matches);

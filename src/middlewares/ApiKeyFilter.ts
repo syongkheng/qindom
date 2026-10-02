@@ -18,7 +18,7 @@ export const RequestApiKeyFilter = async function (req: RequestWithUserInfo, res
 
   // Header Validation
   const apiKeyValidationLoggingEvent = logContext
-    ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Specific headers")
+    ? LoggingUtilities.request.middleware(logContext, "VALIDATION", "Specific headers")
     : undefined;
 
   try {

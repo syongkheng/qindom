@@ -26,7 +26,7 @@ export class ControllerResponse {
     LoggingUtilities.request.response(
       this.req.logContext,
       200,
-      JSON.parse(LoggingUtilities.sanitise(JSON.stringify(data))),
+      LoggingUtilities.redact(data),
     );
 
     return this.res.status(200).json(responseBody);
@@ -36,14 +36,23 @@ export class ControllerResponse {
   // 500 ERROR
   // =========================================================
 
-  ko(data: unknown): Response {
-    const serverError = typeof data === "string" ? data : JSON.stringify(data);
+  get requestId(): string | undefined {
+    return this.req.logContext?.requestId;
+  }
 
-    LoggingUtilities.request.error(
-      this.req.logContext,
-      "Unhandled controller exception",
-      LoggingUtilities.sanitise(serverError),
-    );
+  // `cause` carries the real exception so the request tree records what
+  // actually failed (and where), not just the client-facing fallback text.
+  ko(data: unknown, cause?: { source: string; error: unknown }): Response {
+    if (cause) {
+      LoggingUtilities.request.exception(this.req.logContext, cause.source, cause.error);
+    } else {
+      const serverError = typeof data === "string" ? data : JSON.stringify(data);
+      LoggingUtilities.request.error(
+        this.req.logContext,
+        "Unhandled controller exception",
+        LoggingUtilities.sanitise(serverError),
+      );
+    }
 
     const clientMessage = isPrd ? "An internal error occurred. Please try again later." : data;
 
@@ -56,7 +65,7 @@ export class ControllerResponse {
     LoggingUtilities.request.response(
       this.req.logContext,
       500,
-      JSON.parse(LoggingUtilities.sanitise(JSON.stringify(responseBody))),
+      LoggingUtilities.redact(responseBody),
     );
 
     return this.res.status(500).json(responseBody);
@@ -78,7 +87,7 @@ export class ControllerResponse {
     LoggingUtilities.request.response(
       this.req.logContext,
       400,
-      JSON.parse(LoggingUtilities.sanitise(JSON.stringify(responseBody))),
+      LoggingUtilities.redact(responseBody),
     );
 
     return this.res.status(400).json(responseBody);
@@ -100,7 +109,7 @@ export class ControllerResponse {
     LoggingUtilities.request.response(
       this.req.logContext,
       401,
-      JSON.parse(LoggingUtilities.sanitise(JSON.stringify(responseBody))),
+      LoggingUtilities.redact(responseBody),
     );
 
     return this.res.status(401).json(responseBody);
@@ -120,7 +129,7 @@ export class ControllerResponse {
     LoggingUtilities.request.response(
       this.req.logContext,
       statusCode,
-      JSON.parse(LoggingUtilities.sanitise(JSON.stringify(responseBody))),
+      LoggingUtilities.redact(responseBody),
     );
 
     return this.res.status(statusCode).json(responseBody);

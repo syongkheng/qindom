@@ -25,6 +25,7 @@ export function handleException(
   if (err instanceof BaseExceptions) {
     return cr.result(err.httpStatus, err.name, err.toResponseMessage());
   }
-  LoggingUtilities.service.error(logLabel, toMessage(err));
-  return cr.ko(fallback);
+  // One-liner for PM2's error log, tagged so it can be matched to the request tree
+  LoggingUtilities.service.error(logLabel, `${cr.requestId ?? "no-request-id"} ${toMessage(err)}`);
+  return cr.ko(fallback, { source: logLabel, error: err });
 }

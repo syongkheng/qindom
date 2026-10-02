@@ -1,7 +1,13 @@
+/** Where in the request pipeline an event was recorded. */
+export type LogStage = "middleware" | "controller" | "service";
+
 export interface IRequestLogContext {
   requestId: string;
+  /** Set to "middleware" by RestRequestLogger; flipped to "controller" once the route's middlewares pass (index.ts). */
+  currentStage?: LogStage;
   startTime: number;
   protocol?: string;
+  httpVersion?: string;
   method: string;
   path: string;
   ip: string;
@@ -74,4 +80,13 @@ export interface IRequestLogEvent {
    * Whether this event represents a failure.
    */
   success?: boolean;
+
+  /**
+   * Trimmed stack frames for unhandled exceptions — rendered only in the
+   * verbose output (console / request-log file / Log Searcher), never Telegram.
+   */
+  stack?: string[];
+
+  /** Pipeline stage — assigned by LoggingUtilities.request when the event is recorded. */
+  stage?: LogStage;
 }

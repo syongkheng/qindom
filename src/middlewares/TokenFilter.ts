@@ -31,7 +31,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
   const logContext: IRequestLogContext = req.logContext;
 
   const requestHeaderValidationLoggingEvent = logContext
-    ? LoggingUtilities.request.branch(logContext, "VALIDATION", "JWT")
+    ? LoggingUtilities.request.middleware(logContext, "VALIDATION", "JWT")
     : undefined;
 
   try {

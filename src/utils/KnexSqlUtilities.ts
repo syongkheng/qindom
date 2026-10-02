@@ -90,7 +90,7 @@ class KnexSqlUtilities {
       const t0 = Date.now();
       const result = await query;
       if (logEvent) {
-        this.sqlEvent(logEvent, `${table}.find(${JSON.stringify(whereClause)})`, Date.now() - t0);
+        this.sqlEvent(logEvent, `${table}.find(${JSON.stringify(LoggingUtilities.redact(whereClause))})`, Date.now() - t0);
       } else {
         LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
       }

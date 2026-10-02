@@ -48,7 +48,7 @@ async function resolveTelegramTargets(req: Request, statusCode: number): Promise
 }
 
 export const RestRequestLogger = function (req: Request, res: Response, next: NextFunction) {
-  const payload = req.method === "GET" ? req.query : JSON.parse(LoggingUtilities.sanitise(JSON.stringify(req.body ?? {})));
+  const payload = LoggingUtilities.redact(req.method === "GET" ? req.query : (req.body ?? {}));
 
   const ipAddress = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown");
 
@@ -57,10 +57,13 @@ export const RestRequestLogger = function (req: Request, res: Response, next: Ne
   // ======================================================
 
   req.logContext = {
-    requestId: "req_" + crypto.randomUUID().replace(/-/g, "").substring(0, 5),
+    // 12 hex chars (48 bits) — the old 5-char ids collided within days of traffic
+    requestId: "req_" + crypto.randomBytes(6).toString("hex"),
     startTime: Date.now(),
+    currentStage: "middleware",
     method: req.method,
-    path: req.originalUrl,
+    httpVersion: req.httpVersion,
+    path: LoggingUtilities.redactUrl(req.originalUrl),
     ip: ipAddress,
     payload,
     events: [],

@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { REQUEST_LOG_DIR, REQUEST_LOG_FILE_PREFIX } from "./RequestLogFileWriter.js";
+import { RequestLogMatchDto } from "../../models/dtos/RequestLogDto.js";
+import { parseRequestLogEntry } from "./RequestLogParser.js";
 
 // Reads qindom's own request-log file (see RequestLogFileWriter.ts), not PM2's
 // stdout capture — works identically in dev (tsx watch) and prod (PM2).
@@ -13,13 +15,7 @@ const RESPONSE_LINE_RE = /^└─ RESPONSE (\d+)/;
 
 const MAX_MATCHES = 20;
 
-export interface IRequestLogMatch {
-  raw: string;
-  timestamp: string;
-  method: string;
-  path: string;
-  statusCode: number | null;
-}
+export type IRequestLogMatch = RequestLogMatchDto;
 
 function listLogFiles(): string[] {
   if (!fs.existsSync(LOG_DIR)) return [];
@@ -36,7 +32,10 @@ function parseMatch(lines: string[], headerIndex: number, endIndex: number): IRe
   const headerMatch = headerLine.match(HEADER_RE);
 
   let statusCode: number | null = null;
+  let requestId: string | null = null;
   for (let i = headerIndex; i < endIndex; i++) {
+    const idMatch = lines[i].match(REQUEST_ID_LINE_RE);
+    if (idMatch) requestId = idMatch[1].trim();
     const respMatch = lines[i].match(RESPONSE_LINE_RE);
     if (respMatch) {
       statusCode = Number(respMatch[1]);
@@ -44,12 +43,22 @@ function parseMatch(lines: string[], headerIndex: number, endIndex: number): IRe
     }
   }
 
+  const raw = lines.slice(headerIndex, endIndex).join("\n").trimEnd();
+  let entry = null;
+  try {
+    entry = parseRequestLogEntry(raw);
+  } catch {
+    // Unparseable (e.g. a very old format) — the page falls back to raw
+  }
+
   return {
-    raw: lines.slice(headerIndex, endIndex).join("\n").trimEnd(),
+    raw,
     timestamp: headerLine.slice(1, headerLine.indexOf("]")),
     method: headerMatch?.[2] ?? "",
     path: headerMatch?.[3] ?? "",
     statusCode,
+    requestId,
+    entry,
   };
 }
 

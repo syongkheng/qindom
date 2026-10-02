@@ -31,6 +31,7 @@ export const TELEGRAM_LOG_MODULES: TelegramLogModule[] = [
   { key: "wedding", label: "Wedding", prefix: "/wedding" },
   { key: "suggestion", label: "Trip Suggestions", prefix: "/suggestion" },
   { key: "garmin", label: "Garmin Health", prefix: "/garmin" },
+  { key: "debug", label: "Debug (status-code test)", prefix: "/debug" },
 ];
 
 // De-duplicated key/label/paths triples for admin listing — "iot" appears

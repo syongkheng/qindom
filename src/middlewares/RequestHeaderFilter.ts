@@ -9,14 +9,19 @@ export const RequestHeaderFilter = function (req: Request, res: Response, next: 
   const contentType = req.headers["content-type"];
   const logContext: IRequestLogContext = req.logContext;
 
-  const requestHeaderValidationLoggingEvent = logContext
-    ? LoggingUtilities.request.branch(logContext, "VALIDATION", "General headers")
-    : undefined;
+  // Logged only when a check fails — passing checks (and the optional proxy
+  // IP headers, which are always absent in dev) were pure noise on every request.
+  const failureEvent = () =>
+    logContext ? LoggingUtilities.request.middleware(logContext, "VALIDATION", "General headers") : undefined;
 
-  const userAgent = HeaderValidationUtilities.required(req.headers, "user-agent", requestHeaderValidationLoggingEvent);
+  const userAgent = HeaderValidationUtilities.required(
+    req.headers,
+    "user-agent",
+    req.headers["user-agent"] ? undefined : failureEvent(),
+  );
   const rawIp =
-    HeaderValidationUtilities.optional(req.headers, "x-real-ip", requestHeaderValidationLoggingEvent) ||
-    HeaderValidationUtilities.optional(req.headers, "x-forwarded-for", requestHeaderValidationLoggingEvent) ||
+    HeaderValidationUtilities.optional(req.headers, "x-real-ip") ||
+    HeaderValidationUtilities.optional(req.headers, "x-forwarded-for") ||
     req.socket.remoteAddress ||
     "Unknown";
   const ipAddress = Array.isArray(rawIp) ? rawIp[0] : rawIp;
@@ -30,6 +35,7 @@ export const RequestHeaderFilter = function (req: Request, res: Response, next: 
   // Only enforce for requests that usually have a body
   if (["POST"].includes(req.method)) {
     if (!contentType || !contentType.includes("application/json")) {
+      failureEvent()?.children.push(`(M) 'content-type' must be application/json, got '${contentType ?? "none"}' ❌`);
       return cr.result(415, "Unsupported Media Type", "Content-Type must be application/json");
     }
   }
