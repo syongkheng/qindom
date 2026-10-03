@@ -40,7 +40,7 @@ export class TokenService {
       const token = jwt.sign(
         { id, username, system, roles, lastLoggedInDt },
         this.jwtSecret,
-        { expiresIn: this.jwtExpiration }
+        { algorithm: "HS256", expiresIn: this.jwtExpiration }
       );
       LoggingUtilities.service.info(
         "TokenService.generateToken",

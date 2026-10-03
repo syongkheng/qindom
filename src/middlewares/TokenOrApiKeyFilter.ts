@@ -7,9 +7,11 @@ import { RequestApiKeyFilter } from "./ApiKeyFilter.js";
  * Accepts either a JWT (httpOnly cookie) for normal app users,
  * or an x-api-key — whichever is present.
  */
+const apiKeyFilter = RequestApiKeyFilter("ss", "iot");
+
 export const MandatoryTokenOrApiKeyFilter = (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   if (req.headers["x-api-key"]) {
-    return RequestApiKeyFilter(req, res, next);
+    return apiKeyFilter(req, res, next);
   }
   return MandatoryTokenFilter(req, res, next);
 };

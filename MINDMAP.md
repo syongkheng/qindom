@@ -89,6 +89,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │          list and each (chat,module) enabled-check.
 │   ├── RequestHeaderFilter (POST must have Content-Type: application/json)
 │   ├── cookieParser (reads jwt_token / csrf_token cookies into req.cookies)
+│   ├── JWTs are signed and verified with algorithm pinned to HS256
 │   ├── MandatoryTokenFilter (JWT cookie required → 401 if missing;
 │   │     403 csrf_invalid if X-CSRF-Token header doesn't match csrf_token
 │   │     cookie on non-GET requests)
@@ -96,8 +97,13 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     same DB token-revocation check as MandatoryTokenFilter — a revoked/
 │   │     rotated token drops to visitor instead of 401; CSRF enforced only
 │   │     when a valid token is attached)
-│   └── RequestApiKeyFilter (x-api-key header → tb_ss_api_key / tb_iot_api_key
-│         lookup (ss/iot prefixes only), sets logContext.metadata.userId)
+│   └── RequestApiKeyFilter(...prefixes) — factory; x-api-key header →
+│         tb_ss_api_key / tb_iot_api_key lookup, sets logContext.metadata.userId.
+│         Each route names the key prefix it accepts (presets mw.ssKey →
+│         /v1/ss, /v2/ss; mw.iotKey → /iot) so an iot_ device key can't post
+│         Apple Pay transactions. Itinerary routes are JWT-only
+│         (MandatoryTokenFilter) — their old API-key path never set req.user,
+│         so getUser() always 401'd; TokenOrApiKeyFilter.ts is now unused.
 │
 ├── MODULES
 │   │
@@ -141,6 +147,9 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     search works identically in both environments. 50MB rotation,
 │   │   │     best-effort (try/catch, never blocks the response).
 │   │   ├── bcrypt (10 rounds), SHA-256 OTP hash, 15-min TTL
+│   │   ├── Emails (OTP, password-changed) HTML-escape the username via
+│   │   │     MailerUtilities.escapeHtml; usernames are 3–64 chars (register
+│   │   │     + /pfp/user/username)
 │   │   ├── Dev OTP bypass: verifyEmail() accepts code "111111" whenever
 │   │   │     NODE_ENV !== "prd", regardless of the real DB-stored code,
 │   │   │     expiry, or attempt count — lets fndom's dev build skip

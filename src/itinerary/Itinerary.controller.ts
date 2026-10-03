@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { MandatoryTokenOrApiKeyFilter } from "../middlewares/TokenOrApiKeyFilter.js";
+import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { itineraryChallengeLimiter } from "../middlewares/RateLimiter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { ItineraryService } from "./Itinerary.service.js";
@@ -19,7 +19,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
   const router = Router();
   const svc = new ItineraryService(db);
 
-  router.get("/", MandatoryTokenOrApiKeyFilter, async (req: RequestWithUserInfo, res: Response) => {
+  router.get("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const myTrips = await svc.listTrips(getUser(req).id);
@@ -29,7 +29,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     }
   });
 
-  router.post("/delete/:sessionId", MandatoryTokenOrApiKeyFilter, async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/delete/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       await svc.deleteTrip(getUser(req).id, req.params.sessionId);
@@ -59,7 +59,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     return new ControllerResponse(_req, res).ok({ added: false, message: "Not yet implemented" });
   });
 
-  router.post("/", MandatoryTokenOrApiKeyFilter, async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;
@@ -87,7 +87,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     }
   });
 
-  router.get("/:sessionId", MandatoryTokenOrApiKeyFilter, async (req: RequestWithUserInfo, res: Response) => {
+  router.get("/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const result = await svc.getBySessionId(getUser(req).id, req.params.sessionId);
@@ -97,7 +97,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     }
   });
 
-  router.post("/edit/:sessionId", MandatoryTokenOrApiKeyFilter, async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/edit/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;

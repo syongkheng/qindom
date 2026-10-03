@@ -127,7 +127,7 @@ export class AuthService {
         to: email,
         subject: `${code} is your verification code`,
         html: `
-          <p>Hi <strong>${username}</strong>,</p>
+          <p>Hi <strong>${MailerUtilities.escapeHtml(username)}</strong>,</p>
           <p>Your verification code is:</p>
           <h2 style="letter-spacing:0.2em;">${code}</h2>
           <p>This code expires in <strong>15 minutes</strong>. Do not share it with anyone.</p>
@@ -280,7 +280,7 @@ export class AuthService {
       to: email,
       subject: `${code} is your verification code`,
       html: `
-          <p>Hi <strong>${user.username}</strong>,</p>
+          <p>Hi <strong>${MailerUtilities.escapeHtml(user.username)}</strong>,</p>
           <p>Your verification code is:</p>
           <h2 style="letter-spacing:0.2em;">${code}</h2>
           <p>This code expires in <strong>15 minutes</strong>. Do not share it with anyone.</p>
@@ -431,7 +431,7 @@ export class AuthService {
     try {
       const secret = process.env.JWT_SECRET;
       if (!secret) return;
-      const decoded = jwt.verify(token, secret) as { username: string; system: string };
+      const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as { username: string; system: string };
       await this.db.update<ITB_AA_USER>(
         "tb_aa_user",
         { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
@@ -503,7 +503,7 @@ export class AuthService {
         to: user.email,
         subject: "Your Awense password has been changed",
         html: `
-          <p>Hi <strong>${user.username}</strong>,</p>
+          <p>Hi <strong>${MailerUtilities.escapeHtml(user.username)}</strong>,</p>
           <p>Your password was successfully changed on <strong>${changedAt}</strong>.</p>
           <p>If you did not make this change, please contact us immediately and secure your account.</p>
           <p>— no-reply-awense</p>

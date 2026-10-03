@@ -46,7 +46,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
       return response.ko("Server configuration error");
     }
 
-    const decoded = jwt.verify(token, jwtSecret) as IDecodedTokenUser;
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as IDecodedTokenUser;
 
     // Verify the token matches the one stored in the DB — enables single-session revocation
     const user = await db.findOne<ITB_AA_USER>(
@@ -96,7 +96,7 @@ export const OptionalTokenFilter = async (req: RequestWithUserInfo, res: Respons
     }
 
     try {
-      const decoded = jwt.verify(token, jwtSecret) as IDecodedTokenUser;
+      const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as IDecodedTokenUser;
 
       // Same server-side revocation check as MandatoryTokenFilter: the cookie's
       // token must still match the one stored for the user, so a token that was

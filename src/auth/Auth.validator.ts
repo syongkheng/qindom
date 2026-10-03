@@ -39,6 +39,12 @@ export class AuthValidator {
       throw new InvalidRequestException("username", "format");
     }
     loggingEvent?.children?.push(`'username' minLength ${LogEmoji.success} `);
+    // tb_aa_user.username is VARCHAR(64)
+    if ((username as string).trim().length > 64) {
+      loggingEvent?.children?.push(`'username' maxLength ${LogEmoji.error} `);
+      throw new InvalidRequestException("username", "format");
+    }
+    loggingEvent?.children?.push(`'username' maxLength ${LogEmoji.success} `);
     V.requiredEmail(email, "email", loggingEvent);
     V.requiredString(password, "password", loggingEvent);
     if (!this._isStrongPassword(password as string)) {

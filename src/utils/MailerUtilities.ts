@@ -33,6 +33,16 @@ export class MailerUtilities {
     })
   }
 
+  /** Escape user-supplied text (e.g. usernames) before interpolating it into an html body. */
+  static escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
   static async verifyConnection(): Promise<boolean> {
     try {
       await transporter.verify()

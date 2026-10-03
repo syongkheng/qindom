@@ -60,6 +60,9 @@ export default function createPfpController(db: KnexSqlUtilities) {
       const { newUsername } = req.body;
       if (!newUsername || String(newUsername).trim().length < 3)
         return cr.badRequest("Username must be at least 3 characters.");
+      // tb_aa_user.username is VARCHAR(64)
+      if (String(newUsername).trim().length > 64)
+        return cr.badRequest("Username must be at most 64 characters.");
       const { token, ...rest } = await pfpService.updateUsername(`${username}_${system}`, String(newUsername).trim(), system);
       setAuthCookies(res, token);
       return cr.ok(rest);

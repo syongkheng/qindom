@@ -12,7 +12,14 @@ import { ITbIotApiKey } from "../models/databases/tb_iot_api_key.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 
-export const RequestApiKeyFilter = async function (req: RequestWithUserInfo, res: Response, next: NextFunction) {
+export type ApiKeyPrefix = "ss" | "iot";
+
+/**
+ * Builds an x-api-key filter that only accepts keys with one of the given prefixes.
+ * Each route must name its own key type — an iot_ device key must never authenticate
+ * an ss_ (Apple Pay) route, or vice versa, since both resolve to the owner's userId.
+ */
+export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) => async function (req: RequestWithUserInfo, res: Response, next: NextFunction) {
   const cr = new ControllerResponse(req, res);
   const logContext: IRequestLogContext = req.logContext;
 
@@ -30,6 +37,13 @@ export const RequestApiKeyFilter = async function (req: RequestWithUserInfo, res
     const apiKeyHash = crypto.createHash("sha256").update(apiKeyValue).digest("hex");
 
     apiKeyValidationLoggingEvent?.children?.push(`Prefix: '${apiKeyPrefix}'`);
+
+    if (!(allowedPrefixes as string[]).includes(apiKeyPrefix)) {
+      apiKeyValidationLoggingEvent?.children?.push(
+        `Key Prefix: ${LogEmoji.error} '${apiKeyPrefix}' not allowed here (expects ${allowedPrefixes.join("/")})`,
+      );
+      throw new Exceptions.InvalidRequest("Invalid API key");
+    }
 
     if (apiKeyPrefix === "ss") {
       const validKeys = await db.findOne<ITbSsApiKey>(
@@ -78,11 +92,6 @@ export const RequestApiKeyFilter = async function (req: RequestWithUserInfo, res
         userId: validKeys.user_id,
         deviceName: validKeys.name,
       };
-    }
-
-    if (!["ss", "iot"].includes(apiKeyPrefix)) {
-      apiKeyValidationLoggingEvent?.children?.push(`Key Prefix: ${LogEmoji.error} unrecognised '${apiKeyPrefix}'`);
-      throw new Exceptions.InvalidRequest("Invalid API key");
     }
 
     logContext.metadata = {

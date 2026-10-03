@@ -113,10 +113,10 @@ async function startServer() {
     ["/img",          [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)],  // no RHF — multipart upload
     ["/geocode",      mw.std,                                    createGeocodeController(db)],
     ["/trail",        mw.auth,                                   createTrailController(db)],
-    ["/v1/ss",        mw.apiKey,                                 createSsApplePayControllerV1(db)],
-    ["/v2/ss",        mw.apiKey,                                 createSsApplePayControllerV2(db)],
+    ["/v1/ss",        mw.ssKey,                                  createSsApplePayControllerV1(db)],
+    ["/v2/ss",        mw.ssKey,                                  createSsApplePayControllerV2(db)],
     ["/ss-key",       mw.auth,                                   createSsApiKeyController(db)],
-    ["/iot",          mw.apiKey,                                 createIotController(db)],
+    ["/iot",          mw.iotKey,                                 createIotController(db)],
     ["/iot-key",      mw.auth,                                   createIotApiKeyController(db)],
     ["/wedding",      mw.std,                                    createWeddingController(db)],
     ["/suggestion",   mw.std,                                    createSuggestionController(db)],
