@@ -25,16 +25,13 @@ export const TELEGRAM_LOG_MODULES: TelegramLogModule[] = [
   { key: "siri-shortcut", label: "Siri Shortcut Ingestion", prefix: "/v1/ss" },
   { key: "siri-shortcut", label: "Siri Shortcut Ingestion", prefix: "/v2/ss" },
   { key: "ss-api-key", label: "Siri Shortcuts API Keys", prefix: "/ss-key" },
-  { key: "iot", label: "IoT", prefix: "/iot" },
-  { key: "iot", label: "IoT", prefix: "/iot-key" },
   { key: "wedding", label: "Wedding", prefix: "/wedding" },
   { key: "suggestion", label: "Trip Suggestions", prefix: "/suggestion" },
-  { key: "garmin", label: "Garmin Health", prefix: "/garmin" },
   { key: "debug", label: "Debug (status-code test)", prefix: "/debug" },
 ];
 
-// De-duplicated key/label/paths triples for admin listing — "iot" appears
-// twice above (two mounted prefixes, one module) so listing must collapse
+// De-duplicated key/label/paths triples for admin listing — "siri-shortcut"
+// appears twice above (two mounted prefixes, one module) so listing must collapse
 // that down to a single row with both prefixes surfaced in `paths`.
 export const TELEGRAM_LOG_MODULE_KEYS: { key: string; label: string; paths: string[] }[] = Array.from(
   TELEGRAM_LOG_MODULES.reduce((map, m) => {

@@ -33,18 +33,12 @@ import createTrailController from "./trail/Trail.controller.js";
 import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
-import createIotController from "./iot/Iot.controller.js";
-import createIotApiKeyController from "./iot/IotApiKey.controller.js";
 import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
 import { setupTelegramLogSender } from "./tgimage/TgLog.logSender.js";
 import { initTgLogBot } from "./tgimage/TgLog.bot.js";
 
 // Wedding
 import createWeddingController from "./wedding/Wedding.controller.js";
-
-// Garmin
-import createGarminController from "./garmin/Garmin.controller.js";
-import { startGarminScheduler } from "./garmin/Garmin.scheduler.js";
 
 // Debug (status-code test endpoint)
 import createDebugController from "./debug/Debug.controller.js";
@@ -116,11 +110,8 @@ async function startServer() {
     ["/v1/ss",        mw.ssKey,                                  createSsApplePayControllerV1(db)],
     ["/v2/ss",        mw.ssKey,                                  createSsApplePayControllerV2(db)],
     ["/ss-key",       mw.auth,                                   createSsApiKeyController(db)],
-    ["/iot",          mw.iotKey,                                 createIotController(db)],
-    ["/iot-key",      mw.auth,                                   createIotApiKeyController(db)],
     ["/wedding",      mw.std,                                    createWeddingController(db)],
     ["/suggestion",   mw.std,                                    createSuggestionController(db)],
-    ["/garmin",       mw.auth,                                   createGarminController(db)],
     // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
     ["/debug",        process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController(db)],
   ];
@@ -147,7 +138,6 @@ async function startServer() {
     // at all, so it starts independently regardless.
     setupTelegramLogSender();
     initTgLogBot(db).catch((err) => LoggingUtilities.service.error("TgLogBot", err?.message ?? String(err)));
-    startGarminScheduler(db);
   });
 }
 

@@ -9,5 +9,4 @@ export const mw = {
   std:    [RestRequestLogger, RequestHeaderFilter] as RequestHandler[],
   auth:   [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter] as RequestHandler[],
   ssKey:  [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter("ss")] as RequestHandler[],
-  iotKey: [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter("iot")] as RequestHandler[],
 };

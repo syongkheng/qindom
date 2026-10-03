@@ -8,16 +8,15 @@ import db from "../config/db/mysql.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
-import { ITbIotApiKey } from "../models/databases/tb_iot_api_key.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 
-export type ApiKeyPrefix = "ss" | "iot";
+export type ApiKeyPrefix = "ss";
 
 /**
  * Builds an x-api-key filter that only accepts keys with one of the given prefixes.
- * Each route must name its own key type — an iot_ device key must never authenticate
- * an ss_ (Apple Pay) route, or vice versa, since both resolve to the owner's userId.
+ * Each route must name its own key type, so a key minted for one integration can never
+ * authenticate another's routes (every key type resolves to the owner's userId).
  */
 export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) => async function (req: RequestWithUserInfo, res: Response, next: NextFunction) {
   const cr = new ControllerResponse(req, res);
@@ -72,25 +71,6 @@ export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) => async
         ...logContext.metadata,
         username: user.username,
         userId: validKeys.user_id,
-      };
-    }
-
-    if (apiKeyPrefix === "iot") {
-      const validKeys = await db.findOne<ITbIotApiKey>(
-        "tb_iot_api_key",
-        { api_key_prefix: apiKeyPrefix, api_key_hash: apiKeyHash, record_status: "A" },
-        ["*"],
-        apiKeyValidationLoggingEvent,
-      );
-      if (!validKeys) {
-        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
-        throw new Exceptions.InvalidRequest("Invalid API key");
-      }
-      apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
-      logContext.metadata = {
-        ...logContext.metadata,
-        userId: validKeys.user_id,
-        deviceName: validKeys.name,
       };
     }
 

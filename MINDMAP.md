@@ -63,7 +63,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     Telegram send only (console/request-log file always unaffected),
 │   │     both only ever suppress non-error traffic (4xx/5xx always alert):
 │   │       1. TELEGRAM_SILENT_ROUTES — hardcoded {method,path} exact-match
-│   │          list in RestRequestLogger.ts (e.g. POST /iot), edited in code.
+│   │          list in RestRequestLogger.ts (e.g. POST /analytics/heartbeat), edited in code.
 │   │       2. Per-(chat,module) DB toggle — fans out to EVERY subscribed chat
 │   │          (every tb_tg_stats_whitelist row with an active telegram_chat_id —
 │   │          each whitelisted admin captures their own chat_id the moment they
@@ -98,10 +98,11 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     rotated token drops to visitor instead of 401; CSRF enforced only
 │   │     when a valid token is attached)
 │   └── RequestApiKeyFilter(...prefixes) — factory; x-api-key header →
-│         tb_ss_api_key / tb_iot_api_key lookup, sets logContext.metadata.userId.
+│         tb_ss_api_key lookup, sets logContext.metadata.userId.
 │         Each route names the key prefix it accepts (presets mw.ssKey →
-│         /v1/ss, /v2/ss; mw.iotKey → /iot) so an iot_ device key can't post
-│         Apple Pay transactions. Itinerary routes are JWT-only
+│         /v1/ss, /v2/ss) so a future key type can't reach another's routes.
+│         IoT (/iot, /iot-key, iot_ keys) was removed Oct 2026 — redaction
+│         still masks iot_ keys from old devices. Itinerary routes are JWT-only
 │         (MandatoryTokenFilter) — their old API-key path never set req.user,
 │         so getUser() always 401'd; TokenOrApiKeyFilter.ts is now unused.
 │
@@ -353,26 +354,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   └── Not to be confused with /v1/ss/ap above — that's the Shortcut
 │   │         presenting the key; this is the authenticated dashboard managing it
 │   │
-│   ├── IOT DEVICES  /iot  [API-KEY AUTH]
-│   │   ├── POST /iot — body { deviceId, deviceName?, lat?, lon?, alt?, temp?,
-│   │   │     recordedAt?, meta?: {rssi, chipTemp, uptimeMs} }
-│   │   │       ├── upserts last-seen status — DB: tb_iot_device_heartbeat
-│   │   │       └── inserts one coordinate-log row per request (path history)
-│   │   │             — DB: tb_iot_coordinate_log (recorded_dt = device-clock
-│   │   │             capture time in ms, converted from recordedAt seconds if
-│   │   │             given, else server receipt time; created_dt = insert time)
-│   │   ├── GET  /iot?deviceId=... — last-seen status for a device
-│   │   ├── GET  /iot/history?deviceId=...&limit=... — recent coordinate log rows,
-│   │   │     newest first (default limit 50) — for future path-map plotting
-│   │   └── Auth: RequestApiKeyFilter — x-api-key header, tb_iot_api_key lookup
-│   │           (built for the hike-hitcher ESP32 + SSD1306 OLED hiking tracker)
-│   │
-│   └── IOT API KEY MGMT  /iot-key  [JWT AUTH]
-│       ├── GET    /api-key → { hasKey, name, createdDt, keyHint }
-│       ├── POST   /api-key { deviceName } → revokes existing, generates new iot_ key, returns { key }
-│       ├── DELETE /api-key → soft-deletes active key (record_status D)
-│       └── DB: tb_iot_api_key
-│
 │   ├── SUGGESTION  /suggestion
 │   │   ├── GET  /activity?destination=... — fuzzy search (LOWER LIKE), public
 │   │   ├── POST /activity, PUT /activity/:id — admin-only (JWT + role "admin")
@@ -436,26 +417,6 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     wedding — TODO: no purge job yet enforces it (notice only)
 │   │   └── DB: tb_wedding_rsvp, tb_wedding_rsvp_guest
 │   │
-│   └── GARMIN HEALTH  /garmin  [JWT AUTH]
-│       ├── GET /today — today's intraday stress/body-battery/heart-rate
-│       │     series + last night's sleep (computed live, not persisted)
-│       ├── GET /summary?days=N — persisted daily summaries for trend
-│       │     charts (default 7, max 90)
-│       ├── Garmin.client.ts — wraps unofficial `garmin-connect` npm lib;
-│       │     session (oauth1/oauth2) cached in tb_garmin_session so the
-│       │     scheduler doesn't log in every poll; stress/body-battery use
-│       │     undocumented `wellness-service` endpoints via the lib's
-│       │     generic .get() escape hatch — can break if Garmin changes them
-│       ├── Garmin.scheduler.ts (node-cron, started in index.ts app.listen)
-│       │     ├── */15 * * * * — poll stress/body-battery/HR → intraday row
-│       │     └── 0 8 * * * (Asia/Singapore) — pull last night's sleep +
-│       │           roll up prior day's intraday polls into a daily summary
-│       ├── High stress = score >75 sustained 2+ consecutive polls (15+ min);
-│       │     surfaced only as highlighted windows on the fndom dashboard —
-│       │     no push notification (see fndom /health, personal/auth-only)
-│       └── DB: tb_garmin_session, tb_garmin_intraday_metric,
-│              tb_garmin_daily_summary
-│
 │   DEBUG  /debug  [OPEN in dev · JWT + SYSTEM_R5 in prd]
 │   └── GET /status/:code (200–599) — test endpoint for the logging/Telegram
 │         pipeline. 500 throws a real Error → handleException (exception +
@@ -477,9 +438,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── Telegram Bot API — polling/webhook (node-telegram-bot-api ^1.1.0,
 │   │     ESM-only, fetch-based client — no longer pulls in `request`)
 │   ├── Discord.js Bot
-│   ├── Nodemailer (OTP email delivery)
-│   └── Garmin Connect (unofficial, via `garmin-connect` npm lib) — GARMIN_EMAIL/
-│         GARMIN_PASSWORD env vars; polled by node-cron (see GARMIN module)
+│   └── Nodemailer (OTP email delivery)
 │
 ├── KEY DB PATTERNS
 │   ├── Soft delete: record_status 'A'/'D'
@@ -504,13 +463,11 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── tb_tg_image, tb_tg_stats_whitelist
 │   │   ├── tb_applepay_transaction, tb_applepay_card_label, tb_ss_api_key
 │   │   ├── tb_wedding_rsvp, tb_wedding_rsvp_guest
-│   │   ├── tb_garmin_session, tb_garmin_intraday_metric, tb_garmin_daily_summary
 │   │   └── tb_place_cache, tb_suggestion_note, tb_travel_note_item
 │   ├── dtos/ — service response shapes (XyzDto suffix)
 │   │   ├── SleepDto.ts — SleepLogDto
 │   │   ├── ScenicDto.ts — ScenicSpotDto, ScenicCheckDto
-│   │   ├── TelegramDto.ts — MediaType, MediaDto, LinkTokenDto, MediaUrlDto
-│   │   └── GarminDto.ts — TodayDto, DailySummaryDto, SleepDto, HighStressWindow
+│   │   └── TelegramDto.ts — MediaType, MediaDto, LinkTokenDto, MediaUrlDto
 │   ├── requests/ — request body shapes (XyzBody suffix)
 │   │   ├── RequestWithUserInfo.ts — Express Request + user field
 │   │   ├── RequestWithLogContext.ts
