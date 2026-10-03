@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
@@ -181,7 +182,7 @@ export class AuthService {
 
     // Dev bypass: fndom skips the real OTP send outside prod, so accept the fixed
     // code here instead of the DB-stored one, regardless of expiry/attempt state.
-    if (process.env.NODE_ENV !== "prd" && code === "111111") {
+    if (process.env.NODE_ENV === "dev" && code === "111111") {
       await this.db.update<ITB_AA_USER>(
         "tb_aa_user",
         { email, system, record_status: "A" },
@@ -422,18 +423,53 @@ export class AuthService {
     }));
   }
 
+  // Logout-side token revocation: clears the server-stored token so the cookie
+  // can no longer be replayed (MandatoryTokenFilter rejects any cookie whose
+  // token != tb_aa_user.token). Best-effort — an invalid/expired/missing token
+  // just means there's nothing to revoke; logout still clears the cookies.
+  async invalidateSession(token: string): Promise<void> {
+    try {
+      const secret = process.env.JWT_SECRET;
+      if (!secret) return;
+      const decoded = jwt.verify(token, secret) as { username: string; system: string };
+      await this.db.update<ITB_AA_USER>(
+        "tb_aa_user",
+        { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
+        { token: "" },
+      );
+    } catch {
+      // Invalid / expired / forged token — nothing to revoke.
+    }
+  }
+
   async updateUserRoles(id: number, roles: string[]): Promise<{ updated: boolean }> {
     await this.db.update<ITB_AA_USER>("tb_aa_user", { id }, { roles: JSON.stringify(roles) });
     return { updated: true };
   }
 
-  async updatePassword(username_system: string, newPassword: string, authEvent?: IRequestLogEvent): Promise<void> {
+  async updatePassword(
+    username_system: string,
+    currentPassword: string,
+    newPassword: string,
+    authEvent?: IRequestLogEvent,
+  ): Promise<{ token: string }> {
     const user = await this.db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { username_system, record_status: "A" },
       ["*"],
       authEvent,
     );
+
+    if (!user) throw new Exceptions.InvalidLoginCredentials();
+
+    // Require the current password — a valid session cookie alone must not be
+    // enough to change it (defends against a hijacked session / CSRF, and is the
+    // server-side enforcement the frontend-only /password/validate never gave).
+    const currentValid = await bcrypt.compare(currentPassword, user.password);
+    if (!currentValid) {
+      if (authEvent) authEvent.detail = "current password incorrect";
+      throw new Exceptions.InvalidLoginCredentials();
+    }
 
     const saltRounds = 10;
     try {
@@ -447,6 +483,11 @@ export class AuthService {
     } catch (error) {
       throw new Exceptions.EntityUpdate("Password");
     }
+
+    // Rotate the session token so every OTHER logged-in session is invalidated
+    // (MandatoryTokenFilter rejects any cookie whose token != tb_aa_user.token).
+    // The caller must set the returned token as the current session's new cookie.
+    const { token } = await this._issueToken(user, authEvent);
 
     // Send security notification (best-effort — do not throw if mail fails)
     if (user?.email) {
@@ -474,5 +515,7 @@ export class AuthService {
         );
       });
     }
+
+    return { token };
   }
 }

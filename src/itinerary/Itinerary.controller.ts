@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenOrApiKeyFilter } from "../middlewares/TokenOrApiKeyFilter.js";
+import { itineraryChallengeLimiter } from "../middlewares/RateLimiter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { ItineraryService } from "./Itinerary.service.js";
 import { ItineraryValidator } from "./Itinerary.validator.js";
@@ -38,7 +39,7 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     }
   });
 
-  router.post("/challenge", async (req: Request, res: Response) => {
+  router.post("/challenge", [itineraryChallengeLimiter], async (req: Request, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;

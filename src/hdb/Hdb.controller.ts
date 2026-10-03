@@ -49,9 +49,10 @@ export default function createHdbController(db: KnexSqlUtilities) {
     }
   });
 
-  router.post("/pphs/geocode-options", async (req: Request, res: Response) => {
+  router.post("/pphs/geocode-options", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
+      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
       const { address } = req.body as { address: string };
       return cr.ok(await hdbSvc.getAllCoordinateOptions(address));
     } catch (err) {
@@ -59,9 +60,10 @@ export default function createHdbController(db: KnexSqlUtilities) {
     }
   });
 
-  router.post("/pphs/refresh", async (req: Request, res: Response) => {
+  router.post("/pphs/refresh", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
+      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
       const { address } = req.body as { address: string };
       return cr.ok(await hdbSvc.refreshCoordinatesOfAddress(address));
     } catch (err) {

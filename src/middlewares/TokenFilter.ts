@@ -78,7 +78,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
  * - If a valid token exists → attaches user info to req.user (and enforces CSRF on mutating requests)
  * - If no token or invalid token → continues without error, as a visitor
  */
-export const OptionalTokenFilter = (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
+export const OptionalTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);
   const jwtSecret = process.env.JWT_SECRET;
 
@@ -98,12 +98,26 @@ export const OptionalTokenFilter = (req: RequestWithUserInfo, res: Response, nex
     try {
       const decoded = jwt.verify(token, jwtSecret) as IDecodedTokenUser;
 
+      // Same server-side revocation check as MandatoryTokenFilter: the cookie's
+      // token must still match the one stored for the user, so a token that was
+      // revoked or rotated (logout / password change) is no longer treated as
+      // logged in. Here a mismatch just drops to visitor rather than 401 — this
+      // filter is optional.
+      const user = await db.findOne<ITB_AA_USER>(
+        "tb_aa_user",
+        { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
+        ["id", "token"],
+      );
+      if (!user || user.token !== token) {
+        return next(); // revoked / stale token → proceed as visitor
+      }
+
       // A logged-in user's cookie is present — CSRF must be checked before trusting it.
       if (!isCsrfValid(req)) {
         return response.result(403, "csrf_invalid", "Invalid or missing CSRF token.");
       }
 
-      req.user = decoded; // Attach user info
+      req.user = { ...decoded, id: user.id! }; // Attach user info
     } catch (err) {
       // Token invalid or expired → treat as visitor, don't throw
       LoggingUtilities.service.warn("OptionalTokenFilter", "Invalid token, proceeding as visitor");

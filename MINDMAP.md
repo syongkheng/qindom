@@ -24,7 +24,9 @@ qindom (Express 5 + TypeScript + MySQL)
 │
 ├── MIDDLEWARE STACK (global → route-level)
 │   ├── CORS (ALLOWED_ORIGINS env var)
-│   ├── globalLimiter (100 req/min per IP)
+│   ├── globalLimiter (100 req/min per IP) — all limiters in RateLimiter.ts key
+│   │     on X-Real-IP (set by nginx) via clientIpKey + ipKeyGenerator, not
+│   │     req.ip (no trust proxy, so req.ip would be nginx's address)
 │   ├── express.json (5MB)
 │   ├── Two render modes (LoggingUtilities.request): VERBOSE (console + request-
 │   │     log file → Log Searcher) has payload, every event, response body, and
@@ -90,10 +92,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── MandatoryTokenFilter (JWT cookie required → 401 if missing;
 │   │     403 csrf_invalid if X-CSRF-Token header doesn't match csrf_token
 │   │     cookie on non-GET requests)
-│   ├── OptionalTokenFilter (JWT cookie attached if present; same CSRF
-│   │     check applies only when a token was actually attached)
-│   └── RequestApiKeyFilter (x-api-key header → tb_ss_api_key / tb_llm_api_key lookup,
-│         sets logContext.metadata.userId)
+│   ├── OptionalTokenFilter (JWT cookie attached if present; now also does the
+│   │     same DB token-revocation check as MandatoryTokenFilter — a revoked/
+│   │     rotated token drops to visitor instead of 401; CSRF enforced only
+│   │     when a valid token is attached)
+│   └── RequestApiKeyFilter (x-api-key header → tb_ss_api_key / tb_iot_api_key
+│         lookup (ss/iot prefixes only), sets logContext.metadata.userId)
 │
 ├── MODULES
 │   │
@@ -156,7 +160,7 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── POST /heartbeat — session activity ping (upserted by session_id); requires system field
 │   │   ├── POST /event     — ingest structured event (event, properties, page, referrer,
 │   │   │                     sessionId, timestamp, system); fire-and-forget from any frontend
-│   │   ├── system field identifies source app: 'llm' | 'travel-planner' | 'dental-directory'
+│   │   ├── system field identifies source app: 'travel-planner' | 'dental-directory'
 │   │   └── DB: tb_analytic_user_activity (+ system col), tb_analytic_event
 │   │
 │   ├── CONNECTIVITY  /connectivity
@@ -164,6 +168,8 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │
 │   ├── ITINERARY  /itinerary
 │   │   ├── Trip plans (shareable via short_code + 6-char PIN)
+│   │   ├── POST /challenge rate-limited: itineraryChallengeLimiter, 10 failed
+│   │   │     attempts/15min per IP (skipSuccessfulRequests — unlocks don't count)
 │   │   ├── Agenda items (flights, hotels, activities) — day/date nullable +
 │   │   │     unknown_time flag, so an item can be an unscheduled "thing to
 │   │   │     do"/"place to visit" (see fndom TravelPlannerView); assigning
@@ -189,7 +195,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── GET /geocode?q=... — Nominatim (OpenStreetMap) search proxy,
 │   │   │     addressdetails=1 (so callers can resolve a destination's
 │   │   │     country, e.g. for Suggestion's note lookup)
-│   │   ├── Results cached in DB (by normalized query string, no TTL)
+│   │   ├── Results cached in DB (by normalized query string, no TTL);
+│   │   │     failed upstream fetches are NOT cached (would stick forever)
+│   │   ├── Public, so cache misses go through a module-level Nominatim queue
+│   │   │     in Geocode.service.ts: ≥1.1s between calls (Nominatim 1 req/s
+│   │   │     policy), max 5 waiting — beyond that → ExternalRequest error.
+│   │   │     q capped at 200 chars.
 │   │   └── DB: tb_geocode_cache
 │   │
 │   ├── PLACES  /api/places
@@ -213,6 +224,10 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── HDB HOUSING  /hdb  (Singapore)
 │   │   ├── Property search by query
 │   │   ├── Nearest properties by coordinates (Haversine)
+│   │   ├── Coordinate admin endpoints — /pphs/update, /pphs/clear-coordinates,
+│   │   │     /pphs/geocode-options, /pphs/refresh — all MandatoryTokenFilter +
+│   │   │     PPHS_R5|SYSTEM_R5 (options/refresh call OneMap+Nominatim
+│   │   │     uncached, and refresh deletes admin-curated coordinates)
 │   │   └── DB: tb_hdb_pphs, tb_hdb_pphs_coordinate
 │   │
 │   ├── LTA TRANSPORT  /lta  (Singapore)

@@ -20,7 +20,7 @@ import { RecentRequestLogDto } from "../models/dtos/RequestLogDto.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { TELEGRAM_LOG_MODULE_KEYS } from "../utils/logging/TelegramLogModules.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { setAuthCookies, clearAuthCookies } from "../utils/AuthCookieUtilities.js";
+import { setAuthCookies, clearAuthCookies, JWT_COOKIE } from "../utils/AuthCookieUtilities.js";
 
 export default function createAuthController(db: KnexSqlUtilities) {
   const router = Router();
@@ -247,6 +247,13 @@ export default function createAuthController(db: KnexSqlUtilities) {
   // logout-on-401 silently no-op'd exactly when cookies most needed clearing.
   router.post("/logout", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
+    // If a valid JWT is present, also revoke it server-side so a copied cookie
+    // can't keep being replayed after logout. Best-effort and never blocks the
+    // cookie clear below (the route stays open to everyone by design).
+    const token = req.cookies?.[JWT_COOKIE];
+    if (token) {
+      await svc.invalidateSession(token);
+    }
     clearAuthCookies(res);
     return cr.ok({ loggedOut: true });
   });
@@ -277,11 +284,20 @@ export default function createAuthController(db: KnexSqlUtilities) {
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
         : undefined;
       const { username, system } = getUser(req);
-      const { newPassword } = AuthValidator.validatePasswordUpdateRequest(req.body, validationEvent);
+      const { currentPassword, newPassword } = AuthValidator.validatePasswordUpdateRequest(req.body, validationEvent);
       const updatePasswordLoggingEvent = logContext
         ? LoggingUtilities.request.branch(logContext, "SERVICE", "Updating password")
         : undefined;
-      return cr.ok(await svc.updatePassword(`${username}_${system}`, newPassword, updatePasswordLoggingEvent));
+      const { token } = await svc.updatePassword(
+        `${username}_${system}`,
+        currentPassword,
+        newPassword,
+        updatePasswordLoggingEvent,
+      );
+      // Password change rotates the token; refresh this session's cookie so the
+      // user who just changed it stays logged in while all other sessions drop.
+      setAuthCookies(res, token);
+      return cr.ok({ updated: true });
     } catch (err) {
       return handleException(err, cr, "AuthController.POST /password/update", "Failed to update password");
     }

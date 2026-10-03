@@ -79,15 +79,16 @@ export class AuthValidator {
   static validatePasswordUpdateRequest(
     body: Record<string, unknown>,
     loggingEvent?: IRequestLogEvent,
-  ): { newPassword: string } {
-    const { newPassword } = body;
+  ): { currentPassword: string; newPassword: string } {
+    const { currentPassword, newPassword } = body;
+    V.requiredString(currentPassword, "currentPassword", loggingEvent);
     V.requiredString(newPassword, "newPassword", loggingEvent);
     if (!this._isStrongPassword(newPassword as string)) {
       loggingEvent?.children?.push(`'newPassword' strength ${LogEmoji.error} `);
       throw new WeakPasswordException();
     }
     loggingEvent?.children?.push(`'newPassword' strength ${LogEmoji.success} `);
-    return { newPassword: newPassword as string };
+    return { currentPassword: currentPassword as string, newPassword: newPassword as string };
   }
 
   private static _isStrongPassword(password: string): boolean {

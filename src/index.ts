@@ -29,7 +29,6 @@ import createApplePayDashboardController from "./applepay/ApplePayDashboard.cont
 import createFileController from "./file/File.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
-import createLlmControllerV1 from "./llm/Llm.v1.controller.js";
 import createTrailController from "./trail/Trail.controller.js";
 import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
@@ -114,7 +113,6 @@ async function startServer() {
     ["/img",          [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)],  // no RHF — multipart upload
     ["/geocode",      mw.std,                                    createGeocodeController(db)],
     ["/trail",        mw.auth,                                   createTrailController(db)],
-    ["/v1/llm",       mw.apiKey,                                 createLlmControllerV1(db)],
     ["/v1/ss",        mw.apiKey,                                 createSsApplePayControllerV1(db)],
     ["/v2/ss",        mw.apiKey,                                 createSsApplePayControllerV2(db)],
     ["/ss-key",       mw.auth,                                   createSsApiKeyController(db)],
