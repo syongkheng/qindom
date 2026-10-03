@@ -190,6 +190,11 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   │     packing_item shape: label/category/url/done/sort_order),
 │   │   │     bulk create/edit alongside agendaItems/bookings/packingItems
 │   │   ├── File attachments (base64, 5MB) — auth required
+│   │   ├── POST /edit/:sessionId — child rows (agenda/booking/packing/note)
+│   │   │     are addressed by client-supplied ids, so every update/delete is
+│   │   │     scoped with itinerary_id; an agendaItems[].id not owned by the
+│   │   │     itinerary → ForbiddenAccess (rolls back the whole edit). Keep
+│   │   │     this scoping on any new child-table write (was a cross-user IDOR)
 │   │   └── DB: tb_travel_itinerary, tb_travel_agenda_item,
 │   │           tb_travel_agenda_file, tb_travel_itinerary_booking,
 │   │           tb_travel_itinerary_view, tb_travel_packing_item,
@@ -261,6 +266,16 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │   ├── Telegram Bot: /start /help /link /get /list /delete /expire
 │   │   └── DB: tb_telegram_link, tb_telegram_media,
 │   │          tb_telegram_link_token
+│   │
+│   ├── IMAGE CDN  /img  (src/tgimage/TgImage.*)
+│   │   ├── POST /upload [JWT] — multer 30MB in memory → Telegram sendDocument
+│   │   │     to the storage chat; returns 8-hex shortCode (tb_tg_image)
+│   │   ├── GET /:shortCode [public] — streams from Telegram, re-encoded by
+│   │   │     sharp; sent with CSP `default-src 'none'; sandbox`
+│   │   ├── SVG is NEVER stored or served raw: rasterised to PNG on upload,
+│   │   │     and legacy SVG rows rasterised on read — /img is on the API
+│   │   │     origin, so a scripted SVG would read csrf_token + ride jwt_token
+│   │   └── /admin/list|add|remove (SYSTEM_R5) — tb_tg_stats_whitelist
 │   │
 │   ├── SIRI SHORTCUT (APPLE PAY) V1  /v1/ss/ap  [API-KEY AUTH]
 │   │   ├── "When Apple Pay is used" automation → POST /ap/transaction
@@ -391,8 +406,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── WEDDING  /api/wedding
 │   │   ├── POST /rsvp — self-service guest RSVP (OptionalTokenFilter)
 │   │   │     Fields: name, email, attending (bool), contactNumber?,
-│   │   │     dietaryRestrictions?, mealPreference?, additionalGuestContact[]
-│   │   │     Duplicate email guard (400 on re-submit)
+│   │   │     dietaryRestrictions?, mealPreference?, additionalGuestContact[],
+│   │   │     pin? — a name matching an existing RSVP (case-insensitive) UPDATES
+│   │   │     it, but only with that RSVP's pin in the body; missing/wrong pin
+│   │   │     → 403 forbidden_access (was an unauthenticated overwrite that
+│   │   │     also returned the pin). jessikheng sends the pin it verified via
+│   │   │     GET /rsvp (RSVPModal verifiedPin).
 │   │   │     Response includes WEDDING_PDPA_NOTICE (retention notice)
 │   │   ├── POST /rsvp/preflight {name} — step-1 existence check for the form;
 │   │   │     returns {exists, hasEmail} booleans only (no PII).
@@ -464,10 +483,17 @@ qindom (Express 5 + TypeScript + MySQL)
 │
 ├── KEY DB PATTERNS
 │   ├── Soft delete: record_status 'A'/'D'
+│   ├── UNIQUE keys vs soft delete: never put a plain UNIQUE on a user-chosen
+│   │     value (a 'D' row would block a new active one). Either no key, or
+│   │     unique among active rows via a VIRTUAL generated column
+│   │     `IF(record_status = 'A', col, NULL)` + UNIQUE (NULLs don't collide).
+│   │     System-generated ids (uuid, session_id, short_code) stay plain UNIQUE.
 │   ├── Timestamps: ms epoch (Date.now())
 │   ├── JSON fields: roles[], pax_names, etc. stored as strings
 │   ├── Audit: created_by / updated_by (username)
-│   └── Username uniqueness: composite index username_system
+│   └── Username uniqueness: UNIQUE on generated username_system_active (active
+│         users only) + plain index on username_system for lookups
+│         (migration 20261003000100_fix_soft_delete_unique_keys)
 │
 ├── MODELS  src/models/
 │   ├── IDecodedTokenUser.ts — JWT payload shape (used by auth middleware, requestUtils)

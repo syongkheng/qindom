@@ -26,7 +26,7 @@ export class TgImageService {
     buffer: Buffer,
     mimetype: string,
   ): Promise<{ buffer: Buffer; mimetype: string }> {
-    if (buffer.length <= TgImageService.MAX_TELEGRAM_FILE_BYTES || mimetype === "image/svg+xml") {
+    if (buffer.length <= TgImageService.MAX_TELEGRAM_FILE_BYTES) {
       return { buffer, mimetype };
     }
 
@@ -90,7 +90,14 @@ export class TgImageService {
     if (meta?.ip) captionParts.push(`🌐 ${meta.ip}`);
     if (meta?.sessionId) captionParts.push(`📋 ${meta.sessionId}`);
 
-    const { buffer: uploadBuffer, mimetype: uploadMimetype } = await this.compressForTelegram(fileBuffer, mimetype);
+    // SVG can carry <script>, and /img is served from the API origin (where the
+    // auth + CSRF cookies live), so it's rasterised here and never stored as SVG.
+    const safe =
+      mimetype === "image/svg+xml"
+        ? { buffer: await sharp(fileBuffer).png().toBuffer(), mimetype: "image/png" }
+        : { buffer: fileBuffer, mimetype };
+
+    const { buffer: uploadBuffer, mimetype: uploadMimetype } = await this.compressForTelegram(safe.buffer, safe.mimetype);
 
     const formData = new FormData();
     formData.append("chat_id", String(storageChatId));
@@ -154,8 +161,9 @@ export class TgImageService {
       { responseType: "stream" },
     );
 
+    // Rows stored before SVGs were rasterised at upload — never serve raw SVG.
     if (mimeType === "image/svg+xml") {
-      return { stream: fileResponse.data, contentType: "image/svg+xml" };
+      return { stream: fileResponse.data.pipe(sharp().png()), contentType: "image/png" };
     }
     // sharp() strips EXIF (including Orientation) on re-encode by default —
     // .rotate() with no args bakes the EXIF-specified rotation into the

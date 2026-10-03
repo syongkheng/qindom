@@ -25,7 +25,8 @@ export interface RsvpPayload {
   // Set by the validator when this name already has an active RSVP — tells
   // submitRsvp to update that row (and replace its guest list) instead of
   // inserting a new one, so re-submitting the same name overwrites the
-  // person's previous answer rather than failing as a duplicate.
+  // person's previous answer rather than failing as a duplicate. Only set
+  // once the validator has checked the request carried that RSVP's pin.
   existingRsvpId?: number | null;
 }
 

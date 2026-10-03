@@ -27,7 +27,8 @@ export default function createWeddingController(db: KnexSqlUtilities) {
       // `rsvpId` (the underlying auto-increment id) is intentionally not
       // sent to the client — `pin` is the identifier guests are meant to
       // share/use, and a sequential id would make every other guest's
-      // record trivially enumerable.
+      // record trivially enumerable. Updating an existing RSVP requires its
+      // pin in the body, so on that path this only echoes what the caller sent.
       const { pin } = await weddingService.submitRsvp(payload, logContext);
       return cr.ok({ pin, notice: WEDDING_PDPA_NOTICE });
     } catch (err) {

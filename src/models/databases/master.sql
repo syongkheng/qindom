@@ -26,14 +26,19 @@ CREATE TABLE IF NOT EXISTS tb_aa_user (
   `system`               VARCHAR(256)  NOT NULL,
   country                VARCHAR(256),
   roles                  VARCHAR(1000) NOT NULL DEFAULT '[]',
-  username_system        VARCHAR(512)  UNIQUE NOT NULL,
+  username_system        VARCHAR(512)  NOT NULL,
   state                  VARCHAR(16)   NOT NULL,
   last_logged_in_dt      BIGINT,
   token                  VARCHAR(512),
   pfp_picture_blob       LONGBLOB,
   created_dt             BIGINT        NOT NULL,
   created_by             VARCHAR(64)   NOT NULL,
-  record_status          VARCHAR(1)    NOT NULL
+  record_status          VARCHAR(1)    NOT NULL,
+  -- Unique among ACTIVE users only (NULL for soft-deleted rows), so a deleted
+  -- user's username can be reused.
+  username_system_active VARCHAR(512)  GENERATED ALWAYS AS (IF(record_status = 'A', username_system, NULL)) VIRTUAL,
+  UNIQUE KEY uq_aa_user_username_system_active (username_system_active),
+  KEY idx_aa_user_username_system (username_system)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Feature toggles: control module/feature visibility without a deploy.
@@ -537,8 +542,7 @@ CREATE TABLE IF NOT EXISTS tb_wedding_rsvp (
   meal_preference      VARCHAR(100) NULL,
   record_status        CHAR(1)      NOT NULL DEFAULT 'A',
   created_dt           BIGINT       NOT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_wedding_rsvp_email (email)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tb_wedding_rsvp_guest (

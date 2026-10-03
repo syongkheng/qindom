@@ -541,8 +541,16 @@ export class ItineraryService {
           pax_names: paxNames !== undefined ? (paxNames?.length ? JSON.stringify(paxNames) : null) : undefined,
         });
 
+      // Child rows are addressed by client-supplied ids — every update/delete
+      // below is scoped to this itinerary so ids belonging to another user's
+      // itinerary can't be touched.
+      const ownedAgendaIds = new Set(
+        (await trx(TB_TRAVEL_AGENDA_ITEM).where({ itinerary_id: itinerary.id! }).pluck("id")).map(Number),
+      );
+
       if (_agendaIdsToDelete.length > 0) {
         await trx(TB_TRAVEL_AGENDA_ITEM)
+          .where({ itinerary_id: itinerary.id! })
           .whereIn("id", _agendaIdsToDelete.map(Number))
           .update({ record_status: "D" });
       }
@@ -551,13 +559,14 @@ export class ItineraryService {
 
       for (const item of agendaItems) {
         if (item.id) {
+          if (!ownedAgendaIds.has(Number(item.id))) throw new Exceptions.ForbiddenAccess();
           const cityRaw = normaliseCityRaw(item.cityRaw ?? item.city_raw);
           const startTime = item.startTime ?? item.start_time;
           const endTime = item.endTime ?? item.end_time;
           const unknownTime = item.unknownTime ?? item.unknown_time;
           const durationInHours = item.durationInHours ?? item.duration_in_hours;
           await trx(TB_TRAVEL_AGENDA_ITEM)
-            .where({ id: Number(item.id) })
+            .where({ id: Number(item.id), itinerary_id: itinerary.id! })
             .update({
               category: item.category || undefined,
               list_type: item.listType ?? item.list_type ?? undefined,
@@ -642,6 +651,7 @@ export class ItineraryService {
 
       if (_bookingIdsToDelete.length > 0) {
         await trx(TB_TRAVEL_ITINERARY_BOOKING)
+          .where({ itinerary_id: itinerary.id! })
           .whereIn("id", _bookingIdsToDelete.map(Number))
           .update({ record_status: "D" });
       }
@@ -649,7 +659,7 @@ export class ItineraryService {
       for (const b of bookings) {
         if (b.id) {
           await trx(TB_TRAVEL_ITINERARY_BOOKING)
-            .where({ id: Number(b.id) })
+            .where({ id: Number(b.id), itinerary_id: itinerary.id! })
             .update(this._bookingUpdateRow(b));
         } else {
           await trx(TB_TRAVEL_ITINERARY_BOOKING).insert(this._bookingInsertRow(itinerary.id!, b, now));
@@ -658,6 +668,7 @@ export class ItineraryService {
 
       if (_packingIdsToDelete.length > 0) {
         await trx(TB_TRAVEL_PACKING_ITEM)
+          .where({ itinerary_id: itinerary.id! })
           .whereIn("id", _packingIdsToDelete.map(Number))
           .update({ record_status: "D" });
       }
@@ -666,7 +677,7 @@ export class ItineraryService {
         const p = packingItems[i];
         if (p.id) {
           await trx(TB_TRAVEL_PACKING_ITEM)
-            .where({ id: Number(p.id) })
+            .where({ id: Number(p.id), itinerary_id: itinerary.id! })
             .update({
               label: p.label,
               category: p.category || "misc",
@@ -681,6 +692,7 @@ export class ItineraryService {
 
       if (_noteIdsToDelete.length > 0) {
         await trx(TB_TRAVEL_NOTE_ITEM)
+          .where({ itinerary_id: itinerary.id! })
           .whereIn("id", _noteIdsToDelete.map(Number))
           .update({ record_status: "D" });
       }
@@ -689,7 +701,7 @@ export class ItineraryService {
         const n = noteItems[i];
         if (n.id) {
           await trx(TB_TRAVEL_NOTE_ITEM)
-            .where({ id: Number(n.id) })
+            .where({ id: Number(n.id), itinerary_id: itinerary.id! })
             .update({
               label: n.label,
               category: n.category || undefined,

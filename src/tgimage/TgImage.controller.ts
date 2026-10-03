@@ -20,6 +20,9 @@ export function createTgImageGetController(db: KnexSqlUtilities): Router {
       if (!record) throw new Exceptions.NotFound();
       const { stream, contentType } = await svc.resolveStream(record.telegram_file_id, record.mime_type ?? "image/jpeg");
       res.setHeader("Cache-Control", "public, max-age=86400");
+      // User content on the API origin — if anything ever renders as a document,
+      // it gets no script, no requests and a unique origin.
+      res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
       res.setHeader("Content-Type", contentType);
       stream.pipe(res);
     } catch (err) {

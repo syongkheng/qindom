@@ -3,6 +3,7 @@ import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
+import { ForbiddenAccessException } from "../exceptions/ForbiddenAccessException.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { RsvpGuestPayload, RsvpPayload } from "./Wedding.service.js";
 import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
@@ -20,6 +21,7 @@ export class WeddingValidator {
       mealPreference,
       message,
       additionalGuestContact,
+      pin,
     } = req.body;
 
     V.requiredString(name, "name", loggingEvent);
@@ -43,15 +45,22 @@ export class WeddingValidator {
         "tb_wedding_rsvp",
         { record_status: "A" },
         {
-          columns: ["id"],
+          columns: ["id", "pin"],
           extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmedName]),
         },
         loggingEvent,
       )
     )[0];
+    // Overwriting requires that RSVP's pin — a name alone is public knowledge
+    // (preflight confirms it exists), and without this anyone could rewrite a
+    // guest's RSVP, swap in their own email and take over "forgot PIN".
+    if (existing && (typeof pin !== "string" || pin !== existing.pin)) {
+      loggingEvent?.children?.push(`'name' matches existing RSVP #${existing.id} — pin missing/incorrect ${LogEmoji.error}`);
+      throw new ForbiddenAccessException("An RSVP already exists for this name. Enter its PIN to update it.");
+    }
     loggingEvent?.children?.push(
       existing
-        ? `'name' matches existing RSVP #${existing.id} — will update ${LogEmoji.success}`
+        ? `'name' matches existing RSVP #${existing.id}, pin verified — will update ${LogEmoji.success}`
         : `'name' is new ${LogEmoji.success}`,
     );
 
