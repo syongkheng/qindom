@@ -15,6 +15,7 @@ import { RestRequestLogger } from "./middlewares/RestRequestLogger.js";
 import { MandatoryTokenFilter } from "./middlewares/TokenFilter.js";
 import { globalLimiter } from "./middlewares/RateLimiter.js";
 import { mw } from "./middlewares/presets.js";
+import { ErrorHandler } from "./middlewares/ErrorHandler.js";
 
 // Controllers
 import createConnectivityController from "./connectivity/Connectivity.controller.js";
@@ -61,7 +62,8 @@ async function startServer() {
       // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
-      callback(new Error(`CORS: origin '${origin}' not allowed`));
+      // status/expose: ErrorHandler answers it as a JSON 403 with this message
+      callback(Object.assign(new Error(`CORS: origin '${origin}' not allowed`), { status: 403, expose: true }));
     },
     methods: "GET,POST,DELETE,OPTIONS",
     credentials: true,
@@ -122,6 +124,9 @@ async function startServer() {
     next();
   };
   routes.forEach(([path, mws, router]) => app.use(path, [...mws, enterController], router));
+
+  // Must stay last — replaces Express's default handler, which leaks stack traces
+  app.use(ErrorHandler);
 
   // Start server
   app.listen(port, () => {

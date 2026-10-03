@@ -24,6 +24,17 @@ function isCsrfValid(req: RequestWithUserInfo): boolean {
   return crypto.timingSafeEqual(Buffer.from(header), Buffer.from(cookie));
 }
 
+// Roles come from the DB row, not the JWT — the token's roles are a snapshot from
+// login, so a demoted admin would otherwise keep their access until it expires.
+function parseRoles(raw: string | undefined): string[] {
+  try {
+    const parsed = JSON.parse(raw ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);
   const jwtSecret = process.env.JWT_SECRET;
@@ -52,7 +63,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
     const user = await db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
-      ["id", "token"],
+      ["id", "token", "roles"],
     );
     if (!user || user.token !== token) {
       return response.result(401, "token_invalid", "Your session is no longer valid. Please log in again.");
@@ -62,7 +73,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
       return response.result(403, "csrf_invalid", "Invalid or missing CSRF token.");
     }
 
-    req.user = { ...decoded, id: user.id! };
+    req.user = { ...decoded, id: user.id!, roles: parseRoles(user.roles) };
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
@@ -106,7 +117,7 @@ export const OptionalTokenFilter = async (req: RequestWithUserInfo, res: Respons
       const user = await db.findOne<ITB_AA_USER>(
         "tb_aa_user",
         { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
-        ["id", "token"],
+        ["id", "token", "roles"],
       );
       if (!user || user.token !== token) {
         return next(); // revoked / stale token → proceed as visitor
@@ -117,7 +128,7 @@ export const OptionalTokenFilter = async (req: RequestWithUserInfo, res: Respons
         return response.result(403, "csrf_invalid", "Invalid or missing CSRF token.");
       }
 
-      req.user = { ...decoded, id: user.id! }; // Attach user info
+      req.user = { ...decoded, id: user.id!, roles: parseRoles(user.roles) }; // Attach user info
     } catch (err) {
       // Token invalid or expired → treat as visitor, don't throw
       LoggingUtilities.service.warn("OptionalTokenFilter", "Invalid token, proceeding as visitor");

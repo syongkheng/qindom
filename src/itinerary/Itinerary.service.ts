@@ -374,8 +374,11 @@ export class ItineraryService {
     } = body;
 
     if (idempotencyKey) {
+      // Scoped to the caller — the replay returns the itinerary's shortCode and
+      // sessionId, so another user's key must never resolve to their trip.
       const existing = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
         idempotency_key: idempotencyKey,
+        created_by_id: userId,
       })) as ITB_ITINERARY | undefined;
       if (existing) {
         const existingAgenda = (await this.db.find<ITB_AGENDA_ITEM>(TB_TRAVEL_AGENDA_ITEM, {

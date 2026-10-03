@@ -92,11 +92,22 @@ qindom (Express 5 + TypeScript + MySQL)
 │   ├── JWTs are signed and verified with algorithm pinned to HS256
 │   ├── MandatoryTokenFilter (JWT cookie required → 401 if missing;
 │   │     403 csrf_invalid if X-CSRF-Token header doesn't match csrf_token
-│   │     cookie on non-GET requests)
+│   │     cookie on non-GET requests). req.user.roles is taken from the
+│   │     tb_aa_user row it already loads for the revocation check, NOT the
+│   │     JWT's roles claim (a stale snapshot) — role changes apply on the
+│   │     next request. OptionalTokenFilter does the same.
 │   ├── OptionalTokenFilter (JWT cookie attached if present; now also does the
 │   │     same DB token-revocation check as MandatoryTokenFilter — a revoked/
 │   │     rotated token drops to visitor instead of 401; CSRF enforced only
 │   │     when a valid token is attached)
+│   ├── ErrorHandler (src/middlewares/ErrorHandler.ts) — registered LAST in
+│   │     index.ts. Replaces Express 5's default finalhandler, which renders
+│   │     err.stack as HTML whenever NODE_ENV != "production" (prod is "prd").
+│   │     BaseExceptions → their status; MulterError → 413/400; http-errors
+│   │     (body-parser parse/size, CORS rejection tagged status 403) → 4xx;
+│   │     anything else → generic 500. Uses ControllerResponse only when
+│   │     req.logContext exists (CORS/express.json errors happen before
+│   │     RestRequestLogger, and the request-log helpers need a context).
 │   └── RequestApiKeyFilter(...prefixes) — factory; x-api-key header →
 │         tb_ss_api_key lookup, sets logContext.metadata.userId.
 │         Each route names the key prefix it accepts (presets mw.ssKey →
