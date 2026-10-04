@@ -10,24 +10,29 @@ const EVENT = {
   endUtc: "20270328T083000Z",
 };
 
-// Set WEDDING_WEBSITE_URL in the environment (e.g. https://yoursite.com/?q=0).
-// When unset, the "Open Website" button is left out rather than linking nowhere.
+// Set WEDDING_WEBSITE_URL in the environment (e.g. https://yoursite.com). Any
+// `q` already on it is overridden. When unset, the website links are left out
+// rather than pointing nowhere.
 const websiteUrl = () => process.env.WEDDING_WEBSITE_URL?.trim() || null;
 
-// Website link that opens the RSVP form straight away (`q=2`; the site treats
-// q=0 as no RSVP footer, q=1 as footer shown, q=2 as modal open). Null when
-// WEDDING_WEBSITE_URL isn't set or isn't a valid URL.
-export function buildRsvpUpdateLink(): string | null {
+// The site's `q` param: 0 or absent = RSVP footer shown, 1 = footer hidden,
+// 2 = RSVP modal opens straight away. Null when WEDDING_WEBSITE_URL isn't set
+// or isn't a valid URL.
+function websiteLink(q: "1" | "2"): string | null {
   const base = websiteUrl();
   if (!base) return null;
   try {
     const url = new URL(base);
-    url.searchParams.set("q", "2");
+    url.searchParams.set("q", q);
     return url.toString();
   } catch {
     return null;
   }
 }
+
+// "Open Website": just visiting the site, so the RSVP footer is hidden (q=1).
+// "Submit the RSVP form again": opens the form to edit the response (q=2).
+export const buildRsvpUpdateLink = () => websiteLink("2");
 
 export function buildEventLinks(): { calendar: string; directions: string; website: string | null } {
   const calendar =
@@ -44,7 +49,7 @@ export function buildEventLinks(): { calendar: string; directions: string; websi
     "https://www.google.com/maps/dir/?" +
     new URLSearchParams({ api: "1", destination: EVENT.address }).toString();
 
-  return { calendar, directions, website: websiteUrl() };
+  return { calendar, directions, website: websiteLink("1") };
 }
 
 // Bulletproof email buttons: table-based with inline styles, since email
