@@ -20,7 +20,12 @@ qindom (Express 5 + TypeScript + MySQL)
 │   │     header on mutating requests) — see MandatoryTokenFilter /
 │   │     OptionalTokenFilter in src/middlewares/TokenFilter.ts
 │   ├── Deploy: AWS EC2 ap-southeast-1 — port 3000
-│   └── Process manager: PM2 (ecosystem.config.cjs — .cjs since root is now ESM)
+│   ├── Process manager: PM2 (ecosystem.config.cjs — .cjs since root is now ESM)
+│   └── postinstall: scripts/apply-patches.js applies patches/*.patch to
+│         node_modules (replaced patch-package Oct 2026 — its deps had
+│         unfixable advisories). Exits 1 if a patch stops matching. Guarded
+│         with `test ! -f` because deploy.sh doesn't ship scripts/ or patches/
+│         to EC2 — so patches only ever apply locally, never in prod.
 │
 ├── MIDDLEWARE STACK (global → route-level)
 │   ├── CORS (ALLOWED_ORIGINS env var)

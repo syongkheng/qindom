@@ -13,7 +13,7 @@
     "migrate:rollback": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
     "migrate:make": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make",
     "migrate:status": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:status",
-    "postinstall": "patch-package"
+    "postinstall": "test ! -f scripts/apply-patches.js || node scripts/apply-patches.js"
   },
   "keywords": [],
   "author": "",
@@ -39,7 +39,6 @@
     "node-html-parser": "^7.0.1",
     "node-telegram-bot-api": "^1.1.0",
     "nodemailer": "^10.0.14",
-    "patch-package": "^8.0.1",
     "sharp": "^0.35.3"
   },
   "overrides": {
