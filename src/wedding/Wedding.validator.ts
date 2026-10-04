@@ -3,7 +3,6 @@ import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
-import { ForbiddenAccessException } from "../exceptions/ForbiddenAccessException.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { RsvpGuestPayload, RsvpPayload } from "./Wedding.service.js";
 import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
@@ -21,11 +20,10 @@ export class WeddingValidator {
       mealPreference,
       message,
       additionalGuestContact,
-      pin,
     } = req.body;
 
     V.requiredString(name, "name", loggingEvent);
-    V.optionalEmail(email, "email", loggingEvent);
+    V.requiredEmail(email, "email", loggingEvent);
     V.requiredBoolean(attending, "attending", loggingEvent);
     V.optionalContactNumber(contactNumber, "contactNumber", loggingEvent);
     V.optionalString(dietaryRestrictions, "dietaryRestrictions", loggingEvent);
@@ -33,36 +31,7 @@ export class WeddingValidator {
     V.optionalString(message, "message", loggingEvent);
 
     const trimmedName = (name as string).trim();
-
-    // Re-submitting an already-registered name overwrites that person's
-    // previous RSVP (see WeddingService.submitRsvp) rather than being
-    // rejected as a duplicate. Matched case-insensitively and trimmed —
-    // an exact match previously let trivial variations ("YK" vs "yk" vs
-    // "YK " with trailing whitespace) silently create a second row instead
-    // of updating the first.
-    const existing = (
-      await this.db.find<ITb_wedding_rsvp>(
-        "tb_wedding_rsvp",
-        { record_status: "A" },
-        {
-          columns: ["id", "pin"],
-          extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmedName]),
-        },
-        loggingEvent,
-      )
-    )[0];
-    // Overwriting requires that RSVP's pin — a name alone is public knowledge
-    // (preflight confirms it exists), and without this anyone could rewrite a
-    // guest's RSVP, swap in their own email and take over "forgot PIN".
-    if (existing && (typeof pin !== "string" || pin !== existing.pin)) {
-      loggingEvent?.children?.push(`'name' matches existing RSVP #${existing.id} — pin missing/incorrect ${LogEmoji.error}`);
-      throw new ForbiddenAccessException("An RSVP already exists for this name. Enter its PIN to update it.");
-    }
-    loggingEvent?.children?.push(
-      existing
-        ? `'name' matches existing RSVP #${existing.id}, pin verified — will update ${LogEmoji.success}`
-        : `'name' is new ${LogEmoji.success}`,
-    );
+    const trimmedEmail = (email as string).trim();
 
     const guests: RsvpGuestPayload[] = [];
     if (additionalGuestContact !== undefined && additionalGuestContact !== null) {
@@ -73,41 +42,21 @@ export class WeddingValidator {
 
     return {
       name: trimmedName,
-      email: email ?? null,
+      email: trimmedEmail,
       contactNumber: contactNumber ?? null,
       attending,
       dietaryRestrictions: dietaryRestrictions ?? null,
       mealPreference: mealPreference ?? null,
       message: message ?? null,
       additionalGuestContact: guests,
-      existingRsvpId: existing?.id ?? null,
     };
   }
 
-  // Name-only body — used by the existence check and the "forgot PIN" recovery,
-  // neither of which returns personal data.
-  validateNameBody(req: Request, loggingEvent?: IRequestLogEvent): { name: string } {
-    const { name } = req.body;
-    V.requiredString(name, "name", loggingEvent);
-    return { name: (name as string).trim() };
-  }
-
-  // Locked-down lookup requires BOTH the guest's name and the 4-digit RSVP pin.
-  async validateRsvpLookupQuery(
-    req: Request,
-    loggingEvent?: IRequestLogEvent,
-  ): Promise<{ name: string; pin: string }> {
-    const { name, pin } = req.query;
-
-    V.requiredString(name, "name", loggingEvent);
-
-    if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
-      loggingEvent?.children?.push(`'pin' must be exactly 4 digits ${LogEmoji.error}`);
-      throw new InvalidRequestException("pin", "format");
-    }
-
-    loggingEvent?.children?.push(`'name' + 'pin' validated ${LogEmoji.success}`);
-    return { name: (name as string).trim(), pin };
+  // Email-only body — used by the existence check, which returns no personal data.
+  validateEmailBody(req: Request, loggingEvent?: IRequestLogEvent): { email: string } {
+    const { email } = req.body;
+    V.requiredEmail(email, "email", loggingEvent);
+    return { email: (email as string).trim() };
   }
 
   // Status check requires BOTH the guest's name and the 4-digit pin — a pin

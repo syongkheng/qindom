@@ -27,8 +27,7 @@ export default function createWeddingController(db: KnexSqlUtilities) {
       // `rsvpId` (the underlying auto-increment id) is intentionally not
       // sent to the client — `pin` is the identifier guests are meant to
       // share/use, and a sequential id would make every other guest's
-      // record trivially enumerable. Updating an existing RSVP requires its
-      // pin in the body, so on that path this only echoes what the caller sent.
+      // record trivially enumerable.
       const { pin } = await weddingService.submitRsvp(payload, logContext);
       return cr.ok({ pin, notice: WEDDING_PDPA_NOTICE });
     } catch (err) {
@@ -36,7 +35,7 @@ export default function createWeddingController(db: KnexSqlUtilities) {
     }
   });
 
-  // Step-1 existence check for the RSVP form: name → { exists, hasEmail }.
+  // Step-1 existence check for the RSVP form: email → { exists, hasEmail }.
   // Booleans only, no personal data.
   router.post("/rsvp/preflight", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
@@ -45,48 +44,10 @@ export default function createWeddingController(db: KnexSqlUtilities) {
       ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
       : undefined;
     try {
-      const { name } = weddingValidator.validateNameBody(req, validationEvent);
-      return cr.ok(await weddingService.checkRsvpExistsByName(name));
+      const { email } = weddingValidator.validateEmailBody(req, validationEvent);
+      return cr.ok(await weddingService.checkRsvpExistsByEmail(email));
     } catch (err) {
       return handleException(err, cr, "WeddingController.POST /rsvp/preflight", "Failed to check RSVP");
-    }
-  });
-
-  // "Forgot PIN": emails the pin to the RSVP's registered address if there is
-  // one. Returns { exists, hasEmail, sent } — never the pin itself.
-  router.post("/rsvp/recover-pin", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    const logContext: IRequestLogContext = req.logContext;
-    const validationEvent = logContext
-      ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-      : undefined;
-    try {
-      const { name } = weddingValidator.validateNameBody(req, validationEvent);
-      return cr.ok(await weddingService.recoverPinByName(name));
-    } catch (err) {
-      return handleException(err, cr, "WeddingController.POST /rsvp/recover-pin", "Failed to recover PIN");
-    }
-  });
-
-  // Locked-down lookup: a guest proves their identity with BOTH their name and
-  // the 4-digit RSVP pin. On success they see only their own details plus whose
-  // RSVP they're on ("guest of YK") — never the other guests' details. A pin or
-  // name alone reveals nothing, and a mismatch is reported as a plain
-  // not-found so it can't be used to enumerate names or pins.
-  router.get("/rsvp", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    const logContext: IRequestLogContext = req.logContext;
-
-    const validationEvent = logContext
-      ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Query params")
-      : undefined;
-
-    try {
-      const { name, pin } = await weddingValidator.validateRsvpLookupQuery(req, validationEvent);
-      const rsvp = await weddingService.lookupRsvpByNameAndPin(name, pin);
-      return cr.ok({ found: rsvp !== null, rsvp });
-    } catch (err) {
-      return handleException(err, cr, "WeddingController.GET /rsvp", "Failed to look up RSVP");
     }
   });
 

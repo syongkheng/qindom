@@ -4,6 +4,8 @@ import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
 import { ITb_wedding_rsvp_guest } from "../models/databases/tb_wedding_rsvp_guest.js";
 import { MaskingUtilities } from "../utils/MaskingUtilities.js";
 import { MailerUtilities } from "../utils/MailerUtilities.js";
+import { renderEventActionButtons, buildRsvpUpdateLink } from "./Wedding.eventLinks.js";
+import { renderEmail, emailDetailsPanel, emailSectionTitle, COLORS, SERIF } from "./Wedding.emailTemplate.js";
 
 export interface RsvpGuestPayload {
   name: string;
@@ -15,54 +17,23 @@ export interface RsvpGuestPayload {
 
 export interface RsvpPayload {
   name: string;
-  email?: string | null;
+  email: string;
   contactNumber?: string | null;
   attending: boolean;
   dietaryRestrictions?: string | null;
   mealPreference?: string | null;
   message?: string | null;
   additionalGuestContact: RsvpGuestPayload[];
-  // Set by the validator when this name already has an active RSVP — tells
-  // submitRsvp to update that row (and replace its guest list) instead of
-  // inserting a new one, so re-submitting the same name overwrites the
-  // person's previous answer rather than failing as a duplicate. Only set
-  // once the validator has checked the request carried that RSVP's pin.
-  existingRsvpId?: number | null;
 }
 
-// PDPA retention notice surfaced to guests at collection (POST /rsvp) and at
-// lookup (GET /rsvp). NOTE: this text PROMISES deletion — an actual purge job
+// PDPA retention notice surfaced to guests at collection (POST /rsvp). NOTE: this text PROMISES deletion — an actual purge job
 // must enforce it for the statement to be truthful. That job is not yet
 // implemented; see Wedding module TODO.
 export const WEDDING_PDPA_NOTICE =
   "Your RSVP details are collected only for this wedding and will be permanently deleted the day after the event.";
 
-// Returned by the name+pin lookup. Shows only the requester's OWN details plus
-// whose RSVP they are on ("guest of YK") — never the other guests' details.
-export interface RsvpSelfView {
-  role: "primary" | "guest";
-  // The primary registrant's name when the requester is a guest on someone
-  // else's RSVP (e.g. "YK"); null when the requester IS the primary registrant.
-  guestOf: string | null;
-  you: {
-    name: string;
-    email: string | null;
-    contactNumber: string | null;
-    attending: boolean;
-    dietaryRestrictions: string | null;
-    mealPreference: string | null;
-    message: string | null;
-  };
-  // The registrant's OWN guest names, for editing — populated only when the
-  // requester IS the primary registrant (they created and manage these). Empty
-  // for a guest requester, who never sees the other guests on the RSVP.
-  guestNames: string[];
-  notice: string;
-}
-
-// Deliberately minimal — unlike RsvpLookupResult (used to pre-fill the RSVP
-// form for the person who just typed their own name), this is exposed via an
-// unauthenticated public status-check endpoint, so it omits email/contact
+// Deliberately minimal — this is exposed via an unauthenticated public
+// status-check endpoint, so it omits email/contact
 // number/dietary info and only ever lists guest *names*. Identified by
 // `pin` rather than the underlying auto-increment id — a sequential id
 // would make every other guest's record trivially enumerable once one pin
@@ -79,15 +50,20 @@ export interface RsvpStatusMatch {
   updatedAt: number;
 }
 
+const MEAL_LABELS: Record<string, string> = {
+  regular: "No restrictions",
+  vegetarian: "Vegetarian",
+  halal: "Halal",
+};
+
 export class WeddingService {
   constructor(private readonly db: KnexSqlUtilities) {}
 
-  // Step-1 existence check for the RSVP form: given only a name, report whether
-  // a primary-registrant RSVP exists and whether it has an email on file (so the
-  // UI can offer "forgot PIN → email it", or fall back to "contact the couple").
-  // Returns booleans ONLY — never any personal data.
-  async checkRsvpExistsByName(name: string): Promise<{ exists: boolean; hasEmail: boolean }> {
-    const trimmed = name.trim();
+  // Step-1 existence check for the RSVP form: given only an email, report whether
+  // it already belongs to an RSVP — as a main registrant or as someone's
+  // additional guest. Returns booleans ONLY — never any personal data.
+  async checkRsvpExistsByEmail(email: string): Promise<{ exists: boolean; hasEmail: boolean }> {
+    const trimmed = email.trim();
     const rsvp = (
       await this.db.find<ITb_wedding_rsvp>(
         "tb_wedding_rsvp",
@@ -95,105 +71,26 @@ export class WeddingService {
         {
           limit: 1,
           columns: ["id", "email"],
-          extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmed]),
+          extraWhere: (qb) => qb.whereRaw("LOWER(email) = LOWER(?)", [trimmed]),
         },
       )
     )[0];
-    return { exists: Boolean(rsvp), hasEmail: Boolean(rsvp?.email) };
-  }
+    if (rsvp) return { exists: true, hasEmail: Boolean(rsvp.email) };
 
-  // "Forgot PIN": email the pin to the RSVP's registered address (the only
-  // party who can read it). The pin is never returned in the HTTP response.
-  async recoverPinByName(name: string): Promise<{ exists: boolean; hasEmail: boolean; sent: boolean }> {
-    const trimmed = name.trim();
-    const rsvp = (
-      await this.db.find<ITb_wedding_rsvp>(
-        "tb_wedding_rsvp",
+    // Not a main registrant — they may still have been added as someone's
+    // additional guest, which also counts as an existing RSVP for this email.
+    const guest = (
+      await this.db.find<ITb_wedding_rsvp_guest>(
+        "tb_wedding_rsvp_guest",
         { record_status: "A" },
-        { limit: 1, extraWhere: (qb) => qb.whereRaw("LOWER(name) = LOWER(?)", [trimmed]) },
+        {
+          limit: 1,
+          columns: ["id"],
+          extraWhere: (qb) => qb.whereRaw("LOWER(email) = LOWER(?)", [trimmed]),
+        },
       )
     )[0];
-
-    if (!rsvp) return { exists: false, hasEmail: false, sent: false };
-    if (!rsvp.email) return { exists: true, hasEmail: false, sent: false };
-
-    try {
-      await MailerUtilities.sendMail({
-        to: rsvp.email,
-        subject: "Your wedding RSVP PIN",
-        html: `
-          <p>Hi <strong>${rsvp.name}</strong>,</p>
-          <p>Your RSVP PIN is:</p>
-          <h2 style="letter-spacing:0.2em;">${rsvp.pin}</h2>
-          <p>Use it to view or edit your RSVP. Please don't share it with anyone.</p>
-          <p>— no-reply-awense</p>
-        `,
-      });
-      return { exists: true, hasEmail: true, sent: true };
-    } catch {
-      return { exists: true, hasEmail: true, sent: false };
-    }
-  }
-
-  // Locked-down lookup: the requester must prove BOTH their name and the RSVP
-  // pin. A pin alone, or a name alone, reveals nothing. On success we return
-  // only the requester's own details plus whose RSVP they're on — never the
-  // other guests' details. Returns null when the pin doesn't exist or the name
-  // doesn't match anyone on that pin's RSVP (caller maps both to "not found",
-  // so the two cases are indistinguishable to the client).
-  async lookupRsvpByNameAndPin(name: string, pin: string): Promise<RsvpSelfView | null> {
-    const rsvp = await this.db.findOne<ITb_wedding_rsvp>("tb_wedding_rsvp", { pin, record_status: "A" });
-    if (!rsvp) return null;
-
-    const target = name.trim().toLowerCase();
-
-    const guestRows = await this.db.find<ITb_wedding_rsvp_guest>("tb_wedding_rsvp_guest", {
-      rsvp_id: rsvp.id,
-      record_status: "A",
-    });
-
-    // Primary registrant on this RSVP — gets their own details plus their guest
-    // names so the RSVP form can pre-fill for editing.
-    if (rsvp.name.trim().toLowerCase() === target) {
-      return {
-        role: "primary",
-        guestOf: null,
-        you: {
-          name: rsvp.name,
-          email: rsvp.email,
-          contactNumber: rsvp.contact_number,
-          attending: rsvp.attending === 1,
-          dietaryRestrictions: rsvp.dietary_restrictions,
-          mealPreference: rsvp.meal_preference,
-          message: rsvp.message,
-        },
-        guestNames: guestRows.map((g) => g.name),
-        notice: WEDDING_PDPA_NOTICE,
-      };
-    }
-
-    // Additional guest on this RSVP — only their own details, never the others'.
-    const guest = guestRows.find((g) => g.name.trim().toLowerCase() === target);
-    if (guest) {
-      return {
-        role: "guest",
-        guestOf: rsvp.name, // "you are a guest of YK"
-        you: {
-          name: guest.name,
-          email: guest.email,
-          contactNumber: guest.contact_number,
-          attending: rsvp.attending === 1, // attendance is tracked at the RSVP level
-          dietaryRestrictions: guest.dietary_restrictions,
-          mealPreference: guest.meal_preference,
-          message: null, // message is a primary-registrant field only
-        },
-        guestNames: [],
-        notice: WEDDING_PDPA_NOTICE,
-      };
-    }
-
-    // Pin is valid but the supplied name isn't on this RSVP.
-    return null;
+    return { exists: Boolean(guest), hasEmail: Boolean(guest) };
   }
 
   // Locked-down status check: requires BOTH the guest's name and the 4-digit
@@ -261,64 +158,80 @@ export class WeddingService {
   async submitRsvp(payload: RsvpPayload, logContext?: IRequestLogContext): Promise<{ rsvpId: number; pin: string }> {
     const logEvent = logContext?.events?.[logContext.events.length - 1];
 
-    let rsvpId: number;
-    let pin: string;
     const now = Date.now();
 
-    if (payload.existingRsvpId) {
-      rsvpId = payload.existingRsvpId;
-
-      // Pin is assigned once at creation and never reissued — the guest's
-      // confirmation code has to stay valid across later edits.
-      const existingRow = await this.db.findOne<ITb_wedding_rsvp>("tb_wedding_rsvp", { id: rsvpId });
-      pin = existingRow?.pin ?? (await this.generateUniquePin());
-
+    // Re-submitting an already-registered email replaces that person's previous
+    // RSVP: every active row for the email (and its guests) is soft-deleted and
+    // a fresh row is inserted below, so earlier answers stay on record as 'D'.
+    // Matched case-insensitively and trimmed, so "A@x.com" and "a@x.com " are
+    // the same person.
+    const previous = await this.db.find<ITb_wedding_rsvp>(
+      "tb_wedding_rsvp",
+      { record_status: "A" },
+      {
+        columns: ["id"],
+        extraWhere: (qb) => qb.whereRaw("LOWER(email) = LOWER(?)", [payload.email.trim()]),
+      },
+      logEvent,
+    );
+    for (const { id } of previous) {
       await this.db.update<Partial<ITb_wedding_rsvp>>(
         "tb_wedding_rsvp",
-        { id: rsvpId },
-        {
-          name: payload.name,
-          email: payload.email ?? null,
-          contact_number: payload.contactNumber ?? null,
-          attending: payload.attending ? 1 : 0,
-          dietary_restrictions: payload.dietaryRestrictions ?? null,
-          meal_preference: payload.mealPreference ?? null,
-          message: payload.message ?? null,
-          updated_dt: now,
-        },
+        { id },
+        { record_status: "D", updated_dt: now },
         logEvent,
       );
-
-      // Replace the guest list wholesale rather than trying to diff/merge —
-      // matches "overwrite their latest submission" semantics.
       await this.db.update<Partial<ITb_wedding_rsvp_guest>>(
         "tb_wedding_rsvp_guest",
-        { rsvp_id: rsvpId, record_status: "A" },
+        { rsvp_id: id, record_status: "A" },
         { record_status: "D" },
         logEvent,
       );
-    } else {
-      pin = await this.generateUniquePin();
+    }
 
-      const rsvp = await this.db.insert<Partial<ITb_wedding_rsvp>, ITb_wedding_rsvp>(
-        "tb_wedding_rsvp",
-        {
-          pin,
-          name: payload.name,
-          email: payload.email ?? null,
-          contact_number: payload.contactNumber ?? null,
-          attending: payload.attending ? 1 : 0,
-          dietary_restrictions: payload.dietaryRestrictions ?? null,
-          meal_preference: payload.mealPreference ?? null,
-          message: payload.message ?? null,
-          record_status: "A",
-          created_dt: now,
-          updated_dt: now,
-        },
+    // The same email may also be listed as an additional guest on someone
+    // else's RSVP. They're now answering for themselves, so that guest entry is
+    // soft-deleted and they get their own main row below.
+    const guestEntries = await this.db.find<ITb_wedding_rsvp_guest>(
+      "tb_wedding_rsvp_guest",
+      { record_status: "A" },
+      {
+        columns: ["id"],
+        extraWhere: (qb) => qb.whereRaw("LOWER(email) = LOWER(?)", [payload.email.trim()]),
+      },
+      logEvent,
+    );
+    for (const { id } of guestEntries) {
+      await this.db.update<Partial<ITb_wedding_rsvp_guest>>(
+        "tb_wedding_rsvp_guest",
+        { id },
+        { record_status: "D" },
         logEvent,
       );
-      rsvpId = rsvp.id;
     }
+
+    // A new row gets a new pin — the soft-deleted row keeps its own (the pin
+    // column is unique across deleted rows too).
+    const pin = await this.generateUniquePin();
+
+    const rsvp = await this.db.insert<Partial<ITb_wedding_rsvp>, ITb_wedding_rsvp>(
+      "tb_wedding_rsvp",
+      {
+        pin,
+        name: payload.name,
+        email: payload.email,
+        contact_number: payload.contactNumber ?? null,
+        attending: payload.attending ? 1 : 0,
+        dietary_restrictions: payload.dietaryRestrictions ?? null,
+        meal_preference: payload.mealPreference ?? null,
+        message: payload.message ?? null,
+        record_status: "A",
+        created_dt: now,
+        updated_dt: now,
+      },
+      logEvent,
+    );
+    const rsvpId = rsvp.id;
 
     for (const guest of payload.additionalGuestContact) {
       await this.db.insert<Partial<ITb_wedding_rsvp_guest>, ITb_wedding_rsvp_guest>(
@@ -337,6 +250,121 @@ export class WeddingService {
       );
     }
 
+    // Fire-and-forget: a mail failure (SMTP down, bad address) must never fail
+    // or delay an RSVP that has already been saved.
+    void this.sendConfirmationEmail(payload, pin).catch((err) => {
+      console.error(`Failed to send RSVP confirmation email for RSVP #${rsvpId}:`, err);
+    });
+
+    // Guests who were given an email get their own notice. Skip the submitter's
+    // own address and repeats, so one inbox never gets two emails.
+    const notified = new Set([payload.email.trim().toLowerCase()]);
+    for (const guest of payload.additionalGuestContact) {
+      const guestEmail = guest.email?.trim();
+      if (!guestEmail || notified.has(guestEmail.toLowerCase())) continue;
+      notified.add(guestEmail.toLowerCase());
+      void this.sendGuestConfirmationEmail(payload, guest, guestEmail).catch((err) => {
+        console.error(`Failed to send RSVP guest email for RSVP #${rsvpId}:`, err);
+      });
+    }
+
     return { rsvpId, pin };
+  }
+
+  // Sent to an additional guest: tells them who RSVP'd on their behalf and what
+  // was recorded. No reservation ID — that belongs to the main submitter.
+  private async sendGuestConfirmationEmail(
+    payload: RsvpPayload,
+    guest: RsvpGuestPayload,
+    to: string,
+  ): Promise<void> {
+    const esc = (value: string) => MailerUtilities.escapeHtml(value);
+    const submitter = esc(payload.name);
+
+    const p = (html: string) =>
+      `<p style="margin:0 0 14px;font-family:${SERIF};">${html}</p>`;
+
+    await MailerUtilities.sendMail({
+      to,
+      subject: `Yong Kheng & Jessica: We've received your RSVP from ${payload.name}`,
+      html: renderEmail({
+        heading: "We've received your RSVP",
+        bodyHtml: `
+          ${p(`Hi <strong>${esc(guest.name)}</strong>,`)}
+          ${p(`We've received your RSVP from <strong>${submitter}</strong>, who added you as a guest.`)}
+          ${p(
+            payload.attending
+              ? "You're down as attending — we can't wait to celebrate with you!"
+              : `${submitter} let us know you won't be able to make it. You'll be missed.`,
+          )}
+          ${
+            payload.attending
+              ? emailSectionTitle("Your details") +
+                emailDetailsPanel([
+                  [
+                    "Meal preference",
+                    guest.mealPreference ? MEAL_LABELS[guest.mealPreference] ?? esc(guest.mealPreference) : "—",
+                  ],
+                ])
+              : ""
+          }
+          ${payload.attending ? renderEventActionButtons() : ""}
+          ${p(`If anything needs to change, please let ${submitter} know — they can update the RSVP for everyone.`)}
+        `,
+      }),
+    });
+  }
+
+  private async sendConfirmationEmail(payload: RsvpPayload, pin: string): Promise<void> {
+    const esc = (value: string) => MailerUtilities.escapeHtml(value);
+    const meal = (value?: string | null) => (value ? MEAL_LABELS[value] ?? esc(value) : "—");
+
+    const updateLink = buildRsvpUpdateLink();
+    const p = (html: string) =>
+      `<p style="margin:0 0 14px;font-family:${SERIF};">${html}</p>`;
+    const muted = (html: string) =>
+      `<p style="margin:0 0 14px;font-family:${SERIF};font-size:15px;color:${COLORS.textMuted};">${html}</p>`;
+
+    const details: Array<[string, string]> = [["Attending", payload.attending ? "Yes" : "No"]];
+    if (payload.attending) details.push(["Meal preference", meal(payload.mealPreference)]);
+    if (payload.contactNumber) details.push(["Contact number", esc(payload.contactNumber)]);
+    if (payload.message) details.push(["Message", esc(payload.message)]);
+
+    await MailerUtilities.sendMail({
+      to: payload.email,
+      subject: payload.attending
+        ? "Yong Kheng & Jessica: We've received your RSVP — see you there!"
+        : "Yong Kheng & Jessica: We've received your RSVP",
+      html: renderEmail({
+        heading: payload.attending ? "See you there!" : "We've received your RSVP",
+        bodyHtml: `
+          ${p(`Hi <strong>${esc(payload.name)}</strong>,`)}
+          ${p(
+            payload.attending
+              ? "Thank you for your RSVP — we can't wait to celebrate with you!"
+              : "Thank you for letting us know. We're sorry you can't make it, and you'll be missed.",
+          )}
+          ${emailSectionTitle("Your response")}
+          ${emailDetailsPanel(details)}
+          ${
+            payload.additionalGuestContact.length > 0
+              ? emailSectionTitle("Additional guests") +
+                emailDetailsPanel(
+                  payload.additionalGuestContact.map((g): [string, string] => [esc(g.name), meal(g.mealPreference)]),
+                )
+              : ""
+          }
+          ${payload.attending ? renderEventActionButtons() : ""}
+          ${p(
+            `Need to change something? Just ${
+              updateLink
+                ? `<a href="${updateLink.replace(/&/g, "&amp;")}" style="color:${COLORS.red};font-weight:600;">submit the RSVP form again</a>`
+                : "submit the RSVP form again"
+            } with the same email — your latest response replaces the previous one.`,
+          )}
+          ${muted("If you did not submit this RSVP, please contact us and we will do our best to help you.")}
+        `,
+      }),
+    });
   }
 }
