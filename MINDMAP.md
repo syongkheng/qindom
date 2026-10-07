@@ -7,6 +7,7 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 - Deps: express ^5.1 (5.2.1), sharp 0.35.5, knex ^3.1, node-telegram-bot-api ^1.1, TypeScript ^5.9. `npm audit` clean as of 2026-10-07.
 - Envs: Dev `.env.dev` (Telegram polling) · Prod `.env`, `NODE_ENV=prd` (Telegram webhook).
 - `postinstall`: `scripts/apply-patches.js` applies `patches/*.patch`; deploy.sh doesn't ship `scripts/`/`patches/`, so patches never apply on EC2.
+- `deploy.sh`: rsync of `dist/` excludes `node_modules`, `.env`, `serviceAccountKey.json`, `logs`, `package*.json`, `.lock.sha` so `--delete` doesn't wipe them on EC2; deps reinstall only when `package-lock.json` sha differs from `.lock.sha`; after PM2 start it polls `localhost:3000/connectivity` (15×2s) and exits non-zero with PM2 logs if unhealthy.
 - Knex CLI scripts run via `node --import tsx`; `__dirname` via `fileURLToPath(import.meta.url)`.
 
 ## Middleware stack (global → route-level)
