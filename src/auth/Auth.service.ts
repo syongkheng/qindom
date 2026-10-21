@@ -131,7 +131,7 @@ export class AuthService {
           <p>Your verification code is:</p>
           <h2 style="letter-spacing:0.2em;">${code}</h2>
           <p>This code expires in <strong>15 minutes</strong>. Do not share it with anyone.</p>
-          <p>— no-reply-awense</p>
+          <p>— no-reply</p>
         `,
       });
 
@@ -284,7 +284,7 @@ export class AuthService {
           <p>Your verification code is:</p>
           <h2 style="letter-spacing:0.2em;">${code}</h2>
           <p>This code expires in <strong>15 minutes</strong>. Do not share it with anyone.</p>
-          <p>— no-reply-awense</p>
+          <p>— no-reply</p>
         `,
     });
   }
@@ -506,7 +506,7 @@ export class AuthService {
           <p>Hi <strong>${MailerUtilities.escapeHtml(user.username)}</strong>,</p>
           <p>Your password was successfully changed on <strong>${changedAt}</strong>.</p>
           <p>If you did not make this change, please contact us immediately and secure your account.</p>
-          <p>— no-reply-awense</p>
+          <p>— no-reply</p>
         `,
       }).catch(() => {
         LoggingUtilities.service.warn(
