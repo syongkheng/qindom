@@ -81,7 +81,7 @@ export function renderEmail(opts: { heading: string; bodyHtml: string }): string
           <tr><td align="center" style="padding:8px 24px 28px;">
             ${ornament("&#10047;")}
             <p style="margin:12px 0 0;font-family:${SERIF};font-size:13px;color:${COLORS.textMuted};">
-              &mdash; no-reply-awense
+              &mdash; no-reply
             </p>
           </td></tr>
         </table>

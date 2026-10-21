@@ -25,7 +25,7 @@ export interface MailOptions {
 export class MailerUtilities {
   static async sendMail(options: MailOptions): Promise<void> {
     await transporter.sendMail({
-      from: `"no-reply-awense" <${process.env.SMTP_USER}>`,
+      from: `"no-reply" <${process.env.SMTP_USER}>`,
       to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
       subject: options.subject,
       text: options.text,
