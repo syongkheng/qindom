@@ -31,6 +31,8 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 | /itinerary | std | trips |
 | /budget, /trail | auth | budget, trail |
 | /applepay | auth | Apple Pay dashboard |
+| /todo | auth | Personal to-do list |
+| /v1/ss/todo | ss_ API key | Lock-screen widget feed (Scriptable) |
 | /file | auth | itinerary file records |
 | /img | pub GET / JWT upload | Telegram image CDN |
 | /v1/ss, /v2/ss | api-key | Siri Shortcut ingestion |
@@ -55,6 +57,7 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 - **APPLE PAY DASHBOARD `/applepay`** (JWT) — `GET /` (v1+v2 feed), `POST /` manual entry (no future dates, 5-min skew), `POST /:id/delete` (soft), `POST /:id/category`, `POST /card-label/:cardLast4`. Owner-scoped; uuid is public id. Duplicate detection/CSV export are frontend-only. DB: `tb_applepay_transaction`, `tb_applepay_card_label`. Shared service: `SsApplePayV1Service`.
 - **SS API KEY `/ss-key`** (JWT) — `GET/POST/DELETE /api-key`, `POST /api-key/name` (≤100 chars). One active `ss_` key per user, SHA-256 hashed, shown once. DB: `tb_ss_api_key`.
 - **SUGGESTION `/suggestion`** — `activity`, `packing`, `note` (by country, exact), `place` (curated): GETs public (fuzzy `LOWER LIKE`), writes admin-only (JWT + role admin); `/activity/admin/list`, `/place/admin/list` for fndom `/admin/suggestions`. DB: `tb_suggestion_activity|packing|note|place`.
+- **TODO `/todo`** (JWT, `src/todo/`) — `GET /` (all active tasks by sort_order), `POST /` {title ≤500}, `POST /:taskId/update` {title?, done?, pinned?} (done sets done_dt + clears pin; max 3 pinned → 400), `POST /:taskId/delete` (soft) / `/restore` (client-side 5s undo), `POST /reorder` {ids[]} (full manual order → sort_order). uuid is public id; owner-scoped. Widget feed: `GET /v1/ss/todo` (x-api-key ss_, reuses SS key mgmt) → `{tasks: [≤3 titles, pinned first], openCount}` via `siri-shortcut/Todo.v1.controller.ts`. DB: `tb_todo_task` (migration 20261103000000).
 - **BUDGET `/budget`** (JWT) — shared budget tables: `GET /`, `POST /`, `GET /:sessionId`, `POST /edit|delete/:sessionId`, items (`POST /:sessionId/item`, `/item/:itemId`, `/item/:itemId/delete|restore`), collaborators (`POST /:sessionId/collaborator`, `/collaborator/:userId/delete`). DB: `tb_budget_table`, `tb_budget_item`, `tb_budget_collaborator`.
 - **TRAIL `/trail`** (JWT) — sessions (`GET|POST /sessions`, `GET /sessions/:sessionId`, `POST /sessions/:sessionId/complete|delete`) and custom trails (`GET|POST /custom`). DB: `tb_trail_session`, `tb_trail_split`, `tb_trail_custom`.
 - **WEDDING `/wedding`** (frontend `../jessikheng`)

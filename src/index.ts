@@ -26,6 +26,8 @@ import createAuthController from "./auth/Auth.controller.js";
 import createPfpController from "./profile/Pfp.controller.js";
 import createItineraryController from "./itinerary/Itinerary.controller.js";
 import createBudgetController from "./budget/Budget.controller.js";
+import createTodoController from "./todo/Todo.controller.js";
+import createSsTodoControllerV1 from "./siri-shortcut/Todo.v1.controller.js";
 import createApplePayDashboardController from "./applepay/ApplePayDashboard.controller.js";
 import createFileController from "./file/File.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
@@ -103,6 +105,7 @@ async function startServer() {
     ["/pfp",          mw.std,                                    createPfpController(db)],
     ["/itinerary",    mw.std,                                    createItineraryController(db)],
     ["/budget",       mw.auth,                                   createBudgetController(db)],
+    ["/todo",         mw.auth,                                   createTodoController(db)],
     ["/applepay",     mw.auth,                                   createApplePayDashboardController(db)],
     ["/file",         mw.auth,                                   createFileController(db)],
     ["/img",          mw.pub,                                    createTgImageGetController(db)],
@@ -110,6 +113,7 @@ async function startServer() {
     ["/geocode",      mw.std,                                    createGeocodeController(db)],
     ["/trail",        mw.auth,                                   createTrailController(db)],
     ["/v1/ss",        mw.ssKey,                                  createSsApplePayControllerV1(db)],
+    ["/v1/ss",        mw.ssKey,                                  createSsTodoControllerV1(db)],
     ["/v2/ss",        mw.ssKey,                                  createSsApplePayControllerV2(db)],
     ["/ss-key",       mw.auth,                                   createSsApiKeyController(db)],
     ["/wedding",      mw.std,                                    createWeddingController(db)],
