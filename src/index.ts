@@ -27,6 +27,8 @@ import createPfpController from "./profile/Pfp.controller.js";
 import createItineraryController from "./itinerary/Itinerary.controller.js";
 import createBudgetController from "./budget/Budget.controller.js";
 import createTodoController from "./todo/Todo.controller.js";
+import createHouseLayoutController from "./house/HouseLayout.controller.js";
+import { createHouseShareController, createHouseShareViewController } from "./house/HouseShare.controller.js";
 import createSsTodoControllerV1 from "./siri-shortcut/Todo.v1.controller.js";
 import createApplePayDashboardController from "./applepay/ApplePayDashboard.controller.js";
 import createFileController from "./file/File.controller.js";
@@ -36,6 +38,8 @@ import createTrailController from "./trail/Trail.controller.js";
 import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
+import createMcpApiKeyController from "./mcp-api-key/McpApiKey.controller.js";
+import createHouseMcpController from "./mcp/HouseMcp.controller.js";
 import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
 import { setupTelegramLogSender } from "./tgimage/TgLog.logSender.js";
 import { initTgLogBot } from "./tgimage/TgLog.bot.js";
@@ -106,6 +110,9 @@ async function startServer() {
     ["/itinerary",    mw.std,                                    createItineraryController(db)],
     ["/budget",       mw.auth,                                   createBudgetController(db)],
     ["/todo",         mw.auth,                                   createTodoController(db)],
+    ["/house-layout", mw.auth,                                   createHouseLayoutController(db)],
+    ["/house/share",  mw.auth,                                   createHouseShareController(db)],
+    ["/house/view",   mw.housePublic,                            createHouseShareViewController(db)],
     ["/applepay",     mw.auth,                                   createApplePayDashboardController(db)],
     ["/file",         mw.auth,                                   createFileController(db)],
     ["/img",          mw.pub,                                    createTgImageGetController(db)],
@@ -116,6 +123,8 @@ async function startServer() {
     ["/v1/ss",        mw.ssKey,                                  createSsTodoControllerV1(db)],
     ["/v2/ss",        mw.ssKey,                                  createSsApplePayControllerV2(db)],
     ["/ss-key",       mw.auth,                                   createSsApiKeyController(db)],
+    ["/mcp-key",      mw.auth,                                   createMcpApiKeyController(db)],
+    ["/mcp",          mw.mcpPublic,                              createHouseMcpController()],
     ["/wedding",      mw.std,                                    createWeddingController(db)],
     ["/suggestion",   mw.std,                                    createSuggestionController(db)],
     // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)

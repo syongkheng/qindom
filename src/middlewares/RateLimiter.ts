@@ -84,3 +84,23 @@ export const itineraryChallengeLimiter = rateLimit({
   legacyHeaders: false,
   message: rateLimitResponse("Too many access code attempts. Please try again in 15 minutes."),
 });
+
+/** GET /house/view/:token — public shared-house read */
+export const houseViewLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,       // 1 minute
+  limit: 60,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many requests. Please slow down."),
+});
+
+/** /mcp — public, unauthenticated MCP endpoint */
+export const mcpLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,       // 1 minute
+  limit: 30,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many requests. Please slow down."),
+});

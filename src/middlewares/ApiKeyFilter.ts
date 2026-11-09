@@ -8,10 +8,11 @@ import db from "../config/db/mysql.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
+import { ITbMcpApiKey } from "../models/databases/tb_mcp_api_key.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 
-export type ApiKeyPrefix = "ss";
+export type ApiKeyPrefix = "ss" | "mcp";
 
 /**
  * Builds an x-api-key filter that only accepts keys with one of the given prefixes.
@@ -71,6 +72,27 @@ export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) => async
         ...logContext.metadata,
         username: user.username,
         userId: validKeys.user_id,
+      };
+    }
+
+    if (apiKeyPrefix === "mcp") {
+      const validKey = await db.findOne<ITbMcpApiKey>(
+        "tb_mcp_api_key",
+        { api_key_hash: apiKeyHash, record_status: "A" },
+        ["*"],
+        apiKeyValidationLoggingEvent,
+      );
+      if (!validKey) {
+        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
+        throw new Exceptions.InvalidRequest("Invalid API key");
+      }
+      apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
+      const user = await db.findOne<ITB_AA_USER>("tb_aa_user", { id: validKey.user_id }, ["username"], apiKeyValidationLoggingEvent);
+      if (!user) throw new Exceptions.InvalidRequest("Invalid API key");
+      logContext.metadata = {
+        ...logContext.metadata,
+        username: user.username,
+        userId: validKey.user_id,
       };
     }
 

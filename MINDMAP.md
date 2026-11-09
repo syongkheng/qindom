@@ -32,11 +32,16 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 | /budget, /trail | auth | budget, trail |
 | /applepay | auth | Apple Pay dashboard |
 | /todo | auth | Personal to-do list |
+| /house-layout | auth | Saved house-planner layouts |
+| /house/share | auth | Create / list / revoke a user's house share links |
+| /house/view/:token | public (`mw.housePublic`, 60/min/IP) | Read one shared house snapshot |
 | /v1/ss/todo | ss_ API key | Lock-screen widget feed (Scriptable) |
 | /file | auth | itinerary file records |
 | /img | pub GET / JWT upload | Telegram image CDN |
 | /v1/ss, /v2/ss | api-key | Siri Shortcut ingestion |
 | /ss-key | auth | API-key mgmt |
+| /mcp-key | auth | `mcp_` key mgmt for MCP clients |
+| /mcp | PUBLIC (`mcpLimiter` 30/min/IP) | MCP server (Streamable HTTP), stateless, house layout editing |
 | /wedding | std | RSVP |
 | /suggestion | std | suggestions (admin writes) |
 | /debug | open in dev; JWT + SYSTEM_R5 in prd | `GET /status/:code` logging test |
@@ -58,6 +63,10 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 - **SS API KEY `/ss-key`** (JWT) — `GET/POST/DELETE /api-key`, `POST /api-key/name` (≤100 chars). One active `ss_` key per user, SHA-256 hashed, shown once. DB: `tb_ss_api_key`.
 - **SUGGESTION `/suggestion`** — `activity`, `packing`, `note` (by country, exact), `place` (curated): GETs public (fuzzy `LOWER LIKE`), writes admin-only (JWT + role admin); `/activity/admin/list`, `/place/admin/list` for fndom `/admin/suggestions`. DB: `tb_suggestion_activity|packing|note|place`.
 - **TODO `/todo`** (JWT, `src/todo/`) — `GET /` (all active tasks by sort_order), `POST /` {title ≤500}, `POST /:taskId/update` {title?, done?, pinned?} (done sets done_dt + clears pin; max 3 pinned → 400), `POST /:taskId/delete` (soft) / `/restore` (client-side 5s undo), `POST /reorder` {ids[]} (full manual order → sort_order). uuid is public id; owner-scoped. Widget feed: `GET /v1/ss/todo` (x-api-key ss_, reuses SS key mgmt) → `{tasks: [≤3 titles, pinned first], openCount}` via `siri-shortcut/Todo.v1.controller.ts`. DB: `tb_todo_task` (migration 20261103000000).
+- **HOUSE LAYOUT `/house-layout`** (JWT, `src/house/`) — `GET /` (summaries: id, name, itemCount, createdAt, updatedAt; newest first), `GET /:layoutId` (summary + `data`), `POST /` {name ≤100, data}, `POST /:layoutId/update` {name?, data?}, `POST /:layoutId/delete` (soft). `data` = planner export JSON `{version, plan, items[≤500], custom[≤200], walls?[≤400]}`, ≤1 MB, stored as MEDIUMTEXT; server checks the envelope only (client re-sanitises on load). Max 30 layouts/user (400 beyond). uuid public id; owner-scoped. DB: `tb_house_layout` (migration 20261104000000).
+- **HOUSE SHARE `/house/share` (JWT) + `/house/view/:token` (public)** (`src/house/HouseShare.*`) — `GET /house/share` (own links: token, name, itemCount, createdAt), `POST /house/share` {name, data} (same validation as layouts; snapshot copy, max 20 links/user, 400 beyond), `POST /house/share/:token/delete` (owner-only soft delete = revoke). `GET /house/view/:token` returns `{name, createdAt, data}` only (never the owner), 404 if missing/revoked. Token = random UUID. DB: `tb_house_share` (migration 20261109000000, NOT run yet).
+- **MCP `/mcp`** (`src/mcp/`, PUBLIC — `mw.mcpPublic` = logger + `mcpLimiter`, no auth, no RequestHeaderFilter, no DB) — stateless Streamable HTTP (`enableJsonResponse`, new `McpServer` per POST; GET/DELETE 405). Tools take the planner's layout JSON as an argument (zod-validated: ≤500 items, ≤200 custom, ≤400 walls, ≤1 MB out) and return the edited layout; the user saves it and loads it with the planner's Import JSON. Tools: `new_layout`, `describe_layout`, `check_fit`, `add_furniture` (catalogue kinds + `fitted_wardrobe` generated with parts, `floorToCeiling` = 2.6 m; placed against a room wall via `placeAgainstWall`, refused if it overlaps a wall/item), `move_item`, `remove_item`. `housePlan.ts` is a **server-side copy** of fndom's HDB 5-room walls, room bounds, catalogue sizes, footprint/overlap maths (free-angle `rot`: bounding-box footprint + SAT overlap; `move_item` rot is any 0–360) and wardrobe model — keep in step with fndom `constants/houseplan/*` + `utilities/houseGeometry.ts`. Rooms are hard-coded bounds (`ROOMS`).
+- **MCP KEY `/mcp-key`** (JWT, `src/mcp-api-key/`) — `GET|POST|DELETE /api-key` (one active `mcp_` key per user; raw key returned once; sha256 hash + 5-char hint in `tb_mcp_api_key`, migration 20261107000000). Currently unused (the public /mcp needs no key); kept for a future authenticated, saved-layout variant (`mw.mcpKey` was removed — re-add `RequestApiKeyFilter("mcp")`, which still supports the prefix).
 - **BUDGET `/budget`** (JWT) — shared budget tables: `GET /`, `POST /`, `GET /:sessionId`, `POST /edit|delete/:sessionId`, items (`POST /:sessionId/item`, `/item/:itemId`, `/item/:itemId/delete|restore`), collaborators (`POST /:sessionId/collaborator`, `/collaborator/:userId/delete`). DB: `tb_budget_table`, `tb_budget_item`, `tb_budget_collaborator`.
 - **TRAIL `/trail`** (JWT) — sessions (`GET|POST /sessions`, `GET /sessions/:sessionId`, `POST /sessions/:sessionId/complete|delete`) and custom trails (`GET|POST /custom`). DB: `tb_trail_session`, `tb_trail_split`, `tb_trail_custom`.
 - **WEDDING `/wedding`** (frontend `../jessikheng`)
