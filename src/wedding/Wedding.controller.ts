@@ -5,6 +5,7 @@ import { OptionalTokenFilter } from "../middlewares/TokenFilter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { WeddingValidator } from "./Wedding.validator.js";
 import { WeddingService, WEDDING_PDPA_NOTICE } from "./Wedding.service.js";
+import { WeddingVisitNotifier } from "./Wedding.visitNotifier.js";
 import { handleException } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
@@ -13,8 +14,21 @@ export default function createWeddingController(db: KnexSqlUtilities) {
   const router = Router();
   const weddingValidator = new WeddingValidator(db);
   const weddingService = new WeddingService(db);
+  const visitNotifier = new WeddingVisitNotifier(db);
 
-  router.post("/rsvp", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+  // Page-view ping: relays a Telegram alert only — nothing is stored. Always
+  // answers 204 immediately; the send happens after the response.
+  router.post("/visit", [OptionalTokenFilter], (req: RequestWithUserInfo, res: Response) => {
+    const rawIp = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
+    void visitNotifier.notify({
+      ...WeddingVisitNotifier.sanitise(req.body),
+      ip: Array.isArray(rawIp) ? rawIp[0] : rawIp,
+      userAgent: req.headers["user-agent"] || "",
+    });
+    res.status(204).end();
+  });
+
+  router.post("/rsvp",[OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     const logContext: IRequestLogContext = req.logContext;
 
