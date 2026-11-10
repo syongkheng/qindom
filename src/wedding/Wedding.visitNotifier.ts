@@ -14,13 +14,6 @@ export interface VisitInfo {
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const clip = (value: unknown, max: number): string => (typeof value === "string" ? value.trim().slice(0, max) : "");
 
-// Same IP is reported at most once per window, so a refresh or a flaky
-// connection doesn't spam the chat. In-memory only — nothing is persisted, and
-// the counters reset on restart.
-const DEDUPE_WINDOW_MS = 30 * 60_000;
-const lastSeenByIp = new Map<string, number>();
-let visitsToday = { day: "", count: 0 };
-
 function parseUserAgent(ua: string): { device: string; os: string; browser: string } {
   const os = /iPhone|iPad|iPod/.test(ua)
     ? "iOS"
@@ -79,22 +72,9 @@ export class WeddingVisitNotifier {
       const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
       if (!token) return;
 
-      const now = Date.now();
-      const last = lastSeenByIp.get(visit.ip);
-      if (last && now - last < DEDUPE_WINDOW_MS) return;
-      lastSeenByIp.set(visit.ip, now);
-      for (const [ip, seenAt] of lastSeenByIp) {
-        if (now - seenAt >= DEDUPE_WINDOW_MS) lastSeenByIp.delete(ip);
-      }
-
-      const day = new Date(now).toISOString().slice(0, 10);
-      if (visitsToday.day !== day) visitsToday = { day, count: 0 };
-      visitsToday.count += 1;
-
       const { device, os, browser } = parseUserAgent(visit.userAgent);
       const lines = [
         "👀 <b>Someone is visiting the wedding page</b>",
-        `Visit #${visitsToday.count} today (UTC)`,
         "",
         `📱 ${escapeHtml(device)} · ${escapeHtml(os)} · ${escapeHtml(browser)}`,
         visit.screen ? `🖥 Screen: ${escapeHtml(visit.screen)}` : "",
