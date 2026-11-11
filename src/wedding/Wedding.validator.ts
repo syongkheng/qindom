@@ -7,6 +7,27 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { RsvpGuestPayload, RsvpPayload } from "./Wedding.service.js";
 import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
 
+// Each guest email gets its own confirmation, so the cap also bounds how many
+// emails one submission can send (submitter + guests).
+export const MAX_ADDITIONAL_GUESTS = 10;
+
+// Mirror the tb_wedding_rsvp / tb_wedding_rsvp_guest column widths, so an
+// oversized value is a 400 here instead of a MySQL error (500).
+const MAX_LEN = {
+  name: 255,
+  email: 255,
+  dietaryRestrictions: 100,
+  mealPreference: 100,
+  message: 1000,
+} as const;
+
+function maxLength(value: unknown, max: number, fieldName: string, loggingEvent?: IRequestLogEvent): void {
+  if (typeof value === "string" && value.trim().length > max) {
+    loggingEvent?.children?.push(`'${fieldName}' maxLength ${max} ${LogEmoji.error}`);
+    throw new InvalidRequestException(fieldName, "format");
+  }
+}
+
 export class WeddingValidator {
   constructor(private readonly db: KnexSqlUtilities) {}
 
@@ -29,6 +50,12 @@ export class WeddingValidator {
     V.optionalString(dietaryRestrictions, "dietaryRestrictions", loggingEvent);
     V.optionalString(mealPreference, "mealPreference", loggingEvent);
     V.optionalString(message, "message", loggingEvent);
+
+    maxLength(name, MAX_LEN.name, "name", loggingEvent);
+    maxLength(email, MAX_LEN.email, "email", loggingEvent);
+    maxLength(dietaryRestrictions, MAX_LEN.dietaryRestrictions, "dietaryRestrictions", loggingEvent);
+    maxLength(mealPreference, MAX_LEN.mealPreference, "mealPreference", loggingEvent);
+    maxLength(message, MAX_LEN.message, "message", loggingEvent);
 
     const trimmedName = (name as string).trim();
     const trimmedEmail = (email as string).trim();
@@ -87,6 +114,10 @@ export class WeddingValidator {
       loggingEvent?.children?.push(`additionalGuestContact must be an array ${LogEmoji.error}`);
       throw new InvalidRequestException("additionalGuestContact", "format");
     }
+    if (contacts.length > MAX_ADDITIONAL_GUESTS) {
+      loggingEvent?.children?.push(`additionalGuestContact max ${MAX_ADDITIONAL_GUESTS} ${LogEmoji.error}`);
+      throw new InvalidRequestException("additionalGuestContact", "format");
+    }
 
     contacts.forEach((contact, index) => {
       if (typeof contact !== "object" || contact === null || Array.isArray(contact)) {
@@ -102,6 +133,10 @@ export class WeddingValidator {
       V.optionalContactNumber(contactNumber, `${prefix}.contactNumber`, loggingEvent);
       V.optionalString(dietaryRestrictions, `${prefix}.dietaryRestrictions`, loggingEvent);
       V.optionalString(mealPreference, `${prefix}.mealPreference`, loggingEvent);
+      maxLength(name, MAX_LEN.name, `${prefix}.name`, loggingEvent);
+      maxLength(email, MAX_LEN.email, `${prefix}.email`, loggingEvent);
+      maxLength(dietaryRestrictions, MAX_LEN.dietaryRestrictions, `${prefix}.dietaryRestrictions`, loggingEvent);
+      maxLength(mealPreference, MAX_LEN.mealPreference, `${prefix}.mealPreference`, loggingEvent);
 
       loggingEvent?.children?.push(`${prefix} validated ${LogEmoji.success}`);
 

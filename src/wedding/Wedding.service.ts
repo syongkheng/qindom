@@ -50,6 +50,38 @@ export interface RsvpStatusMatch {
   updatedAt: number;
 }
 
+// Set when a submission replaced an earlier response for the same email:
+// "own" = this email's previous RSVP (with when it was last saved),
+// "guest" = this email was listed as a guest on someone else's RSVP.
+type ReplacedRsvpInfo = { kind: "own"; at: number } | { kind: "guest" };
+
+const formatSgDateTime = (ms: number) =>
+  new Date(ms).toLocaleString("en-GB", {
+    timeZone: "Asia/Singapore",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }) + " (SGT)";
+
+function renderReplacedNotice(replaced: ReplacedRsvpInfo): string {
+  const what =
+    replaced.kind === "own" && replaced.at > 0
+      ? `This replaces the RSVP previously recorded for this email on <strong>${formatSgDateTime(replaced.at)}</strong>.`
+      : replaced.kind === "own"
+        ? "This replaces the RSVP previously recorded for this email."
+        : "This email was previously listed as a guest on another RSVP — this response replaces that entry.";
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+           style="margin:0 0 16px;background:#fbefee;border-left:3px solid ${COLORS.red};border-radius:4px;">
+      <tr><td style="padding:12px 16px;font-family:${SERIF};font-size:16px;color:${COLORS.text};">
+        <p style="margin:0 0 6px;font-weight:700;color:${COLORS.red};">Your RSVP was updated</p>
+        <p style="margin:0;">${what} If you didn't make this change, please contact us so we can restore your response.</p>
+      </td></tr>
+    </table>`;
+}
+
 const MEAL_LABELS: Record<string, string> = {
   regular: "No restrictions",
   vegetarian: "Vegetarian",
@@ -169,7 +201,7 @@ export class WeddingService {
       "tb_wedding_rsvp",
       { record_status: "A" },
       {
-        columns: ["id"],
+        columns: ["id", "created_dt", "updated_dt"],
         extraWhere: (qb) => qb.whereRaw("LOWER(email) = LOWER(?)", [payload.email.trim()]),
       },
       logEvent,
@@ -250,9 +282,19 @@ export class WeddingService {
       );
     }
 
+    // Tamper alert: anyone can resubmit an email (deliberate — see MINDMAP), so
+    // when this submission replaced an earlier response the confirmation says
+    // so, letting the inbox owner spot a change they didn't make.
+    const replaced: ReplacedRsvpInfo | null =
+      previous.length > 0
+        ? { kind: "own", at: Math.max(...previous.map((r) => Number(r.updated_dt ?? r.created_dt) || 0)) }
+        : guestEntries.length > 0
+          ? { kind: "guest" }
+          : null;
+
     // Fire-and-forget: a mail failure (SMTP down, bad address) must never fail
     // or delay an RSVP that has already been saved.
-    void this.sendConfirmationEmail(payload, pin).catch((err) => {
+    void this.sendConfirmationEmail(payload, pin, replaced).catch((err) => {
       console.error(`Failed to send RSVP confirmation email for RSVP #${rsvpId}:`, err);
     });
 
@@ -315,7 +357,11 @@ export class WeddingService {
     });
   }
 
-  private async sendConfirmationEmail(payload: RsvpPayload, pin: string): Promise<void> {
+  private async sendConfirmationEmail(
+    payload: RsvpPayload,
+    pin: string,
+    replaced: ReplacedRsvpInfo | null = null,
+  ): Promise<void> {
     const esc = (value: string) => MailerUtilities.escapeHtml(value);
     const meal = (value?: string | null) => (value ? MEAL_LABELS[value] ?? esc(value) : "—");
 
@@ -339,6 +385,7 @@ export class WeddingService {
         heading: payload.attending ? "See you there!" : "We've received your RSVP",
         bodyHtml: `
           ${p(`Hi <strong>${esc(payload.name)}</strong>,`)}
+          ${replaced ? renderReplacedNotice(replaced) : ""}
           ${p(
             payload.attending
               ? "Thank you for your RSVP — we can't wait to celebrate with you!"

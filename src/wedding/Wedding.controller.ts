@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { OptionalTokenFilter } from "../middlewares/TokenFilter.js";
+import { weddingRsvpLimiter } from "../middlewares/RateLimiter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { WeddingValidator } from "./Wedding.validator.js";
 import { WeddingService, WEDDING_PDPA_NOTICE } from "./Wedding.service.js";
@@ -28,7 +29,7 @@ export default function createWeddingController(db: KnexSqlUtilities) {
     res.status(204).end();
   });
 
-  router.post("/rsvp",[OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
+  router.post("/rsvp", [weddingRsvpLimiter, OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     const logContext: IRequestLogContext = req.logContext;
 

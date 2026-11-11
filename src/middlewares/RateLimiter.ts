@@ -85,6 +85,16 @@ export const itineraryChallengeLimiter = rateLimit({
   message: rateLimitResponse("Too many access code attempts. Please try again in 15 minutes."),
 });
 
+/** POST /wedding/rsvp — each submission sends up to 11 emails (submitter + 10 guests) */
+export const weddingRsvpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,      // 15 minutes
+  limit: 10,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many RSVP submissions. Please try again in 15 minutes."),
+});
+
 /** GET /house/view/:token — public shared-house read */
 export const houseViewLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,       // 1 minute
