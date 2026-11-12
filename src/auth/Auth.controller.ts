@@ -204,8 +204,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
       const validationEvent = logContext
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
         : undefined;
-      const { email, system, code } = AuthValidator.validateEmailVerifyRequest(req.body, validationEvent);
-      const { token, ...rest } = await svc.verifyEmail({ email, system, code, logContext });
+      const { email, system, code, password } = AuthValidator.validateEmailVerifyRequest(req.body, validationEvent);
+      const { token, ...rest } = await svc.verifyEmail({ email, system, code, password, logContext });
       setAuthCookies(res, token);
       return cr.ok(rest);
     } catch (err) {

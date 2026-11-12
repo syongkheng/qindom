@@ -23,6 +23,13 @@ function generateSixDigitCode(): string {
   return num.toString().padStart(6, "0");
 }
 
+// An unverified row whose OTP has lapsed was never proven to belong to the
+// email's owner, so it is treated as free: preflight routes to register and
+// register releases it instead of blocking the real owner forever.
+function isStaleUnverified(user: ITB_AA_USER): boolean {
+  return user.email_verified !== 1 && (!user.verify_code_expires_at || Date.now() > user.verify_code_expires_at);
+}
+
 export class AuthService {
   private tokenService: TokenService;
   constructor(private db: KnexSqlUtilities) {
@@ -49,7 +56,7 @@ export class AuthService {
       authEvent,
     );
 
-    const found = existing.length > 0;
+    const found = existing.length > 0 && !isStaleUnverified(existing[0]);
     if (authEvent) authEvent.detail = found ? "email found" : "email not found";
 
     return found ? { exist: true, nextStep: "login" } : { exist: false, nextStep: "register" };
@@ -78,7 +85,7 @@ export class AuthService {
       { limit: 1 },
       authEvent,
     );
-    if (existing.length > 0) {
+    if (existing.length > 0 && !isStaleUnverified(existing[0])) {
       if (authEvent) authEvent.detail = "email already registered";
       throw new Exceptions.EmailAlreadyRegistered();
     }
@@ -89,9 +96,16 @@ export class AuthService {
       { limit: 1 },
       authEvent,
     );
-    if (existingUsername.length > 0) {
+    if (existingUsername.length > 0 && !isStaleUnverified(existingUsername[0])) {
       if (authEvent) authEvent.detail = "username already taken";
       throw new Exceptions.UsernameAlreadyTaken();
+    }
+
+    // Soft-delete lapsed unverified rows holding this email or username. That
+    // frees the username unique key and discards a squatter's chosen password.
+    const staleIds = new Set([...existing, ...existingUsername].map((u) => u.id!));
+    for (const id of staleIds) {
+      await this.db.update<ITB_AA_USER>("tb_aa_user", { id }, { record_status: "D" }, authEvent);
     }
 
     const saltRounds = 10;
@@ -148,11 +162,13 @@ export class AuthService {
     email,
     system,
     code,
+    password,
     logContext,
   }: {
     email: string;
     system: string;
     code: string;
+    password: string;
     logContext?: IRequestLogContext;
   }): Promise<{ token: string; username: string; roles: string[] }> {
     const authEvent = logContext
@@ -180,8 +196,30 @@ export class AuthService {
       throw new Exceptions.EmailAlreadyRegistered();
     }
 
+    if ((user.verify_attempts ?? 0) >= MAX_VERIFY_ATTEMPTS) {
+      if (authEvent) authEvent.detail = "max attempts exceeded";
+      LoggingUtilities.service.warn("AuthService.verifyEmail", `Max attempts exceeded for ${email}`);
+      throw new Exceptions.MaxVerifyAttempts();
+    }
+
+    // The OTP only proves inbox access. Also require the password the row was
+    // registered with: otherwise someone who registered the victim's email first
+    // (and so chose its password) gets the victim to verify an account they can
+    // log in to. Wrong passwords count toward the same attempt cap as wrong OTPs.
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      await this.db.update<ITB_AA_USER>(
+        "tb_aa_user",
+        { email, system, record_status: "A" },
+        { verify_attempts: (user.verify_attempts ?? 0) + 1 },
+        authEvent,
+      );
+      if (authEvent) authEvent.detail = "invalid password";
+      throw new Exceptions.InvalidLoginCredentials();
+    }
+
     // Dev bypass: fndom skips the real OTP send outside prod, so accept the fixed
-    // code here instead of the DB-stored one, regardless of expiry/attempt state.
+    // code here instead of the DB-stored one, regardless of expiry state.
     if (process.env.NODE_ENV === "dev" && code === "111111") {
       await this.db.update<ITB_AA_USER>(
         "tb_aa_user",
@@ -197,12 +235,6 @@ export class AuthService {
       );
       if (authEvent) authEvent.detail = "email verified (dev OTP bypass)";
       return this._issueToken(user, authEvent);
-    }
-
-    if ((user.verify_attempts ?? 0) >= MAX_VERIFY_ATTEMPTS) {
-      if (authEvent) authEvent.detail = "max attempts exceeded";
-      LoggingUtilities.service.warn("AuthService.verifyEmail", `Max attempts exceeded for ${email}`);
-      throw new Exceptions.MaxVerifyAttempts();
     }
 
     if (!user.verify_code_expires_at || Date.now() > user.verify_code_expires_at) {

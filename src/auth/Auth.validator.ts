@@ -6,6 +6,10 @@ import { StructuralValidationUtilities as V } from "../utils/StructualValidation
 
 const OTP_REGEX = /^\d{6}$/;
 
+// Systems new accounts may be created under. Login/verify don't check this so
+// rows created before the allowlist existed keep working.
+const REGISTER_SYSTEMS = ["fnd"];
+
 export class AuthValidator {
   static validatePreflightRequest(
     body: Record<string, unknown>,
@@ -53,6 +57,11 @@ export class AuthValidator {
     }
     loggingEvent?.children?.push(`'password' strength ${LogEmoji.success} `);
     V.requiredString(system, "system", loggingEvent);
+    if (!REGISTER_SYSTEMS.includes(system as string)) {
+      loggingEvent?.children?.push(`'system' allowlist ${LogEmoji.error} `);
+      throw new InvalidRequestException("system", "format");
+    }
+    loggingEvent?.children?.push(`'system' allowlist ${LogEmoji.success} `);
     return {
       username: (username as string).trim(),
       email: (email as string).toLowerCase().trim(),
@@ -64,13 +73,19 @@ export class AuthValidator {
   static validateEmailVerifyRequest(
     body: Record<string, unknown>,
     loggingEvent?: IRequestLogEvent,
-  ): { email: string; system: string; code: string } {
-    const { email, system, code } = body;
+  ): { email: string; system: string; code: string; password: string } {
+    const { email, system, code, password } = body;
     V.requiredEmail(email, "email", loggingEvent);
     V.requiredString(system, "system", loggingEvent);
     V.required(code, "code", loggingEvent);
     V.regex(code, OTP_REGEX, "code", loggingEvent);
-    return { email: (email as string).toLowerCase().trim(), system: system as string, code: code as string };
+    V.requiredString(password, "password", loggingEvent);
+    return {
+      email: (email as string).toLowerCase().trim(),
+      system: system as string,
+      code: code as string,
+      password: password as string,
+    };
   }
 
   static validatePasswordValidateRequest(

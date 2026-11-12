@@ -21,7 +21,6 @@ export const TELEGRAM_LOG_MODULES: TelegramLogModule[] = [
   { key: "file", label: "File Upload", prefix: "/file" },
   { key: "imghost", label: "Image Hosting (CDN)", prefix: "/img" },
   { key: "geocode", label: "Geocode", prefix: "/geocode" },
-  { key: "trail", label: "Trail", prefix: "/trail" },
   { key: "siri-shortcut", label: "Siri Shortcut Ingestion", prefix: "/v1/ss" },
   { key: "siri-shortcut", label: "Siri Shortcut Ingestion", prefix: "/v2/ss" },
   { key: "ss-api-key", label: "Siri Shortcuts API Keys", prefix: "/ss-key" },
