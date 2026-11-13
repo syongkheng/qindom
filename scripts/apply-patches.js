@@ -52,6 +52,13 @@ const patchFiles = fs.existsSync(patchDir) ? fs.readdirSync(patchDir).filter((f)
 for (const file of patchFiles) {
   for (const hunk of parseHunks(fs.readFileSync(path.join(patchDir, file), "utf8"))) {
     const targetPath = path.join(root, hunk.target);
+    // A patch for a package that is no longer in the dependency tree has
+    // nothing to fix — skip it rather than crash the install.
+    const pkgDir = hunk.target.match(/^node_modules\/(@[^/]+\/[^/]+|[^/]+)/)?.[0];
+    if (pkgDir && !fs.existsSync(path.join(root, pkgDir))) {
+      console.log(`apply-patches: ${file} → ${pkgDir} not installed (skipped)`);
+      continue;
+    }
     const source = fs.readFileSync(targetPath, "utf8");
     const before = hunk.before.join("\n");
     const after = hunk.after.join("\n");
