@@ -220,6 +220,34 @@ export class SsApplePayV1Service {
     return { id: transactionUuid, deleted: true };
   }
 
+  // Undo for deleteTransaction: flips a soft-deleted row back to active. The
+  // dashboard re-inserts its own snapshot of the row, so only an ack is returned.
+  async restoreTransaction(
+    userId: number,
+    transactionUuid: string,
+    loggingContext?: IRequestLogContext,
+  ): Promise<{ id: string; restored: true }> {
+    const serviceProcessingLoggingEvent = loggingContext
+      ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Restoring Apple Pay transaction")
+      : undefined;
+
+    const existing = await this.db.findOne<ITB_APPLEPAY_TRANSACTION>(TB_APPLEPAY_TRANSACTION, {
+      uuid: transactionUuid,
+      created_by_id: userId,
+      record_status: "D",
+    });
+    if (!existing) throw new Exceptions.NotFound();
+
+    await this.db.update<ITB_APPLEPAY_TRANSACTION>(
+      TB_APPLEPAY_TRANSACTION,
+      { uuid: transactionUuid, created_by_id: userId },
+      { record_status: "A", updated_dt: Date.now(), updated_by_id: userId },
+      serviceProcessingLoggingEvent,
+    );
+
+    return { id: transactionUuid, restored: true };
+  }
+
   async getTransactions(userId: number, loggingContext?: IRequestLogContext): Promise<ApplePayTransactionResponse[]> {
     const serviceProcessingLoggingEvent = loggingContext
       ? LoggingUtilities.request.branch(loggingContext, "SERVICE", "Retrieving Apple Pay transactions")

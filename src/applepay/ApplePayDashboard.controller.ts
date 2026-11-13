@@ -51,6 +51,17 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
     }
   });
 
+  // Undo for the soft delete above (dashboard's Undo toast).
+  router.post("/:transactionId/restore", async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const result = await service.restoreTransaction(getUser(req).id, req.params.transactionId, req.logContext);
+      return cr.ok(result);
+    } catch (err) {
+      return handleException(err, cr, "ApplePayDashboardController.POST /:transactionId/restore", "Failed to restore transaction");
+    }
+  });
+
   router.post("/:transactionId/category", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
