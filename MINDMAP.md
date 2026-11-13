@@ -57,7 +57,6 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 - **GEOCODE `/geocode?q=`** — Nominatim proxy, DB-cached (`tb_geocode_cache`, failures not cached), queue ≥1.1s/call, max 5 waiting, q ≤ 200 chars.
 - **HDB `/hdb`** — property search, nearest (Haversine); coordinate admin routes (`/pphs/update|clear-coordinates|geocode-options|refresh`) need PPHS_R5|SYSTEM_R5. DB: `tb_hdb_pphs`, `tb_hdb_pphs_coordinate`.
 - **LTA `/lta`** — bus arrivals (DataMall), nearest stops/MRT. DB: `tb_lta_busstop`, `tb_lta_bus_info`, `tb_lrt_mrt_station`.
-- **FND / Kingdom 236** — Discord bot (prefix `!`: hello, ping, help, register, deregister, list, redeem, remind, stalk); auto gift-code watcher on `GIFT_CODE_WATCH_CHANNEL_IDS` → `executeRedemption()`; Discord↔governor via Firestore.
 - **SIRI SHORTCUTS (API-key)** — V1 `POST /v1/ss/ap/transaction {amount, merchant, name}` (Apple Pay NFC; `$` stripped); V2 `POST /v2/ss/ap/sms {smsBody}` (regex-parses amount, merchant, card last 3–4; UOB/DBS). `occurred_dt` always server-stamped. Both write `tb_applepay_transaction` (`source` v1|v2|manual).
 - **APPLE PAY DASHBOARD `/applepay`** (JWT) — `GET /` (v1+v2 feed), `POST /` manual entry (no future dates, 5-min skew), `POST /:id/delete` (soft), `POST /:id/restore` (undo: D -> A, owner-scoped, 404 if not deleted), `POST /:id/category`, `POST /card-label/:cardLast4`. Owner-scoped; uuid is public id. Duplicate detection/CSV export are frontend-only. DB: `tb_applepay_transaction`, `tb_applepay_card_label`. Shared service: `SsApplePayV1Service`.
 - **SS API KEY `/ss-key`** (JWT) — `GET/POST/DELETE /api-key`, `POST /api-key/name` (≤100 chars). One active `ss_` key per user, SHA-256 hashed, shown once. DB: `tb_ss_api_key`.
@@ -76,7 +75,7 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
   - DB: `tb_wedding_rsvp`, `tb_wedding_rsvp_guest`.
 
 ## External services
-MySQL · Nominatim · Firebase/Firestore · LTA DataMall · Telegram Bot API (`node-telegram-bot-api` ^1.1, ESM, fetch-based) · Discord.js · Nodemailer (OTP/RSVP email).
+MySQL · Nominatim · LTA DataMall · Telegram Bot API (`node-telegram-bot-api` ^1.1, ESM, fetch-based) · Nodemailer (OTP/RSVP email).
 
 ## DB patterns
 - Soft delete `record_status` 'A'/'D'; timestamps are ms epoch (`Date.now()`); JSON fields (roles, pax_names…) stored as strings; audit `created_by`/`updated_by` (username).

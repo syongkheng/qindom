@@ -1,6 +1,6 @@
 # qindom
 
-Express 5 + TypeScript REST API backend for the Finderium / Kingdom 236 platform.
+Express 5 + TypeScript REST API backend for the Finderium platform.
 
 - **Runtime:** Node 22
 - **Database:** MySQL via Knex.js
@@ -45,7 +45,6 @@ Set `NODE_ENV=prd` to load `.env` (production). Any other value loads `.env.dev`
 | `/api/hdb` | HDB | RestRequestLogger, RequestHeaderFilter |
 | `/api/lta` | LTA | RestRequestLogger, RequestHeaderFilter |
 | `/api/auth` | Auth | RestRequestLogger, RequestHeaderFilter |
-| `/api/fnd` | FND | RestRequestLogger |
 | `/api/pfp` | Profile | RestRequestLogger, RequestHeaderFilter |
 | `/api/analytics` | Heartbeat | RestRequestLogger, RequestHeaderFilter |
 | `/api/itinerary` | Itinerary | RestRequestLogger, RequestHeaderFilter |
@@ -108,7 +107,6 @@ Error responses use non-200 codes and a descriptive status string or error objec
 - [LTA Public Transport](src/lta/README.md)
 - [Profile](src/profile/README.md)
 - [Analytics](src/analytics/README.md)
-- [FND / Kingdom](src/fnd/README.md)
 - [Itinerary / Travel Planner](src/itinerary/README.md)
 - [File Upload](src/file/README.md)
 - [Feature Flags](src/feature/README.md)

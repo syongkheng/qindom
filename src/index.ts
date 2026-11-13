@@ -39,7 +39,6 @@ import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
 import createMcpApiKeyController from "./mcp-api-key/McpApiKey.controller.js";
 import createHouseMcpController from "./mcp/HouseMcp.controller.js";
-import { startDiscordBot } from "./fnd/discord/Fnd.bot.js";
 import { setupTelegramLogSender } from "./tgimage/TgLog.logSender.js";
 import { initTgLogBot } from "./tgimage/TgLog.bot.js";
 
@@ -160,4 +159,3 @@ async function startServer() {
 // Start the application
 startServer();
 
-startDiscordBot().catch((err) => LoggingUtilities.service.error("Discord", err?.message ?? String(err)));
