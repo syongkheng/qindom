@@ -51,6 +51,13 @@ import createDebugController from "./debug/Debug.controller.js";
 // Suggestion
 import createSuggestionController from "./suggestion/Suggestion.controller.js";
 
+// Camera relay (phones ↔ dashboards)
+import createCameraController from "./camera/Camera.controller.js";
+import { CameraService } from "./camera/Camera.service.js";
+import { CameraRelay } from "./camera/Camera.relay.js";
+import { PairingCodeStore } from "./camera/Camera.pairing.js";
+import { attachCameraWebSockets } from "./camera/Camera.ws.js";
+
 async function startServer() {
   const app: Application = express();
   const port: number = Number(process.env.PORT) || 3000;
@@ -97,6 +104,10 @@ async function startServer() {
   // Initialize database
   const db = await initializeDatabase();
 
+  // Camera relay state is in memory (single PM2 process); device bindings are in tb_camera_device.
+  const cameraRelay = new CameraRelay();
+  const cameraService = new CameraService(db, cameraRelay, new PairingCodeStore());
+
   // Route table — [path, middlewares, router]
   const routes: [string, RequestHandler[], Router][] = [
     ["/connectivity", mw.std,                                    createConnectivityController(db)],
@@ -124,6 +135,7 @@ async function startServer() {
     ["/mcp",          mw.mcpPublic,                              createHouseMcpController()],
     ["/wedding",      mw.std,                                    createWeddingController(db)],
     ["/suggestion",   mw.std,                                    createSuggestionController(db)],
+    ["/camera",       mw.std,                                    createCameraController(cameraService)],  // auth per route
     // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
     ["/debug",        process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController(db)],
   ];
@@ -139,7 +151,7 @@ async function startServer() {
   app.use(ErrorHandler);
 
   // Start server
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
     // TgLog.bot.ts's polling loop was previously left off — it isn't needed
@@ -154,6 +166,9 @@ async function startServer() {
     setupTelegramLogSender();
     initTgLogBot(db).catch((err) => LoggingUtilities.service.error("TgLogBot", err?.message ?? String(err)));
   });
+
+  // WebSocket upgrades bypass Express middleware; auth happens in the upgrade handler.
+  attachCameraWebSockets(server, { service: cameraService, relay: cameraRelay, allowedOrigins });
 }
 
 // Start the application

@@ -114,3 +114,35 @@ export const mcpLimiter = rateLimit({
   legacyHeaders: false,
   message: rateLimitResponse("Too many requests. Please slow down."),
 });
+
+/** POST /camera/device/register — phones register on launch and after their device is removed */
+export const cameraRegisterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,      // 1 hour
+  limit: 30,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many device registrations. Please try again later."),
+});
+
+/** POST /camera/device/claim — only failed (wrong/expired) codes count. Per IP… */
+export const cameraClaimIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,      // 15 minutes
+  limit: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many pairing attempts. Please try again in 15 minutes."),
+});
+
+/** …and per logged-in user (runs after MandatoryTokenFilter), so rotating IPs doesn't help. */
+export const cameraClaimUserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,      // 15 minutes
+  limit: 5,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req: Request) => `camera-claim-user:${(req as Request & { user?: { id?: number } }).user?.id ?? "none"}`,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many pairing attempts. Please try again in 15 minutes."),
+});

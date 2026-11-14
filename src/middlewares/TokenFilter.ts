@@ -35,6 +35,29 @@ function parseRoles(raw: string | undefined): string[] {
   }
 }
 
+/**
+ * Same JWT + DB revocation check as MandatoryTokenFilter, for callers outside the
+ * Express chain (the camera dashboard WebSocket upgrade). Returns null when the
+ * token is missing, invalid, expired or no longer the user's current token.
+ * CSRF is the caller's job (WebSockets check Origin instead).
+ */
+export async function resolveSessionUser(token: string | undefined): Promise<IDecodedTokenUser | null> {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!token || !jwtSecret) return null;
+  try {
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as IDecodedTokenUser;
+    const user = await db.findOne<ITB_AA_USER>(
+      "tb_aa_user",
+      { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
+      ["id", "token", "roles"],
+    );
+    if (!user || user.token !== token) return null;
+    return { ...decoded, id: user.id!, roles: parseRoles(user.roles) };
+  } catch {
+    return null;
+  }
+}
+
 export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);
   const jwtSecret = process.env.JWT_SECRET;
