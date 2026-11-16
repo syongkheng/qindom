@@ -147,6 +147,11 @@ async function startServer() {
   };
   routes.forEach(([path, mws, router]) => app.use(path, [...mws, enterController], router));
 
+  // Unmatched routes: JSON envelope instead of Express's default "Cannot GET /…" HTML page
+  app.use((_req, res) => {
+    res.status(404).json({ code: 404, status: "Not Found", data: "Not Found" });
+  });
+
   // Must stay last — replaces Express's default handler, which leaks stack traces
   app.use(ErrorHandler);
 
