@@ -14,6 +14,7 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { AuthValidator } from "./Auth.validator.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
+import { isValidRole, Roles } from "./Permission.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { RequestLogSearch } from "../utils/logging/RequestLogSearch.js";
 import { RecentRequestLogDto } from "../models/dtos/RequestLogDto.js";
@@ -31,7 +32,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
   router.get("/admin/users", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
       return cr.ok(await svc.listUsers());
     } catch (err) {
       return handleException(err, cr, "AuthController.GET /admin/users", "Failed to load users");
@@ -45,11 +46,11 @@ export default function createAuthController(db: KnexSqlUtilities) {
     async (req: RequestWithUserInfo, res: Response) => {
       const cr = new ControllerResponse(req, res);
       try {
-        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
         const id = Number(req.params.id);
         if (!Number.isInteger(id) || id <= 0) return cr.result(400, "Bad Request", "Invalid ID");
         const { roles } = req.body;
-        if (!Array.isArray(roles)) throw new Exceptions.InvalidRequest("roles");
+        if (!Array.isArray(roles) || !roles.every(isValidRole)) throw new Exceptions.InvalidRequest("roles");
         return cr.ok(await svc.updateUserRoles(id, roles));
       } catch (err) {
         return handleException(err, cr, "AuthController.POST /admin/users/:id/roles", "Failed to update roles");
@@ -66,7 +67,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
     async (req: RequestWithUserInfo, res: Response) => {
       const cr = new ControllerResponse(req, res);
       try {
-        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
         const limit = Math.min(Math.max(Number(req.query.limit) || 3, 1), 20);
         const matches: RecentRequestLogDto[] = RequestLogSearch.recent(limit).map(
           ({ requestId, timestamp, method, path, statusCode }) => ({ requestId, timestamp, method, path, statusCode }),
@@ -85,7 +86,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
     async (req: RequestWithUserInfo, res: Response) => {
       const cr = new ControllerResponse(req, res);
       try {
-        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
         const requestId = req.params.requestId;
         // 12 hex = current ids; 5 hex = ids already in older log files
         if (!/^req_([0-9a-f]{12}|[0-9a-f]{5})$/i.test(requestId)) return cr.result(400, "Bad Request", "Invalid Request ID format");
@@ -106,7 +107,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
     async (req: RequestWithUserInfo, res: Response) => {
       const cr = new ControllerResponse(req, res);
       try {
-        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
         return cr.ok(await telegramLogSubscriptionSvc.listMatrix());
       } catch (err) {
         return handleException(
@@ -127,7 +128,7 @@ export default function createAuthController(db: KnexSqlUtilities) {
     async (req: RequestWithUserInfo, res: Response) => {
       const cr = new ControllerResponse(req, res);
       try {
-        if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
         const { moduleKey } = req.params;
         if (!TELEGRAM_LOG_MODULE_KEYS.some((m) => m.key === moduleKey)) {
           return cr.result(400, "Bad Request", "Unknown module key");

@@ -3,6 +3,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { handleException, hasRole } from "../utils/requestUtils.js";
+import { Roles } from "../auth/Permission.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
@@ -25,7 +26,7 @@ export default function createDebugController(_db: KnexSqlUtilities) {
   router.get("/status/:code", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (isPrd && !hasRole(req, "SYSTEM_R5")) throw new Exceptions.ForbiddenAccess();
+      if (isPrd && !hasRole(req, Roles.OWNER)) throw new Exceptions.ForbiddenAccess();
 
       const code = Number(req.params.code);
       if (!Number.isInteger(code) || code < 200 || code > 599) {

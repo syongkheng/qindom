@@ -6,6 +6,7 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { SuggestionService } from "./Suggestion.service.js";
 import { SuggestionValidator } from "./Suggestion.validator.js";
 import { handleException, hasRole } from "../utils/requestUtils.js";
+import { Roles } from "../auth/Permission.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 
 export default function createSuggestionController(db: KnexSqlUtilities) {
@@ -28,7 +29,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
   // POST /suggestion/packing (admin)
   router.post("/packing", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");
+    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
     const logContext = req.logContext;
     const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Body") : undefined;
     try {
@@ -43,7 +44,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
   // DELETE /suggestion/packing/:id (admin)
   router.delete("/packing/:id", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");
+    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
     const logContext = req.logContext;
     const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Params") : undefined;
     try {
@@ -72,7 +73,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
   // POST /suggestion/note (admin)
   router.post("/note", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");
+    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
     const logContext = req.logContext;
     const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Body") : undefined;
     try {
@@ -87,7 +88,7 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
   // DELETE /suggestion/note/:id (admin)
   router.delete("/note/:id", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, "admin")) return cr.result(403, "Forbidden", "Insufficient permissions");
+    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
     const logContext = req.logContext;
     const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Params") : undefined;
     try {

@@ -1,5 +1,33 @@
 ## Analytics Controller
 
+### v1 (use this) — `POST /analytics/collect`
+
+One fixed shape for every frontend; the schema lives in `AnalyticsContract.ts`.
+
+```json
+{
+  "v": 1,
+  "system": "jessikheng",
+  "event": "page_view",
+  "sessionId": "uuid",
+  "timestamp": 1763540000000,
+  "page": "/#/status",
+  "referrer": "",
+  "screen": { "width": 390, "height": 844, "breakpoint": "phone", "size": "small" },
+  "properties": {}
+}
+```
+
+- `system` must be an active row in `tb_analytic_system` (else 400). If the row has `allowed_origins`, the `Origin` header must match (else 403).
+- `screen.breakpoint` is the site's own breakpoint key from that row; unknown keys are stored as `unknown`.
+- `screen.size` is `small | medium | large`; if missing/invalid it is derived from the breakpoint's mapping.
+- `event` is snake_case; `page_view` drives the dashboard. `properties` ≤ 4KB. Rate limit 120/min/IP.
+- Dashboard reads: `GET /analytics/systems`, `GET /analytics/systems/:key/summary?hours=24` (login; SYSTEM_R5 or a grant in `tb_aa_resource_access`).
+
+To add a site: create its registry row with `POST /analytics/admin/systems` (SYSTEM_R5; body `{key, displayName, breakpoints, allowedOrigins, active}`), then send the payload above. fndom `/admin/analytics-access` manages viewers and allowed origins for existing rows.
+
+### Legacy (deprecated, kept so nothing breaks)
+
 - `POST /analytics` — ingest a structured event from any frontend system
 - `POST /analytics/heartbeat` — legacy session-activity ping (kept for compatibility)
 - Authentication is optional on both routes — anonymous sessions are accepted

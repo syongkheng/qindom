@@ -115,6 +115,16 @@ export const mcpLimiter = rateLimit({
   message: rateLimitResponse("Too many requests. Please slow down."),
 });
 
+/** POST /analytics/collect — public ingest; page views + a few interaction events per visitor */
+export const analyticsLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,       // 1 minute
+  limit: 120,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many analytics events. Please slow down."),
+});
+
 /** POST /camera/device/register — phones register on launch and after their device is removed */
 export const cameraRegisterLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,      // 1 hour

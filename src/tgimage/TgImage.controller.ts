@@ -6,6 +6,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { TgImageService } from "./TgImage.service.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
+import { Roles } from "../auth/Permission.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 
@@ -60,7 +61,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
   router.get("/admin/list", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
       return cr.ok(await svc.listAdmins());
     } catch (err) {
       return handleException(err, cr, "TgImageController.GET /admin/list", "Failed to list admins");
@@ -70,7 +71,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
   router.post("/admin/add", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
       const telegramUserId = Number(req.body?.telegramUserId);
       if (!telegramUserId || isNaN(telegramUserId)) return cr.badRequest("telegramUserId required");
       await svc.addToWhitelist(telegramUserId);
@@ -83,7 +84,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
   router.post("/admin/remove", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasRole(req, "SYSTEM_R5")) return cr.result(403, "Forbidden", "Insufficient permissions");
+      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
       const telegramUserId = Number(req.body?.telegramUserId);
       if (!telegramUserId || isNaN(telegramUserId)) return cr.badRequest("telegramUserId required");
       const removed = await svc.removeFromWhitelist(telegramUserId);

@@ -7,6 +7,7 @@ import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
+import { Roles } from "../auth/Permission.js";
 
 export default function createHdbController(db: KnexSqlUtilities) {
   const router = Router();
@@ -27,7 +28,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const user = getUser(req);
-      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
+      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
       const { address, lat, lng, formedUrl } = req.body as {
         address: string; lat: string; lng: string; formedUrl: string;
       };
@@ -40,7 +41,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   router.post("/pphs/clear-coordinates", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
+      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
       const { address } = req.body as { address: string };
       await hdbSvc.clearCoordinatesOfAddress(address);
       return cr.ok(true);
@@ -52,7 +53,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   router.post("/pphs/geocode-options", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
+      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
       const { address } = req.body as { address: string };
       return cr.ok(await hdbSvc.getAllCoordinateOptions(address));
     } catch (err) {
@@ -63,7 +64,7 @@ export default function createHdbController(db: KnexSqlUtilities) {
   router.post("/pphs/refresh", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
     try {
-      if (!hasRole(req, "PPHS_R5", "SYSTEM_R5")) throw new Exceptions.UnauthorizedAccess();
+      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
       const { address } = req.body as { address: string };
       return cr.ok(await hdbSvc.refreshCoordinatesOfAddress(address));
     } catch (err) {
