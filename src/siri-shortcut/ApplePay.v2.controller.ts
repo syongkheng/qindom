@@ -9,9 +9,10 @@ import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { SsApplePayV1Service } from "./ApplePay.v1.service.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
-// "SGD 1.99", "USD 12.50" — the currency amount in a bank transaction-alert
-// SMS.
-const AMOUNT_REGEX = /\b[A-Z]{3}\s*([\d,]+\.\d{2})\b/;
+// "SGD 1.99", "USD 12.50", "SGD11.25" (Citi, no space) — the currency code
+// and amount in a bank transaction-alert SMS. Group 1 = currency, group 2 =
+// amount. The amount is stored as-is in that currency (never converted).
+const AMOUNT_REGEX = /\b([A-Z]{3})\s*([\d,]+\.\d{2})\b/;
 // "...UOB Card ending 1986...", "...DBS/POSB card ending 5244..." — the
 // last 3-4 digits the bank includes in these alerts; the full PAN is never
 // sent in the SMS or stored here.
@@ -22,7 +23,29 @@ const CARD_LAST4_REGEX = /card\s+ending\s+(\d{3,4})/i;
 // boundary comes first: a trailing "on <day> <MON>" date, "was completed",
 // the "If unauthorised" boilerplate, or end-of-string. Lookahead so none of
 // those boundary words end up inside the captured merchant.
-const MERCHANT_REGEX = /\b(?:at|to)\s+(.+?)(?=\s+on\s+\d{1,2}\s+[A-Z]{3}\b|\s+was\s+completed\b|\.\s*(?:if unauthorised|$)|$)/i;
+const MERCHANT_REGEX_GENERIC = /\b(?:at|to)\s+(.+?)(?=\s+on\s+\d{1,2}\s+[A-Z]{3}\b|\s+was\s+completed\b|\.\s*(?:if unauthorised|$)|$)/i;
+
+// Citibank SG: "There was a charge of SGD11.25 on your Card ending 3284 by
+// TikTok Shop Seller    Singapore    SGP on 14/10/26 18:13. If
+// unauthorized, call our hotline." — merchant sits after "by", up to the
+// numeric "on dd/mm/yy" date. Tried before the generic pattern since the
+// UOB/DBS formats never use "by ... on <numeric date>".
+const MERCHANT_REGEX_CITI = /\bby\s+([\s\S]+?)\s+on\s+\d{1,2}\/\d{1,2}\/\d{2,4}\b/i;
+
+// Citi pads the merchant descriptor with runs of spaces before the city and
+// country code ("Spotify P480A42C6A    Stockholm    SWE"); keep only the
+// part before the first run. If the spacing was collapsed somewhere along
+// the way, the whole descriptor is kept rather than guessing.
+function cleanCitiMerchant(raw: string): string {
+  return raw.split(/\s{2,}/)[0].trim();
+}
+
+export function parseMerchant(text: string): string | null {
+  const citi = MERCHANT_REGEX_CITI.exec(text);
+  if (citi) return cleanCitiMerchant(citi[1]) || null;
+  const generic = MERCHANT_REGEX_GENERIC.exec(text);
+  return generic ? generic[1].trim() || null : null;
+}
 
 // V2 of the Siri Shortcut Apple Pay/card transaction ingestion. V1
 // (ApplePay.v1.controller.ts) is fed by the "When Apple Pay is used"
@@ -54,12 +77,12 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
 
       const amountMatch = AMOUNT_REGEX.exec(text);
       if (!amountMatch) throw new Exceptions.InvalidRequest("amount", "mandatory");
-      const parsedAmount = Number(amountMatch[1].replace(/,/g, ""));
+      const currency = amountMatch[1];
+      const parsedAmount = Number(amountMatch[2].replace(/,/g, ""));
       if (Number.isNaN(parsedAmount)) throw new Exceptions.InvalidRequest("amount", "format");
 
-      const merchantMatch = MERCHANT_REGEX.exec(text);
-      if (!merchantMatch) throw new Exceptions.InvalidRequest("merchant", "mandatory");
-      const merchant = merchantMatch[1].trim();
+      const merchant = parseMerchant(text);
+      if (!merchant) throw new Exceptions.InvalidRequest("merchant", "mandatory");
 
       // Card number is best-effort — some alert templates may not include
       // it, and it's not essential to logging the transaction.
@@ -67,7 +90,7 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
       const cardLast4 = cardMatch ? cardMatch[1] : null;
 
       const userId = logContext?.metadata?.userId as number;
-      const serviceResponse = await service.recordSmsTransaction(userId, parsedAmount, merchant, cardLast4, logContext);
+      const serviceResponse = await service.recordSmsTransaction(userId, parsedAmount, currency, merchant, cardLast4, logContext);
 
       // Shortcut-friendly shape — just the fields extracted from the SMS,
       // for the automation to show back as a confirmation (e.g. via "Show
@@ -75,6 +98,7 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
       // to the authenticated dashboard via GET /applepay.
       return cr.ok({
         amount: serviceResponse.amount,
+        currency: serviceResponse.currency,
         merchant: serviceResponse.merchant,
         cardLast4: serviceResponse.cardLast4,
         timestamp: serviceResponse.occurredDt,

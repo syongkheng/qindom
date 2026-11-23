@@ -13,10 +13,18 @@ export class ApplePayDashboardValidator {
     body: Record<string, unknown>,
     loggingEvent?: IRequestLogEvent,
   ): CreateManualTransactionBody {
-    const { amount, merchant, occurredDt, category } = body as any;
+    const { amount, currency, merchant, occurredDt, category } = body as any;
 
     V.requiredNumber(amount, "amount", loggingEvent);
     if (amount <= 0 || amount > MAX_AMOUNT) throw new Exceptions.InvalidRequest("amount", "format");
+
+    // Optional — defaults to the home currency (SGD) when omitted.
+    let normalizedCurrency = "SGD";
+    if (currency !== undefined && currency !== null && currency !== "") {
+      V.string(currency, "currency", loggingEvent, "(O)");
+      normalizedCurrency = currency.trim().toUpperCase();
+      if (!/^[A-Z]{3}$/.test(normalizedCurrency)) throw new Exceptions.InvalidRequest("currency", "format");
+    }
 
     V.requiredString(merchant, "merchant", loggingEvent);
     const trimmedMerchant = merchant.trim();
@@ -35,6 +43,7 @@ export class ApplePayDashboardValidator {
 
     return {
       amount: Math.round(amount * 100) / 100,
+      currency: normalizedCurrency,
       merchant: trimmedMerchant,
       occurredDt,
       category: trimmedCategory,

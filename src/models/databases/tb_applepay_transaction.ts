@@ -2,6 +2,9 @@ export interface ITB_APPLEPAY_TRANSACTION {
   id?: number;
   uuid: string;
   amount: number;
+  // ISO 4217 code as reported by the bank alert (e.g. 'SGD', 'CNY'); rows
+  // recorded before this column existed default to 'SGD'.
+  currency?: string;
   merchant: string;
   // Apple Pay device/payment label — only ever populated by the V1 NFC-tap
   // automation; the V2 SMS-parsing automation has no equivalent field.

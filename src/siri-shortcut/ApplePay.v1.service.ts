@@ -14,6 +14,9 @@ const TB_APPLEPAY_CARD_LABEL = "tb_applepay_card_label";
 export interface ApplePayTransactionResponse {
   id: string;
   amount: number;
+  // ISO 4217 code (e.g. 'SGD', 'CNY'). Amounts are never converted — the
+  // dashboard groups totals per currency.
+  currency: string;
   merchant: string;
   name: string | null;
   category?: string;
@@ -43,6 +46,7 @@ function buildTransactionResponse(
   return {
     id: row.uuid,
     amount: Number(row.amount),
+    currency: row.currency ?? "SGD",
     merchant: row.merchant,
     name: row.name ?? null,
     category: row.category ?? undefined,
@@ -124,12 +128,13 @@ export class SsApplePayV1Service {
 
   // V2: called by the "forward bank transaction SMS" Shortcuts automation
   // (see ApplePay.v2.controller.ts), which does the raw-SMS parsing and
-  // hands this already-extracted amount/merchant/cardLast4. Unlike V1 this
+  // hands this already-extracted amount/currency/merchant/cardLast4. Unlike V1 this
   // covers every transaction the bank alerts on (online purchases included,
   // not just NFC taps), so it has no Apple Pay device `name` to store.
   async recordSmsTransaction(
     userId: number,
     amount: number,
+    currency: string,
     merchant: string,
     cardLast4: string | null,
     loggingContext?: IRequestLogContext,
@@ -152,6 +157,7 @@ export class SsApplePayV1Service {
       {
         uuid: crypto.randomUUID(),
         amount,
+        currency,
         merchant,
         source: "v2",
         card_last4: cardLast4,
@@ -181,6 +187,7 @@ export class SsApplePayV1Service {
       {
         uuid: crypto.randomUUID(),
         amount: body.amount,
+        currency: body.currency,
         merchant: body.merchant,
         category: body.category,
         source: "manual",
