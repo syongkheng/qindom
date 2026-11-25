@@ -1,19 +1,15 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
+import { SsApiKeyRenameBody } from "./SsApiKey.types.js";
 
-// name VARCHAR(100) on tb_ss_api_key.
+// tb_ss_api_key.name is VARCHAR(100).
 const NAME_MAX_LENGTH = 100;
 
-export class SsApiKeyValidator {
-  static validateRenameRequest(body: Record<string, unknown>, loggingEvent?: IRequestLogEvent): { name: string } {
-    const { name } = body as any;
-    V.string(name, "name", loggingEvent);
-
-    const trimmed = (name as string).trim();
-    if (!trimmed) throw new Exceptions.InvalidRequest("name", "mandatory");
-    if (trimmed.length > NAME_MAX_LENGTH) throw new Exceptions.InvalidRequest("name", "format");
-
-    return { name: trimmed };
-  }
+export function validateRenameBody(body: Record<string, unknown>, event?: IRequestLogEvent): SsApiKeyRenameBody {
+  V.string(body.name, "name", event);
+  const name = (body.name as string).trim();
+  if (!name) throw new Exceptions.InvalidRequest("name", "mandatory");
+  if (name.length > NAME_MAX_LENGTH) throw new Exceptions.InvalidRequest("name", "format");
+  return { name };
 }

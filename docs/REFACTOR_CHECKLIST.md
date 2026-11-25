@@ -11,9 +11,9 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 3 | `token` | [x] | 9c9a280 | `signToken`/`verifyToken`/`getJwtSecret` functions; `JWT_ALGORITHM` + `JWT_TTL_MS` single source (cookie maxAge uses it); callers in auth, profile, TokenFilter switched; boot fail-fast in index.ts; tests + README |
 | 4 | `constants` | [x] | 6a96864 | added `RecordStatus`, `Time`, `Locale` + README; `RESPONSE_STATUS` → `ResponseStatus`; `JWT_TTL_MS` uses `Time`; raw emoji in LoggingUtilities → `LogEmoji` |
 | 5 | `exceptions` | [x] | 511bae4 | 21 files → `AppExceptions.ts` (registry only); deleted EntityRetrieval/ParseJson/TokenExpired/TokenFormat; statuses fixed (502/500/429/400); `invalid_request_generic`; NotFound/Unauthorized take a message; `BaseExceptions` → `BaseException`; tests + README |
-| 6 | `geocode` | [~] in review | | `route()` + `cr.ok<NominatimPlaceDto[]>`; `Geocode.types.ts`; logContext → request tree (SQL timings, cache hit/miss); `URLSearchParams` + named limit; dup gap lambda; tests (cache hit/miss/failure) + README; `LoggingUtilities.request.branch` accepts undefined context |
+| 6 | `geocode` | [x] | f91e15e | `route()` + `cr.ok<NominatimPlaceDto[]>`; `Geocode.types.ts`; logContext → request tree (SQL timings, cache hit/miss); `URLSearchParams` + named limit; dup gap lambda; tests (cache hit/miss/failure) + README; `LoggingUtilities.request.branch` accepts undefined context |
 | 7 | `mcp-api-key` | [x] removed | | deleted with MCP (see 21) |
-| 8 | `ss-api-key` | [ ] | | |
+| 8 | `ss-api-key` | [~] in review | | `route()` + typed `cr.ok`; `SsApiKey.types.ts`; validator → function; `RecordStatus`; named constants; consistent `logContext?`; `sha256Hex` shared with ApiKeyFilter; DELETE → `POST /api-key/delete` (fndom); tests + README |
 | 9 | `file` | [ ] | | |
 | 10 | `profile` | [ ] | | |
 | 11 | `todo` | [ ] | | |
@@ -39,7 +39,13 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 31 | `migrations` | [ ] | | format only, never change logic |
 | 32 | empty folders `src/log`, `src/places` | [ ] | | delete only on explicit OK |
 
+## fndom companion branch
+`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`. **Deploy fndom together with qindom.**
+
 ## Cross-cutting smells (initial scan)
+- 5 inline `crypto.createHash("sha256")` → `sha256Hex()` (ss-api-key + ApiKeyFilter done; auth, camera, analytics left).
+- ~10 static-class validators → exported functions (each folder).
+- Remaining `router.delete` routes (suggestion) → POST + fndom.
 - 176 raw `record_status` `'A'`/`'D'` → `RecordStatus` (each folder).
 - ~29 hand-written durations (`60 * 1000`…) → `Time` (each folder).
 - `"SGD"` ×9, `"Asia/Singapore"` ×5 → `Locale.ts` (applepay, siri-shortcut, analytics, wedding).

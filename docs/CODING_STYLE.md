@@ -17,7 +17,7 @@ Each feature folder `src/<module>/` holds:
 |---|---|
 | `<Module>.controller.ts` | HTTP only: parse params, call the service, `cr.ok(...)` |
 | `<Module>.service.ts` | Business logic + DB access via `KnexSqlUtilities` |
-| `<Module>.validator.ts` | Request-body validation (optional) |
+| `<Module>.validator.ts` | Request-body validation: exported functions `validateXyzBody(body, event?) → XyzBody` (no static classes) |
 | `<Module>.types.ts` | `XyzDto` (responses) and `XyzBody` (request bodies) for this module |
 | `<Module>.constants.ts` | Module constants, only when there are too many to keep at the top of the file using them |
 | `<Module>.test.ts` | `node:test` unit tests |
@@ -75,10 +75,12 @@ Each feature folder `src/<module>/` holds:
 
 ## 5. Constants and magic values
 - No magic strings or numbers inside logic. Name them as module-level `const`s at the top of the file.
+- Table-name constants are named after the table, never a bare `TABLE`: `const SS_API_KEY_TABLE = "tb_ss_api_key";`, `const GEOCODE_CACHE_TABLE = "tb_geocode_cache";`.
 - Naming: single values are `UPPER_SNAKE_CASE` (`JWT_TTL_MS`); enum-like `as const` objects are `PascalCase` with UPPER keys (`RecordStatus.ACTIVE`, `ResponseStatus.OK`, `Time.DAY_MS`).
 - A value used by more than one module goes in `src/constants/`.
 - Durations use `Time` from `src/constants/Time.ts`, with the unit in the name: `const OTP_TTL_MS = 15 * Time.MINUTE_MS;`.
 - Shared constants (see `src/constants/README.md`): `RecordStatus` (never a raw `"A"`/`"D"`, in raw SQL pass it as a binding), `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`.
+- Hash secrets with `sha256Hex()` from `src/utils/HashUtilities.ts`; never inline `crypto.createHash("sha256")…`.
 - Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
 - Env vars loaded by dotenv (secrets, URLs) must be read **lazily** inside a function (`getJwtSecret()`), never in a top-level `const`: ESM evaluates imports before `index.ts` runs `dotenv.config`. Required ones are checked once at boot in `index.ts`.
@@ -88,7 +90,7 @@ Each feature folder `src/<module>/` holds:
 ## 6. HTTP conventions
 - Envelope: `{ code, status: "Ok" | "Ko", data }`, produced only by `ControllerResponse`.
 - URL segments use hyphens (`/card-label`, not `/card_label`).
-- Mutations are `POST` (`/:id/delete`, `/:id/update`). Bodyless POSTs from clients send `{}`.
+- Mutations are always `POST` (`/:id/delete`, `/:id/update`); no `DELETE`/`PUT`/`PATCH` routes. Bodyless POSTs from clients send `{}`. Changing a verb is a frontend change: update fndom (`ApiRoute` + store) on the fndom branch `refactor/qindom-alignment`.
 
 ## 7. Database
 - Soft delete via `record_status` `'A'`/`'D'`; timestamps are ms epoch (`Date.now()`).
@@ -125,6 +127,10 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | All exceptions must be registered in `Exceptions`; no exception classes outside `AppExceptions.ts` (enforced by test). |
 | 2026-11-25 | Service log pattern: `logContext?` last → one `branch()` event per method → passed to DB calls; `branch()` accepts undefined context. |
 | 2026-11-25 | Pass-through external payloads get a DTO typing only the fields we/fndom read, plus an index signature. |
+| 2026-11-25 | Validators are exported functions (`validateXyzBody`), not static classes. |
+| 2026-11-25 | Mutations are always POST; `DELETE /ss-key/api-key` → `POST /ss-key/api-key/delete` (fndom updated). |
+| 2026-11-25 | Shared `sha256Hex()` helper for all hashing. |
+| 2026-11-25 | Table constants are descriptive (`SS_API_KEY_TABLE`), never a bare `TABLE`. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions

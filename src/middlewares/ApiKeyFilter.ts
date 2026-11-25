@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { NextFunction, Response } from "express";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
@@ -6,6 +5,7 @@ import { HeaderValidationUtilities } from "../utils/HeaderValidationUtilities.js
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import db from "../config/db/mysql.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
+import { sha256Hex } from "../utils/HashUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
@@ -34,7 +34,7 @@ export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) =>
       const apiKeyPrefix = apiKey.split("_")[0];
 
       const apiKeyValue = apiKey.split("_")[1];
-      const apiKeyHash = crypto.createHash("sha256").update(apiKeyValue).digest("hex");
+      const apiKeyHash = sha256Hex(apiKeyValue);
 
       apiKeyValidationLoggingEvent?.children?.push(`Prefix: '${apiKeyPrefix}'`);
 

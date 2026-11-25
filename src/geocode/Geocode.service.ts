@@ -6,7 +6,7 @@ import { toMessage } from "../utils/errorUtils.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { NominatimPlaceDto } from "./Geocode.types.js";
 
-const CACHE_TABLE = "tb_geocode_cache";
+const GEOCODE_CACHE_TABLE = "tb_geocode_cache";
 
 const NOMINATIM_SERVICE_NAME = "Nominatim";
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
@@ -59,7 +59,7 @@ export class GeocodeService {
   private async getCached(query: string, event?: IRequestLogEvent): Promise<NominatimPlaceDto[] | null> {
     try {
       const records = await this.db.find<ITB_GEOCODE_CACHE>(
-        CACHE_TABLE,
+        GEOCODE_CACHE_TABLE,
         { query },
         { limit: 1, orderBy: "created_dt", orderDirection: "desc" },
         event,
@@ -75,7 +75,7 @@ export class GeocodeService {
   private async storeCache(query: string, results: NominatimPlaceDto[], event?: IRequestLogEvent): Promise<void> {
     try {
       await this.db.insert<ITB_GEOCODE_CACHE>(
-        CACHE_TABLE,
+        GEOCODE_CACHE_TABLE,
         { query, results_json: JSON.stringify(results), created_dt: Date.now() },
         event,
       );

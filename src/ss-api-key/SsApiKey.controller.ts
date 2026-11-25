@@ -1,71 +1,44 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { handleException, getUser } from "../utils/requestUtils.js";
+import { getUser, route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { SsApiKeyService } from "./SsApiKey.service.js";
-import { SsApiKeyValidator } from "./SsApiKey.validator.js";
+import { validateRenameBody } from "./SsApiKey.validator.js";
+import { SsApiKeyGeneratedDto, SsApiKeyRevokedDto, SsApiKeyStatusDto } from "./SsApiKey.types.js";
 
-export default function createSsApiKeyController(db: KnexSqlUtilities) {
+export default function createSsApiKeyController(db: KnexSqlUtilities): Router {
   const router = Router();
-  const service = new SsApiKeyService(db);
+  const svc = new SsApiKeyService(db);
 
-  router.get("/api-key", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const user = getUser(req);
-      const logEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "SERVICE", "Get API key status")
-        : undefined;
-      const result = await service.getKeyStatus(user.id, logEvent);
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "SsApiKeyController.GET /api-key", "Failed to get API key status");
-    }
-  });
+  router.get(
+    "/api-key",
+    route("SsApiKeyController.GET /api-key", "Failed to get API key status", async (req, cr) =>
+      cr.ok<SsApiKeyStatusDto>(await svc.getKeyStatus(getUser(req).id, req.logContext)),
+    ),
+  );
 
-  router.post("/api-key", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const user = getUser(req);
-      const result = await service.generateKey(user.id, logContext);
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "SsApiKeyController.POST /api-key", "Failed to generate API key");
-    }
-  });
+  router.post(
+    "/api-key",
+    route("SsApiKeyController.POST /api-key", "Failed to generate API key", async (req, cr) =>
+      cr.ok<SsApiKeyGeneratedDto>(await svc.generateKey(getUser(req).id, req.logContext)),
+    ),
+  );
 
-  router.post("/api-key/name", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const user = getUser(req);
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { name } = SsApiKeyValidator.validateRenameRequest(req.body, validationEvent);
-      const result = await service.renameKey(user.id, name, logContext);
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "SsApiKeyController.POST /api-key/name", "Failed to rename API key");
-    }
-  });
+  router.post(
+    "/api-key/name",
+    route("SsApiKeyController.POST /api-key/name", "Failed to rename API key", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { name } = validateRenameBody(req.body, event);
+      return cr.ok<SsApiKeyStatusDto>(await svc.renameKey(getUser(req).id, name, req.logContext));
+    }),
+  );
 
-  router.delete("/api-key", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const user = getUser(req);
-      const result = await service.revokeKey(user.id, logContext);
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "SsApiKeyController.DELETE /api-key", "Failed to revoke API key");
-    }
-  });
+  router.post(
+    "/api-key/delete",
+    route("SsApiKeyController.POST /api-key/delete", "Failed to revoke API key", async (req, cr) =>
+      cr.ok<SsApiKeyRevokedDto>(await svc.revokeKey(getUser(req).id, req.logContext)),
+    ),
+  );
 
   return router;
 }
