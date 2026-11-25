@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, RequestHandler, Response } from "express";
 import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { BaseExceptions } from "../exceptions/BaseException.js";
@@ -23,4 +23,33 @@ export function handleException(err: unknown, cr: ControllerResponse, logLabel: 
   // One-liner for PM2's error log, tagged so it can be matched to the request tree
   LoggingUtilities.service.error(logLabel, `${cr.requestId ?? "no-request-id"} ${toMessage(err)}`);
   return cr.ko(fallback, { source: logLabel, error: err });
+}
+
+export type RouteHandler<R extends Request = Request> = (
+  req: R,
+  cr: ControllerResponse,
+  res: Response,
+) => Promise<Response | void> | Response | void;
+
+/**
+ * Wraps a controller handler with the standard response + exception plumbing:
+ * builds the `ControllerResponse`, and routes any thrown error through
+ * `handleException` (typed `BaseExceptions` → their status, anything else → 500 with `fallback`).
+ *
+ * @param label    `"<Module>Controller.<METHOD> <path>"`, used in logs and the request tree
+ * @param fallback client-facing message for unexpected (non-typed) errors
+ */
+export function route<R extends Request = Request>(
+  label: string,
+  fallback: string,
+  handler: RouteHandler<R>,
+): RequestHandler {
+  return async (req, res) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      await handler(req as R, cr, res);
+    } catch (err) {
+      handleException(err, cr, label, fallback);
+    }
+  };
 }
