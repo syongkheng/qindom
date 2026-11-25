@@ -151,4 +151,37 @@ export class StructuralValidationUtilities {
     this.required(fieldToValidate, fieldName, event);
     this.oneOf(fieldToValidate, allowedValues, fieldName, event);
   }
+
+  /** Required string, trimmed, 1..maxLength chars (match maxLength to the column). Returns the trimmed value. */
+  static requiredText(
+    fieldToValidate: unknown,
+    fieldName: string,
+    maxLength: number,
+    event?: IRequestLogEvent,
+  ): string {
+    this.requiredString(fieldToValidate, fieldName, event);
+    const trimmed = (fieldToValidate as string).trim();
+    if (!trimmed || trimmed.length > maxLength) {
+      if (event) event.children?.push(`(M) '${fieldName}' 1–${maxLength} chars ${LogEmoji.error} `);
+      throw new Exceptions.InvalidRequest(fieldName, "format");
+    }
+    return trimmed;
+  }
+
+  /** Optional string: undefined/null/blank → null, otherwise trimmed and at most maxLength chars. */
+  static optionalText(
+    fieldToValidate: unknown,
+    fieldName: string,
+    maxLength: number,
+    event?: IRequestLogEvent,
+  ): string | null {
+    if (fieldToValidate === undefined || fieldToValidate === null || fieldToValidate === "") return null;
+    this.string(fieldToValidate, fieldName, event, "(O)");
+    const trimmed = (fieldToValidate as string).trim();
+    if (trimmed.length > maxLength) {
+      if (event) event.children?.push(`(O) '${fieldName}' ≤${maxLength} chars ${LogEmoji.error} `);
+      throw new Exceptions.InvalidRequest(fieldName, "format");
+    }
+    return trimmed || null;
+  }
 }

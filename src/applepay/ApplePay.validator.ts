@@ -19,15 +19,6 @@ const CARD_LAST4_REGEX = /^\d{3,4}$/;
 
 const isBlank = (value: unknown) => value === undefined || value === null || value === "";
 
-/** Optional free-text field: blank → null, otherwise a trimmed string of at most `maxLength`. */
-function optionalText(value: unknown, field: string, maxLength: number, event?: IRequestLogEvent): string | null {
-  if (isBlank(value)) return null;
-  V.string(value, field, event, "(O)");
-  const trimmed = (value as string).trim();
-  if (trimmed.length > maxLength) throw new Exceptions.InvalidRequest(field, "format");
-  return trimmed || null;
-}
-
 export function validateManualTransactionBody(
   body: Record<string, unknown>,
   event?: IRequestLogEvent,
@@ -45,11 +36,7 @@ export function validateManualTransactionBody(
     if (!CURRENCY_REGEX.test(normalizedCurrency)) throw new Exceptions.InvalidRequest("currency", "format");
   }
 
-  V.requiredString(merchant, "merchant", event);
-  const trimmedMerchant = (merchant as string).trim();
-  if (!trimmedMerchant || trimmedMerchant.length > MERCHANT_MAX_LENGTH) {
-    throw new Exceptions.InvalidRequest("merchant", "format");
-  }
+  const trimmedMerchant = V.requiredText(merchant, "merchant", MERCHANT_MAX_LENGTH, event);
 
   V.requiredNumber(occurredDt, "occurredDt", event);
   const occurred = occurredDt as number;
@@ -62,12 +49,12 @@ export function validateManualTransactionBody(
     currency: normalizedCurrency,
     merchant: trimmedMerchant,
     occurredDt: occurred,
-    category: optionalText(category, "category", CATEGORY_MAX_LENGTH, event),
+    category: V.optionalText(category, "category", CATEGORY_MAX_LENGTH, event),
   };
 }
 
 export function validateCategoryBody(body: Record<string, unknown>, event?: IRequestLogEvent): ApplePayCategoryBody {
-  return { category: optionalText(body.category, "category", CATEGORY_MAX_LENGTH, event) };
+  return { category: V.optionalText(body.category, "category", CATEGORY_MAX_LENGTH, event) };
 }
 
 export function validateCardLabelBody(
@@ -76,5 +63,5 @@ export function validateCardLabelBody(
   event?: IRequestLogEvent,
 ): ApplePayCardLabelBody {
   V.regex(cardLast4Param, CARD_LAST4_REGEX, "cardLast4", event);
-  return { cardLast4: cardLast4Param, label: optionalText(body.label, "label", CARD_LABEL_MAX_LENGTH, event) };
+  return { cardLast4: cardLast4Param, label: V.optionalText(body.label, "label", CARD_LABEL_MAX_LENGTH, event) };
 }

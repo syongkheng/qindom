@@ -1,109 +1,90 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { SuggestionService } from "./Suggestion.service.js";
-import { SuggestionValidator } from "./Suggestion.validator.js";
-import { handleException, hasRole } from "../utils/requestUtils.js";
-import { Roles } from "../auth/Permission.js";
+import { requireRole, route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { Roles } from "../auth/Permission.js";
+import { SuggestionService } from "./Suggestion.service.js";
+import {
+  validateCountryQuery,
+  validateIdParam,
+  validateNoteBody,
+  validatePackingBody,
+} from "./Suggestion.validator.js";
+import { NoteSuggestionDto, PackingSuggestionDto, SuggestionDeletedDto } from "./Suggestion.types.js";
 
-export default function createSuggestionController(db: KnexSqlUtilities) {
+/** Who may curate suggestions. */
+const ADMIN_ROLES = [Roles.LEGACY_ADMIN, Roles.OWNER];
+
+/**
+ * Mounted under `mw.std` (public): the GETs are open; writes add MandatoryTokenFilter
+ * per route + an admin role check (called by hand, not from fndom).
+ */
+export default function createSuggestionController(db: KnexSqlUtilities): Router {
   const router = Router();
   const svc = new SuggestionService(db);
 
-  // GET /suggestion/packing
-  router.get("/packing", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    const logContext = req.logContext;
-    const event = logContext ? LoggingUtilities.request.branch(logContext, "SERVICE", "packing") : undefined;
-    try {
-      const items = await svc.getAllPacking(event);
-      return cr.ok(items);
-    } catch (err) {
-      return handleException(err, cr, "SuggestionController.GET /packing", "Failed to fetch packing suggestions");
-    }
-  });
+  // ── Packing ──
 
-  // POST /suggestion/packing (admin)
-  router.post("/packing", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-    const logContext = req.logContext;
-    const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Body") : undefined;
-    try {
-      const data = SuggestionValidator.validateCreatePacking(req.body, event);
-      const item = await svc.createPacking(data, event);
-      return cr.ok(item);
-    } catch (err) {
-      return handleException(err, cr, "SuggestionController.POST /packing", "Failed to create packing suggestion");
-    }
-  });
+  router.get(
+    "/packing",
+    route("SuggestionController.GET /packing", "Failed to fetch packing suggestions", async (req, cr) =>
+      cr.ok<PackingSuggestionDto[]>(await svc.getAllPacking(req.logContext)),
+    ),
+  );
 
-  // DELETE /suggestion/packing/:id (admin)
-  router.delete("/packing/:id", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-    const logContext = req.logContext;
-    const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Params") : undefined;
-    try {
-      const { id } = SuggestionValidator.validateIdParam(req.params, event);
-      await svc.deletePacking(id, event);
-      return cr.ok({ deleted: true });
-    } catch (err) {
-      return handleException(
-        err,
-        cr,
-        "SuggestionController.DELETE /packing/:id",
-        "Failed to delete packing suggestion",
-      );
-    }
-  });
+  router.post(
+    "/packing",
+    MandatoryTokenFilter,
+    route("SuggestionController.POST /packing", "Failed to create packing suggestion", async (req, cr) => {
+      requireRole(req, ...ADMIN_ROLES);
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const body = validatePackingBody(req.body, event);
+      return cr.ok<PackingSuggestionDto>(await svc.createPacking(body, req.logContext));
+    }),
+  );
 
-  // GET /suggestion/note?country=Singapore
-  router.get("/note", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    const logContext = req.logContext;
-    const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Query") : undefined;
-    try {
-      const { country } = SuggestionValidator.validateNoteSearch(req.query as Record<string, unknown>, event);
-      const notes = await svc.getNotesByCountry(country, event);
-      return cr.ok(notes);
-    } catch (err) {
-      return handleException(err, cr, "SuggestionController.GET /note", "Failed to fetch note suggestions");
-    }
-  });
+  router.post(
+    "/packing/:id/delete",
+    MandatoryTokenFilter,
+    route("SuggestionController.POST /packing/:id/delete", "Failed to delete packing suggestion", async (req, cr) => {
+      requireRole(req, ...ADMIN_ROLES);
+      const { id } = validateIdParam(req.params);
+      return cr.ok<SuggestionDeletedDto>(await svc.deletePacking(id, req.logContext));
+    }),
+  );
 
-  // POST /suggestion/note (admin)
-  router.post("/note", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-    const logContext = req.logContext;
-    const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Body") : undefined;
-    try {
-      const data = SuggestionValidator.validateCreateNote(req.body, event);
-      const note = await svc.createNote(data, event);
-      return cr.ok(note);
-    } catch (err) {
-      return handleException(err, cr, "SuggestionController.POST /note", "Failed to create note suggestion");
-    }
-  });
+  // ── Notes (per country) ──
 
-  // DELETE /suggestion/note/:id (admin)
-  router.delete("/note/:id", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    if (!hasRole(req, Roles.LEGACY_ADMIN, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-    const logContext = req.logContext;
-    const event = logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Params") : undefined;
-    try {
-      const { id } = SuggestionValidator.validateIdParam(req.params, event);
-      await svc.deleteNote(id, event);
-      return cr.ok({ deleted: true });
-    } catch (err) {
-      return handleException(err, cr, "SuggestionController.DELETE /note/:id", "Failed to delete note suggestion");
-    }
-  });
+  router.get(
+    "/note",
+    route("SuggestionController.GET /note", "Failed to fetch note suggestions", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Query");
+      const { country } = validateCountryQuery(req.query, event);
+      return cr.ok<NoteSuggestionDto[]>(await svc.getNotesByCountry(country, req.logContext));
+    }),
+  );
+
+  router.post(
+    "/note",
+    MandatoryTokenFilter,
+    route("SuggestionController.POST /note", "Failed to create note suggestion", async (req, cr) => {
+      requireRole(req, ...ADMIN_ROLES);
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const body = validateNoteBody(req.body, event);
+      return cr.ok<NoteSuggestionDto>(await svc.createNote(body, req.logContext));
+    }),
+  );
+
+  router.post(
+    "/note/:id/delete",
+    MandatoryTokenFilter,
+    route("SuggestionController.POST /note/:id/delete", "Failed to delete note suggestion", async (req, cr) => {
+      requireRole(req, ...ADMIN_ROLES);
+      const { id } = validateIdParam(req.params);
+      return cr.ok<SuggestionDeletedDto>(await svc.deleteNote(id, req.logContext));
+    }),
+  );
 
   return router;
 }

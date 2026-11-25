@@ -17,8 +17,8 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 9 | `file` | [x] | a005e9d | dead `POST /file/tg` deleted (+ fndom `CREATE_TG`); `route()` + `cr.ok<FileDeletedDto>`; `File.types.ts`; validator → function (uuid strings, ≤100); `RecordStatus` bindings; real `affectedRows` count; logContext; tests + README rewritten |
 | 10 | `profile` | [x] | 5001889 | `Pfp.*` → `Profile.*`; mounted `mw.auth` (per-route filters dropped); `route()` + typed DTOs; validators (country, image data URL, shared `validateUsername`); no more user rows in responses; no try/catch→Unknown; lookups by id; one atomic username+token update; `parseRoles` shared; tests + README |
 | 11 | `todo` | [x] | 009fe60 | `route()` + typed DTOs (no more `any`); `Todo.types.ts`; validators → functions; pin cap → `InvalidRequest("pinned","limit")`; `RecordStatus`; logContext through every query; shared `activeTasks`; widget call typed; tests + README (none before) |
-| 12 | `applepay` | [~] in review | | service moved in from siri-shortcut (`ApplePayService`) + body types from models/requests; `ApplePayDashboard.*` → `ApplePay.*`; `route()` + typed DTOs; validators → functions with 64-char caps on category/label (were unchecked); `TransactionSource`; `RecordStatus`; shared `setRecordStatus`/`loadOrThrow`; `getApiKeyUserId` (siri-shortcut + todo widget); tests + README |
-| 13 | `suggestion` | [ ] | | inline `cr.result(403, ...)` ×4 → `requireRole()` |
+| 12 | `applepay` | [x] | c5736ee | service moved in from siri-shortcut (`ApplePayService`) + body types from models/requests; `ApplePayDashboard.*` → `ApplePay.*`; `route()` + typed DTOs; validators → functions with 64-char caps on category/label (were unchecked); `TransactionSource`; `RecordStatus`; shared `setRecordStatus`/`loadOrThrow`; `getApiKeyUserId` (siri-shortcut + todo widget); tests + README |
+| 13 | `suggestion` | [~] in review | | `route()` + `requireRole(ADMIN_ROLES)`; DELETE ×2 → `POST /:id/delete`; raw rows → camelCase DTOs (fndom panels); `Suggestion.types.ts`; validators → functions w/ column caps, http(s) url, whole counts; `RecordStatus`; `any` casts gone; shared `V.requiredText/optionalText` (applepay switched); tests + README |
 | 14 | `house` | [ ] | | |
 | 15 | `pdca` | [ ] | | replace zod with hand-written validator |
 | 16 | `lta` | [ ] | | take over LTA queries now inside `KnexSqlUtilities` |
@@ -40,12 +40,12 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 32 | empty folders `src/log`, `src/places` | [ ] | | delete only on explicit OK |
 
 ## fndom companion branch
-`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`; unused `ApiRoute.FILE.CREATE_TG` removed. **Deploy fndom together with qindom.**
+`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`; unused `ApiRoute.FILE.CREATE_TG` removed; suggestion panels → camelCase + delete routes → POST. **Deploy fndom together with qindom.**
 
 ## Cross-cutting smells (initial scan)
 - 5 inline `crypto.createHash("sha256")` → `sha256Hex()` (ss-api-key + ApiKeyFilter done; auth, camera, analytics left).
 - ~10 static-class validators → exported functions (each folder).
-- Remaining `router.delete` routes (suggestion) → POST + fndom.
+- ~~Remaining `router.delete` routes~~ none left.
 - 176 raw `record_status` `'A'`/`'D'` → `RecordStatus` (each folder).
 - ~29 hand-written durations (`60 * 1000`…) → `Time` (each folder).
 - `"SGD"` ×9, `"Asia/Singapore"` ×5 → `Locale.ts` (applepay, siri-shortcut, analytics, wedding).

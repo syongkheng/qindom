@@ -67,6 +67,8 @@ Each feature folder `src/<module>/` holds:
 - Look up the current user by `getUser(req).id` (JWT routes) or `getApiKeyUserId(req)` (x-api-key routes), never `logContext.metadata.userId as number` or rebuilt `username_system` strings.
 - More than ~3 positional parameters of the same kind → pass an input object (`recordSmsTransaction(userId, { amount, currency, merchant, cardLast4 })`).
 - Fixed sets of stored string values get an enum-like constant + type (`TransactionSource.V2`), not bare `"v2"`.
+- Use `V.requiredText(value, field, max)` / `V.optionalText(value, field, max)` for strings (trim + length cap + blank→null); don't hand-roll trim/length checks.
+- API JSON is **camelCase** everywhere; snake_case column names never reach the client.
 - Free-text fields are length-checked against their column in the validator (and the column width noted in a comment), so an oversized value is a 400, never a DB error/truncation.
 
 ## 4c. Exceptions
@@ -152,6 +154,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | No `any` in service signatures; `toXyzDto` mappers. |
 | 2026-11-25 | Services live with the tables they own (`SsApplePayV1Service` → `applepay/ApplePayService`). |
 | 2026-11-25 | `getApiKeyUserId(req)` for API-key routes; input objects over long positional lists; `TransactionSource` enum. |
+| 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
+| 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions
