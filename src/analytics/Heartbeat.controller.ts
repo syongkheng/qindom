@@ -25,17 +25,17 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const { event, properties, page, referrer, sessionId, timestamp, system } = req.body;
-      if (!event)     throw new Exceptions.InvalidRequest("event");
+      if (!event) throw new Exceptions.InvalidRequest("event");
       if (!sessionId) throw new Exceptions.InvalidRequest("sessionId");
-      if (!system)    throw new Exceptions.InvalidRequest("system");
+      if (!system) throw new Exceptions.InvalidRequest("system");
 
       await eventSvc.insertEvent({
         event,
         properties: properties ?? {},
-        page:       page     ?? "",
-        referrer:   referrer ?? "",
+        page: page ?? "",
+        referrer: referrer ?? "",
         sessionId,
-        userId:    req.user?.username ?? "",
+        userId: req.user?.username ?? "",
         ipAddress: resolveIp(req),
         userAgent: req.headers["user-agent"] || "Unknown",
         system,
@@ -53,11 +53,11 @@ export default function createHeartbeatController(db: KnexSqlUtilities) {
     try {
       const { sessionId, system } = req.body;
       if (!sessionId) throw new Exceptions.InvalidRequest("sessionId");
-      if (!system)    throw new Exceptions.InvalidRequest("system");
+      if (!system) throw new Exceptions.InvalidRequest("system");
 
       await heartbeatSvc.insertHeartbeatRecord({
         sessionId,
-        username:  req.user?.username ?? "Anonymous",
+        username: req.user?.username ?? "Anonymous",
         ipAddress: resolveIp(req),
         userAgent: req.headers["user-agent"] || "Unknown",
         system,

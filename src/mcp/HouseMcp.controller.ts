@@ -27,7 +27,10 @@ export default function createHouseMcpController() {
 
   // No server-initiated streams or sessions to resume.
   const notAllowed = (_req: RequestWithUserInfo, res: Response) => {
-    res.status(405).set("Allow", "POST").json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null });
+    res
+      .status(405)
+      .set("Allow", "POST")
+      .json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null });
   };
   router.get("/", notAllowed);
   router.delete("/", notAllowed);

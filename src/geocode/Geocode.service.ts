@@ -53,7 +53,7 @@ export class GeocodeService {
       const records = await this.db.find<ITB_GEOCODE_CACHE>(
         "tb_geocode_cache",
         { query },
-        { limit: 1, orderBy: "created_dt", orderDirection: "desc" }
+        { limit: 1, orderBy: "created_dt", orderDirection: "desc" },
       );
 
       if (!records.length) return null;
@@ -111,7 +111,10 @@ export class GeocodeService {
     try {
       const response = await fetch(url, { headers: NOMINATIM_HEADERS });
       if (!response.ok) {
-        LoggingUtilities.service.error("GeocodeService.fetchNominatim", `Nominatim HTTP ${response.status} for: ${query}`);
+        LoggingUtilities.service.error(
+          "GeocodeService.fetchNominatim",
+          `Nominatim HTTP ${response.status} for: ${query}`,
+        );
         return null;
       }
       return (await response.json()) as Record<string, unknown>[];

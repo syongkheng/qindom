@@ -16,7 +16,11 @@ export function setupTelegramLogSender(): void {
     let text = html;
 
     if (logSearcherUrl) {
-      const href = logSearcherUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const href = logSearcherUrl
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
       text += isPublicUrl(logSearcherUrl)
         ? `\n<a href="${href}">View Verbose Logs</a>`
         : // Dev (localhost): Telegram won't link it — show the URL tap-to-copy instead

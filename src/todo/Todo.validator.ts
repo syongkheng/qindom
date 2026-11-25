@@ -45,7 +45,11 @@ export class TodoValidator {
 
   static validateReorderRequest(body: Record<string, unknown>): { ids: string[] } {
     const { ids } = body as any;
-    if (!Array.isArray(ids) || ids.length > MAX_REORDER_IDS || !ids.every((i) => typeof i === "string" && i.length <= 36)) {
+    if (
+      !Array.isArray(ids) ||
+      ids.length > MAX_REORDER_IDS ||
+      !ids.every((i) => typeof i === "string" && i.length <= 36)
+    ) {
       throw new Exceptions.InvalidRequest("ids", "format");
     }
     return { ids };

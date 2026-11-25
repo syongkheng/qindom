@@ -79,7 +79,11 @@ export default function createItineraryController(db: KnexSqlUtilities) {
     try {
       const result = await svc.getByShortCode(req.params.shortCode);
       if (!("hasChallenge" in result)) {
-        void svc.recordView(req.params.shortCode, extractIp(req), (req.headers["user-agent"] || "Unknown").slice(0, 512));
+        void svc.recordView(
+          req.params.shortCode,
+          extractIp(req),
+          (req.headers["user-agent"] || "Unknown").slice(0, 512),
+        );
       }
       return cr.ok(result);
     } catch (err) {

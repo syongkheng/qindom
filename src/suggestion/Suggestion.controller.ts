@@ -52,7 +52,12 @@ export default function createSuggestionController(db: KnexSqlUtilities) {
       await svc.deletePacking(id, event);
       return cr.ok({ deleted: true });
     } catch (err) {
-      return handleException(err, cr, "SuggestionController.DELETE /packing/:id", "Failed to delete packing suggestion");
+      return handleException(
+        err,
+        cr,
+        "SuggestionController.DELETE /packing/:id",
+        "Failed to delete packing suggestion",
+      );
     }
   });
 

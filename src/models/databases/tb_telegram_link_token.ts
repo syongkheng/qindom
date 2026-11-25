@@ -1,5 +1,5 @@
 export interface ITbTelegramLinkToken {
-  token:      string;
-  username:   string;
+  token: string;
+  username: string;
   created_dt: number;
 }

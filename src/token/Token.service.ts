@@ -11,10 +11,7 @@ export class TokenService {
     this.jwtSecret = process.env.JWT_SECRET!;
 
     if (!this.jwtSecret) {
-      LoggingUtilities.service.error(
-        "TokenService",
-        "JWT_SECRET is not set in environment variables"
-      );
+      LoggingUtilities.service.error("TokenService", "JWT_SECRET is not set in environment variables");
       throw new Error("JWT_SECRET environment variable not set");
     }
   }
@@ -32,25 +29,18 @@ export class TokenService {
     roles: string[];
     lastLoggedInDt: number;
   }): Promise<string> {
-    LoggingUtilities.service.info(
-      "TokenService.generateToken",
-      `Generating token`
-    );
+    LoggingUtilities.service.info("TokenService.generateToken", `Generating token`);
     try {
-      const token = jwt.sign(
-        { id, username, system, roles, lastLoggedInDt },
-        this.jwtSecret,
-        { algorithm: "HS256", expiresIn: this.jwtExpiration }
-      );
-      LoggingUtilities.service.info(
-        "TokenService.generateToken",
-        `Token generated - [REDACTED]`
-      );
+      const token = jwt.sign({ id, username, system, roles, lastLoggedInDt }, this.jwtSecret, {
+        algorithm: "HS256",
+        expiresIn: this.jwtExpiration,
+      });
+      LoggingUtilities.service.info("TokenService.generateToken", `Token generated - [REDACTED]`);
       return token;
     } catch (error) {
       LoggingUtilities.service.error(
         "TokenService.generateToken",
-        `Something went wrong generating the token: ${error}`
+        `Something went wrong generating the token: ${error}`,
       );
       throw new Exceptions.Unknown();
     }

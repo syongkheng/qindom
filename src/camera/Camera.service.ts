@@ -42,7 +42,11 @@ export class CameraService {
   }
 
   async touch(deviceId: string): Promise<void> {
-    await this.db.update<ITbCameraDevice>(TB_CAMERA_DEVICE, { uuid: deviceId, record_status: "A" }, { last_seen_dt: Date.now() });
+    await this.db.update<ITbCameraDevice>(
+      TB_CAMERA_DEVICE,
+      { uuid: deviceId, record_status: "A" },
+      { last_seen_dt: Date.now() },
+    );
   }
 
   async register(body: CameraRegisterBody): Promise<CameraRegisterDto> {
@@ -78,8 +82,7 @@ export class CameraService {
     if (!deviceId) throw new Exceptions.InvalidRequest("code");
 
     const row = (await this.db.findOne<ITbCameraDevice>(TB_CAMERA_DEVICE, { uuid: deviceId, record_status: "A" })) as
-      | ITbCameraDevice
-      | undefined;
+      ITbCameraDevice | undefined;
     if (!row || row.user_id != null) throw new Exceptions.InvalidRequest("code");
 
     const now = Date.now();

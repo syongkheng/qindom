@@ -34,12 +34,7 @@ export class SuggestionService {
   }
 
   async deletePacking(id: number, logEvent?: IRequestLogEvent): Promise<void> {
-    await this.db.update<any>(
-      "tb_suggestion_packing",
-      { id },
-      { record_status: "D" },
-      logEvent,
-    );
+    await this.db.update<any>("tb_suggestion_packing", { id }, { record_status: "D" }, logEvent);
   }
 
   // Small curated list per country — exact (case-insensitive) match is fine,
@@ -88,11 +83,6 @@ export class SuggestionService {
   }
 
   async deleteNote(id: number, logEvent?: IRequestLogEvent): Promise<void> {
-    await this.db.update<any>(
-      "tb_suggestion_note",
-      { id },
-      { record_status: "D" },
-      logEvent,
-    );
+    await this.db.update<any>("tb_suggestion_note", { id }, { record_status: "D" }, logEvent);
   }
 }

@@ -101,15 +101,24 @@ test("hourlyRange returns N zero-fillable hour starts ending at the current hour
 
 test("orderBuckets keeps registry order, zero-fills, and puts 'unknown' last", () => {
   const out = orderBuckets(
-    [{ key: "phone", label: "Phone" }, { key: "desktop", label: "Desktop" }],
-    new Map([["unknown", 3], ["desktop", 5]]),
+    [
+      { key: "phone", label: "Phone" },
+      { key: "desktop", label: "Desktop" },
+    ],
+    new Map([
+      ["unknown", 3],
+      ["desktop", 5],
+    ]),
     new Map([["desktop", 2]]),
   );
-  assert.deepEqual(out.map((b) => [b.key, b.views, b.sessions]), [
-    ["phone", 0, 0],
-    ["desktop", 5, 2],
-    ["unknown", 3, 0],
-  ]);
+  assert.deepEqual(
+    out.map((b) => [b.key, b.views, b.sessions]),
+    [
+      ["phone", 0, 0],
+      ["desktop", 5, 2],
+      ["unknown", 3, 0],
+    ],
+  );
 });
 
 test("role allowlist accepts MODULE_R1-5 and legacy 'admin' only", () => {

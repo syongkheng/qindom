@@ -83,9 +83,7 @@ export interface NormalisedEvent {
   screenSize: string;
 }
 
-export type ParseResult =
-  | { ok: true; value: CollectRequest }
-  | { ok: false; field: string };
+export type ParseResult = { ok: true; value: CollectRequest } | { ok: false; field: string };
 
 /** Structural validation only (no registry lookup). */
 export function parseCollectRequest(body: unknown): ParseResult {

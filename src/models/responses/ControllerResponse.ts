@@ -23,11 +23,7 @@ export class ControllerResponse {
       data,
     };
 
-    LoggingUtilities.request.response(
-      this.req.logContext,
-      200,
-      LoggingUtilities.redact(data),
-    );
+    LoggingUtilities.request.response(this.req.logContext, 200, LoggingUtilities.redact(data));
 
     return this.res.status(200).json(responseBody);
   }
@@ -62,11 +58,7 @@ export class ControllerResponse {
       data: clientMessage,
     };
 
-    LoggingUtilities.request.response(
-      this.req.logContext,
-      500,
-      LoggingUtilities.redact(responseBody),
-    );
+    LoggingUtilities.request.response(this.req.logContext, 500, LoggingUtilities.redact(responseBody));
 
     return this.res.status(500).json(responseBody);
   }
@@ -84,11 +76,7 @@ export class ControllerResponse {
 
     LoggingUtilities.request.branch(this.req.logContext, "WARN", "Bad request returned");
 
-    LoggingUtilities.request.response(
-      this.req.logContext,
-      400,
-      LoggingUtilities.redact(responseBody),
-    );
+    LoggingUtilities.request.response(this.req.logContext, 400, LoggingUtilities.redact(responseBody));
 
     return this.res.status(400).json(responseBody);
   }
@@ -106,11 +94,7 @@ export class ControllerResponse {
 
     LoggingUtilities.request.branch(this.req.logContext, "ERROR", "Bad authorization returned");
 
-    LoggingUtilities.request.response(
-      this.req.logContext,
-      401,
-      LoggingUtilities.redact(responseBody),
-    );
+    LoggingUtilities.request.response(this.req.logContext, 401, LoggingUtilities.redact(responseBody));
 
     return this.res.status(401).json(responseBody);
   }
@@ -126,11 +110,7 @@ export class ControllerResponse {
       data,
     };
 
-    LoggingUtilities.request.response(
-      this.req.logContext,
-      statusCode,
-      LoggingUtilities.redact(responseBody),
-    );
+    LoggingUtilities.request.response(this.req.logContext, statusCode, LoggingUtilities.redact(responseBody));
 
     return this.res.status(statusCode).json(responseBody);
   }

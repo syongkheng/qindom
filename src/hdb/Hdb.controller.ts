@@ -11,7 +11,7 @@ import { Roles } from "../auth/Permission.js";
 
 export default function createHdbController(db: KnexSqlUtilities) {
   const router = Router();
-  const hdbSvc        = new HdbService(db);
+  const hdbSvc = new HdbService(db);
   const coordinateSvc = new CoordinateService(db);
 
   router.post("/pphs", async (req: Request, res: Response) => {
@@ -30,7 +30,10 @@ export default function createHdbController(db: KnexSqlUtilities) {
       const user = getUser(req);
       if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
       const { address, lat, lng, formedUrl } = req.body as {
-        address: string; lat: string; lng: string; formedUrl: string;
+        address: string;
+        lat: string;
+        lng: string;
+        formedUrl: string;
       };
       return cr.ok(await coordinateSvc.updateCoordinates(address, { lat, lng, formed_url: formedUrl }, user.username));
     } catch (err) {

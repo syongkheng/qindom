@@ -47,7 +47,12 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
       const result = await service.deleteTransaction(getUser(req).id, req.params.transactionId, req.logContext);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "ApplePayDashboardController.POST /:transactionId/delete", "Failed to delete transaction");
+      return handleException(
+        err,
+        cr,
+        "ApplePayDashboardController.POST /:transactionId/delete",
+        "Failed to delete transaction",
+      );
     }
   });
 
@@ -58,7 +63,12 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
       const result = await service.restoreTransaction(getUser(req).id, req.params.transactionId, req.logContext);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "ApplePayDashboardController.POST /:transactionId/restore", "Failed to restore transaction");
+      return handleException(
+        err,
+        cr,
+        "ApplePayDashboardController.POST /:transactionId/restore",
+        "Failed to restore transaction",
+      );
     }
   });
 
@@ -73,7 +83,12 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
       const result = await service.updateCategory(getUser(req).id, req.params.transactionId, category, logContext);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "ApplePayDashboardController.POST /:transactionId/category", "Failed to update category");
+      return handleException(
+        err,
+        cr,
+        "ApplePayDashboardController.POST /:transactionId/category",
+        "Failed to update category",
+      );
     }
   });
 
@@ -95,7 +110,12 @@ export default function createApplePayDashboardController(db: KnexSqlUtilities) 
       const result = await service.setCardLabel(getUser(req).id, cardLast4, label, logContext);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "ApplePayDashboardController.POST /card-label/:cardLast4", "Failed to update card label");
+      return handleException(
+        err,
+        cr,
+        "ApplePayDashboardController.POST /card-label/:cardLast4",
+        "Failed to update card label",
+      );
     }
   });
 

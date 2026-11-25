@@ -6,7 +6,7 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 
 const TB_TRAVEL_AGENDA_FILE = "tb_travel_agenda_file";
 const TB_TRAVEL_AGENDA_ITEM = "tb_travel_agenda_item";
-const TB_TRAVEL_ITINERARY   = "tb_travel_itinerary";
+const TB_TRAVEL_ITINERARY = "tb_travel_itinerary";
 
 export class FileService {
   constructor(private db: KnexSqlUtilities) {}

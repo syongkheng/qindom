@@ -79,11 +79,17 @@ export class AnalyticSystemService {
       record_status: input.active ? "A" : "D",
       updated_dt: now,
     };
-    const existing = await this.db.findOne<ITB_ANALYTIC_SYSTEM>("tb_analytic_system", { system_key: input.key }, ["id"]);
+    const existing = await this.db.findOne<ITB_ANALYTIC_SYSTEM>("tb_analytic_system", { system_key: input.key }, [
+      "id",
+    ]);
     if (existing) {
       await this.db.update<ITB_ANALYTIC_SYSTEM>("tb_analytic_system", { id: existing.id }, data);
     } else {
-      await this.db.insert<ITB_ANALYTIC_SYSTEM>("tb_analytic_system", { ...data, system_key: input.key, created_dt: now });
+      await this.db.insert<ITB_ANALYTIC_SYSTEM>("tb_analytic_system", {
+        ...data,
+        system_key: input.key,
+        created_dt: now,
+      });
     }
     AnalyticSystemService.invalidate();
   }

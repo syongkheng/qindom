@@ -102,7 +102,8 @@ export class HdbService {
       const componentProps: Record<string, unknown> = nextData?.props?.pageProps?.componentProps ?? {};
 
       for (const uid of Object.keys(componentProps)) {
-        const items = (componentProps[uid] as { props?: { accordionItems?: { bodyContentVal?: string }[] } })?.props?.accordionItems;
+        const items = (componentProps[uid] as { props?: { accordionItems?: { bodyContentVal?: string }[] } })?.props
+          ?.accordionItems;
         if (Array.isArray(items)) {
           for (const item of items) {
             if (typeof item.bodyContentVal === "string" && item.bodyContentVal.includes("<table>")) {
@@ -119,7 +120,10 @@ export class HdbService {
     }
 
     if (!bodyContentHtml) {
-      LoggingUtilities.service.error("HdbService.statistics", "No accordion body content with table found in __NEXT_DATA__.");
+      LoggingUtilities.service.error(
+        "HdbService.statistics",
+        "No accordion body content with table found in __NEXT_DATA__.",
+      );
       throw new UnknownException();
     }
 
@@ -199,18 +203,23 @@ export class HdbService {
     await this.coordinateService.clearCoordinates(transformedAddress);
   }
 
-  async getAllCoordinateOptions(address: string): Promise<Array<{
-    source: 'onemap' | 'nominatim';
-    lat: string;
-    lng: string;
-    formedUrl: string;
-  }>> {
+  async getAllCoordinateOptions(address: string): Promise<
+    Array<{
+      source: "onemap" | "nominatim";
+      lat: string;
+      lng: string;
+      formedUrl: string;
+    }>
+  > {
     const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
     return this.coordinateService.fetchAllCoordinateOptions(transformedAddress);
   }
 
   async refreshCoordinatesOfAddress(address: string): Promise<{
-    lat: string; lng: string; formedUrl: string; source: string;
+    lat: string;
+    lng: string;
+    formedUrl: string;
+    source: string;
   }> {
     const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
     await this.coordinateService.deleteCache(transformedAddress);

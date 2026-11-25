@@ -44,7 +44,8 @@ export default function createPdcaEnquiryController(db: KnexSqlUtilities) {
       if (!system || !isOriginAllowed(system, req.headers.origin)) throw new Exceptions.ForbiddenAccess();
 
       const parsed = EnquirySchema.safeParse(req.body);
-      if (!parsed.success) throw new Exceptions.InvalidRequest(parsed.error.issues[0]?.path.join(".") || "body", "format");
+      if (!parsed.success)
+        throw new Exceptions.InvalidRequest(parsed.error.issues[0]?.path.join(".") || "body", "format");
       const enquiry = parsed.data;
 
       // Bots that fill the hidden field get the same success answer, and nothing is sent.

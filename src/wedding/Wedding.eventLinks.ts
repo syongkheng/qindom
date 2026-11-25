@@ -46,8 +46,7 @@ export function buildEventLinks(): { calendar: string; directions: string; websi
     }).toString();
 
   const directions =
-    "https://www.google.com/maps/dir/?" +
-    new URLSearchParams({ api: "1", destination: EVENT.address }).toString();
+    "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", destination: EVENT.address }).toString();
 
   return { calendar, directions, website: websiteLink("1") };
 }

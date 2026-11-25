@@ -28,7 +28,10 @@ const UpsertSystemSchema = z.object({
   key: SystemKeySchema,
   displayName: z.string().trim().min(1).max(128),
   breakpoints: z.array(BreakpointSchema).min(1).max(12),
-  allowedOrigins: z.array(z.string().regex(/^https?:\/\/[^/\s]+$/)).max(20).default([]),
+  allowedOrigins: z
+    .array(z.string().regex(/^https?:\/\/[^/\s]+$/))
+    .max(20)
+    .default([]),
   active: z.boolean().default(true),
 });
 
@@ -67,7 +70,8 @@ export default function createAnalyticsController(db: KnexSqlUtilities) {
 
       const system = await systems.getActive(parsed.value.system);
       if (!system) throw new Exceptions.InvalidRequest("system");
-      if (!isOriginAllowed(system, req.headers.origin)) throw new Exceptions.ForbiddenAccess("Origin not allowed for this system");
+      if (!isOriginAllowed(system, req.headers.origin))
+        throw new Exceptions.ForbiddenAccess("Origin not allowed for this system");
 
       await dashboard.insert(normaliseEvent(system, parsed.value), {
         userId: req.user?.username ?? "",
@@ -149,35 +153,48 @@ export default function createAnalyticsController(db: KnexSqlUtilities) {
         if (!readKey) throw new Exceptions.NotFound();
         return cr.ok({ readKey });
       } catch (err) {
-        return handleException(err, cr, "AnalyticsController.POST /admin/systems/:key/read-key", "Failed to rotate read key");
+        return handleException(
+          err,
+          cr,
+          "AnalyticsController.POST /admin/systems/:key/read-key",
+          "Failed to rotate read key",
+        );
       }
     },
   );
 
-  router.get("/admin/systems", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!isOwner(req)) return cr.result(403, "Forbidden", "Insufficient permissions");
-      return cr.ok(await systems.listAll());
-    } catch (err) {
-      return handleException(err, cr, "AnalyticsController.GET /admin/systems", "Failed to load analytics systems");
-    }
-  });
-
-  router.post("/admin/systems", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!isOwner(req)) return cr.result(403, "Forbidden", "Insufficient permissions");
-      const parsed = UpsertSystemSchema.safeParse(req.body);
-      if (!parsed.success) {
-        throw new Exceptions.InvalidRequest(parsed.error.issues[0]?.path.join(".") || "body", "format");
+  router.get(
+    "/admin/systems",
+    [MandatoryTokenFilter, adminLimiter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const cr = new ControllerResponse(req, res);
+      try {
+        if (!isOwner(req)) return cr.result(403, "Forbidden", "Insufficient permissions");
+        return cr.ok(await systems.listAll());
+      } catch (err) {
+        return handleException(err, cr, "AnalyticsController.GET /admin/systems", "Failed to load analytics systems");
       }
-      await systems.upsert(parsed.data);
-      return cr.ok(await systems.listAll());
-    } catch (err) {
-      return handleException(err, cr, "AnalyticsController.POST /admin/systems", "Failed to save analytics system");
-    }
-  });
+    },
+  );
+
+  router.post(
+    "/admin/systems",
+    [MandatoryTokenFilter, adminLimiter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const cr = new ControllerResponse(req, res);
+      try {
+        if (!isOwner(req)) return cr.result(403, "Forbidden", "Insufficient permissions");
+        const parsed = UpsertSystemSchema.safeParse(req.body);
+        if (!parsed.success) {
+          throw new Exceptions.InvalidRequest(parsed.error.issues[0]?.path.join(".") || "body", "format");
+        }
+        await systems.upsert(parsed.data);
+        return cr.ok(await systems.listAll());
+      } catch (err) {
+        return handleException(err, cr, "AnalyticsController.POST /admin/systems", "Failed to save analytics system");
+      }
+    },
+  );
 
   router.get(
     "/admin/systems/:key/access",
@@ -188,7 +205,12 @@ export default function createAnalyticsController(db: KnexSqlUtilities) {
         if (!isOwner(req)) return cr.result(403, "Forbidden", "Insufficient permissions");
         return cr.ok(await permissions.listGrants(ResourceType.ANALYTICS_SYSTEM, String(req.params.key)));
       } catch (err) {
-        return handleException(err, cr, "AnalyticsController.GET /admin/systems/:key/access", "Failed to load access list");
+        return handleException(
+          err,
+          cr,
+          "AnalyticsController.GET /admin/systems/:key/access",
+          "Failed to load access list",
+        );
       }
     },
   );
@@ -215,7 +237,12 @@ export default function createAnalyticsController(db: KnexSqlUtilities) {
         await permissions.grant(ResourceType.ANALYTICS_SYSTEM, key, target.id, getUser(req).id);
         return cr.ok(await permissions.listGrants(ResourceType.ANALYTICS_SYSTEM, key));
       } catch (err) {
-        return handleException(err, cr, "AnalyticsController.POST /admin/systems/:key/access", "Failed to grant access");
+        return handleException(
+          err,
+          cr,
+          "AnalyticsController.POST /admin/systems/:key/access",
+          "Failed to grant access",
+        );
       }
     },
   );
@@ -233,7 +260,12 @@ export default function createAnalyticsController(db: KnexSqlUtilities) {
         await permissions.revoke(ResourceType.ANALYTICS_SYSTEM, key, userId);
         return cr.ok(await permissions.listGrants(ResourceType.ANALYTICS_SYSTEM, key));
       } catch (err) {
-        return handleException(err, cr, "AnalyticsController.POST /admin/systems/:key/access/:userId/revoke", "Failed to revoke access");
+        return handleException(
+          err,
+          cr,
+          "AnalyticsController.POST /admin/systems/:key/access/:userId/revoke",
+          "Failed to revoke access",
+        );
       }
     },
   );

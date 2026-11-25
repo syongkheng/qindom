@@ -55,7 +55,8 @@ export async function up(knex: Knex): Promise<void> {
       mandatory: 0,
       min_days_before_arrival: null,
       max_advance_hours: 6,
-      notes: "Optional convenience tool for immigration/customs/tax-free QR codes. Can be completed any time up to 6 hours before landing.",
+      notes:
+        "Optional convenience tool for immigration/customs/tax-free QR codes. Can be completed any time up to 6 hours before landing.",
       record_status: "A",
       created_dt: now,
     },

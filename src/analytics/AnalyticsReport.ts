@@ -16,10 +16,20 @@
 export const REPORT_CONTRACT = "pdca.analytics.report/v1" as const;
 
 export const REPORT_METRICS = [
-  "visitors", "newVisitors", "pageViews", "enquiries",
-  "whatsappClicks", "callClicks", "emailClicks", "formSubmits",
-  "directionsClicks", "rxDownloads",
-  "listingViews", "listingCalls", "listingDirections", "listingWebsiteClicks",
+  "visitors",
+  "newVisitors",
+  "pageViews",
+  "enquiries",
+  "whatsappClicks",
+  "callClicks",
+  "emailClicks",
+  "formSubmits",
+  "directionsClicks",
+  "rxDownloads",
+  "listingViews",
+  "listingCalls",
+  "listingDirections",
+  "listingWebsiteClicks",
 ] as const;
 export type ReportMetric = (typeof REPORT_METRICS)[number];
 
@@ -206,12 +216,17 @@ export function classifySource(referrer: string | null | undefined, ownHosts: st
     return "Other sites";
   }
   if (ownHosts.includes(host)) return "Direct";
-  if (host === "maps.google.com" || host === "maps.app.goo.gl" || (/^google\./.test(host) && path.startsWith("/maps"))) {
+  if (
+    host === "maps.google.com" ||
+    host === "maps.app.goo.gl" ||
+    (/^google\./.test(host) && path.startsWith("/maps"))
+  ) {
     return "Google Maps";
   }
   if (/^google\.[a-z.]+$/.test(host)) return "Google search";
   if (host.endsWith("instagram.com")) return "Instagram";
-  if (host.endsWith("facebook.com") || host === "fb.me" || host === "l.facebook.com" || host === "m.facebook.com") return "Facebook";
+  if (host.endsWith("facebook.com") || host === "fb.me" || host === "l.facebook.com" || host === "m.facebook.com")
+    return "Facebook";
   if (host.endsWith("linkedin.com") || host === "lnkd.in") return "LinkedIn";
   if (host.endsWith("tiktok.com")) return "TikTok";
   return "Other sites";

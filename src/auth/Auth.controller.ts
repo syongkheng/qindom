@@ -89,7 +89,8 @@ export default function createAuthController(db: KnexSqlUtilities) {
         if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
         const requestId = req.params.requestId;
         // 12 hex = current ids; 5 hex = ids already in older log files
-        if (!/^req_([0-9a-f]{12}|[0-9a-f]{5})$/i.test(requestId)) return cr.result(400, "Bad Request", "Invalid Request ID format");
+        if (!/^req_([0-9a-f]{12}|[0-9a-f]{5})$/i.test(requestId))
+          return cr.result(400, "Bad Request", "Invalid Request ID format");
         const matches = RequestLogSearch.find(requestId);
         if (!matches.length) return cr.result(404, "Not Found", "No log entries found for that Request ID");
         return cr.ok(matches);

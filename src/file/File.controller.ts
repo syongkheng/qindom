@@ -25,7 +25,15 @@ export default function createFileController(db: KnexSqlUtilities): Router {
       StructuralValidationUtilities.required(agendaId, "agendaId", validationEvent);
       StructuralValidationUtilities.required(tgShortCode, "tgShortCode", validationEvent);
       StructuralValidationUtilities.required(mimeType, "mimeType", validationEvent);
-      const result = await svc.uploadTg(getUser(req).id, uuid, Number(agendaId), tgShortCode, mimeType, name, sizeInBytes);
+      const result = await svc.uploadTg(
+        getUser(req).id,
+        uuid,
+        Number(agendaId),
+        tgShortCode,
+        mimeType,
+        name,
+        sizeInBytes,
+      );
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "FileController.POST /tg", "Failed to link tg image");

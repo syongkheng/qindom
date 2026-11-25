@@ -30,10 +30,7 @@ export class AnalyticEventService {
     system: string;
     timestamp: number;
   }): Promise<void> {
-    LoggingUtilities.service.debug(
-      "AnalyticEventService.insertEvent",
-      `[${system}] ${event} — session:${sessionId}`,
-    );
+    LoggingUtilities.service.debug("AnalyticEventService.insertEvent", `[${system}] ${event} — session:${sessionId}`);
 
     try {
       await this.db.insert<ITB_ANALYTIC_EVENT>("tb_analytic_event", {

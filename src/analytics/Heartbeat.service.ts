@@ -20,10 +20,7 @@ export class HeartbeatService {
     userAgent: string;
     system: string;
   }): Promise<void> {
-    LoggingUtilities.service.debug(
-      "HeartbeatService.insertHeartbeatRecord",
-      `[${system}] ${username} — ${ipAddress}`,
-    );
+    LoggingUtilities.service.debug("HeartbeatService.insertHeartbeatRecord", `[${system}] ${username} — ${ipAddress}`);
 
     try {
       await this.db.upsert<ITB_ANALYTIC_USER_ACTIVITY>(

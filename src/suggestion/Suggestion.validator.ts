@@ -21,10 +21,7 @@ export class SuggestionValidator {
     };
   }
 
-  static validateNoteSearch(
-    query: Record<string, unknown>,
-    loggingEvent?: IRequestLogEvent,
-  ): { country: string } {
+  static validateNoteSearch(query: Record<string, unknown>, loggingEvent?: IRequestLogEvent): { country: string } {
     const { country } = query;
     V.requiredString(country, "country", loggingEvent);
     if (!(country as string).trim()) {
@@ -75,10 +72,7 @@ export class SuggestionValidator {
     };
   }
 
-  static validateIdParam(
-    params: Record<string, string>,
-    loggingEvent?: IRequestLogEvent,
-  ): { id: number } {
+  static validateIdParam(params: Record<string, string>, loggingEvent?: IRequestLogEvent): { id: number } {
     const id = Number(params.id);
     if (!Number.isInteger(id) || id <= 0) {
       loggingEvent?.children?.push(`'id' invalid ${LogEmoji.error}`);

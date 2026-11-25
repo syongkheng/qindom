@@ -97,7 +97,12 @@ export default function createBudgetController(db: KnexSqlUtilities) {
       await svc.deleteItem(getUser(req).id, req.params.sessionId, req.params.itemId);
       return cr.ok({ deleted: true });
     } catch (err) {
-      return handleException(err, cr, "BudgetController.POST /:sessionId/item/:itemId/delete", "Failed to delete budget item");
+      return handleException(
+        err,
+        cr,
+        "BudgetController.POST /:sessionId/item/:itemId/delete",
+        "Failed to delete budget item",
+      );
     }
   });
 
@@ -107,7 +112,12 @@ export default function createBudgetController(db: KnexSqlUtilities) {
       const result = await svc.restoreItem(getUser(req).id, req.params.sessionId, req.params.itemId);
       return cr.ok(result);
     } catch (err) {
-      return handleException(err, cr, "BudgetController.POST /:sessionId/item/:itemId/restore", "Failed to restore budget item");
+      return handleException(
+        err,
+        cr,
+        "BudgetController.POST /:sessionId/item/:itemId/restore",
+        "Failed to restore budget item",
+      );
     }
   });
 
@@ -128,7 +138,12 @@ export default function createBudgetController(db: KnexSqlUtilities) {
       await svc.removeCollaborator(getUser(req).id, req.params.sessionId, Number(req.params.userId));
       return cr.ok({ removed: true });
     } catch (err) {
-      return handleException(err, cr, "BudgetController.POST /:sessionId/collaborator/:userId/delete", "Failed to remove collaborator");
+      return handleException(
+        err,
+        cr,
+        "BudgetController.POST /:sessionId/collaborator/:userId/delete",
+        "Failed to remove collaborator",
+      );
     }
   });
 

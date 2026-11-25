@@ -262,7 +262,11 @@ export class BudgetService {
     })) as ITB_BUDGET_ITEM | undefined;
     if (!existing) throw new Exceptions.NotFound();
 
-    const [restored] = await this.db.update<ITB_BUDGET_ITEM>(TB_BUDGET_ITEM, { uuid: itemUuid }, { record_status: "A" });
+    const [restored] = await this.db.update<ITB_BUDGET_ITEM>(
+      TB_BUDGET_ITEM,
+      { uuid: itemUuid },
+      { record_status: "A" },
+    );
     return buildItemResponse(restored);
   }
 

@@ -16,12 +16,7 @@ export function hasRole(req: RequestWithUserInfo, ...roles: string[]): boolean {
   return roles.some((r) => req.user?.roles?.includes(r) ?? false);
 }
 
-export function handleException(
-  err: unknown,
-  cr: ControllerResponse,
-  logLabel: string,
-  fallback: string
-): Response {
+export function handleException(err: unknown, cr: ControllerResponse, logLabel: string, fallback: string): Response {
   if (err instanceof BaseExceptions) {
     return cr.result(err.httpStatus, err.name, err.toResponseMessage());
   }

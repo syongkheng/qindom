@@ -16,7 +16,7 @@ const rateLimitResponse = (message: string) => ({
 
 /** Global fallback — all routes */
 export const globalLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute
+  windowMs: 1 * 60 * 1000, // 1 minute
   limit: 100,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -26,7 +26,7 @@ export const globalLimiter = rateLimit({
 
 /** POST /auth/login */
 export const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -36,7 +36,7 @@ export const loginLimiter = rateLimit({
 
 /** POST /auth/register */
 export const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,      // 1 hour
+  windowMs: 60 * 60 * 1000, // 1 hour
   limit: 5,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -46,7 +46,7 @@ export const registerLimiter = rateLimit({
 
 /** POST /auth/verify-email */
 export const verifyEmailLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -56,7 +56,7 @@ export const verifyEmailLimiter = rateLimit({
 
 /** POST /auth/resend-verify */
 export const resendVerifyLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 3,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -66,7 +66,7 @@ export const resendVerifyLimiter = rateLimit({
 
 /** GET|POST /auth/admin/* */
 export const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 60,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -76,7 +76,7 @@ export const adminLimiter = rateLimit({
 
 /** POST /itinerary/challenge — only failed guesses count toward the limit */
 export const itineraryChallengeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
   skipSuccessfulRequests: true,
   keyGenerator: clientIpKey,
@@ -87,7 +87,7 @@ export const itineraryChallengeLimiter = rateLimit({
 
 /** POST /wedding/rsvp — each submission sends up to 11 emails (submitter + 10 guests) */
 export const weddingRsvpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -97,7 +97,7 @@ export const weddingRsvpLimiter = rateLimit({
 
 /** GET /house/view/:token — public shared-house read */
 export const houseViewLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute
+  windowMs: 1 * 60 * 1000, // 1 minute
   limit: 60,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -107,7 +107,7 @@ export const houseViewLimiter = rateLimit({
 
 /** /mcp — public, unauthenticated MCP endpoint */
 export const mcpLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute
+  windowMs: 1 * 60 * 1000, // 1 minute
   limit: 30,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -117,7 +117,7 @@ export const mcpLimiter = rateLimit({
 
 /** POST /analytics/collect — public ingest; page views + a few interaction events per visitor */
 export const analyticsLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute
+  windowMs: 1 * 60 * 1000, // 1 minute
   limit: 120,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -127,7 +127,7 @@ export const analyticsLimiter = rateLimit({
 
 /** POST /camera/device/register — phones register on launch and after their device is removed */
 export const cameraRegisterLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,      // 1 hour
+  windowMs: 60 * 60 * 1000, // 1 hour
   limit: 30,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -137,7 +137,7 @@ export const cameraRegisterLimiter = rateLimit({
 
 /** POST /camera/device/claim — only failed (wrong/expired) codes count. Per IP… */
 export const cameraClaimIpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 10,
   skipSuccessfulRequests: true,
   keyGenerator: clientIpKey,
@@ -148,10 +148,11 @@ export const cameraClaimIpLimiter = rateLimit({
 
 /** …and per logged-in user (runs after MandatoryTokenFilter), so rotating IPs doesn't help. */
 export const cameraClaimUserLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,      // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 5,
   skipSuccessfulRequests: true,
-  keyGenerator: (req: Request) => `camera-claim-user:${(req as Request & { user?: { id?: number } }).user?.id ?? "none"}`,
+  keyGenerator: (req: Request) =>
+    `camera-claim-user:${(req as Request & { user?: { id?: number } }).user?.id ?? "none"}`,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: rateLimitResponse("Too many pairing attempts. Please try again in 15 minutes."),
@@ -159,7 +160,7 @@ export const cameraClaimUserLimiter = rateLimit({
 
 /** POST /analytics/report — private dashboard reads (viewer key) */
 export const analyticsReportLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute
+  windowMs: 1 * 60 * 1000, // 1 minute
   limit: 30,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",
@@ -169,7 +170,7 @@ export const analyticsReportLimiter = rateLimit({
 
 /** POST /pdca/enquiry — PDCA website contact form */
 export const pdcaEnquiryLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,      // 10 minutes
+  windowMs: 10 * 60 * 1000, // 10 minutes
   limit: 5,
   keyGenerator: clientIpKey,
   standardHeaders: "draft-7",

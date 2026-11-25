@@ -56,11 +56,7 @@ export class PermissionService {
   constructor(private db: KnexSqlUtilities) {}
 
   /** OWNER → always; otherwise needs an active grant. */
-  async canAccessResource(
-    user: IDecodedTokenUser | undefined,
-    type: ResourceTypeValue,
-    key: string,
-  ): Promise<boolean> {
+  async canAccessResource(user: IDecodedTokenUser | undefined, type: ResourceTypeValue, key: string): Promise<boolean> {
     if (!user) return false;
     if (userIsOwner(user)) return true;
     const row = await this.db.findOne<ITB_AA_RESOURCE_ACCESS>(
@@ -83,7 +79,14 @@ export class PermissionService {
 
   async listGrants(type: ResourceTypeValue, key: string): Promise<ResourceGrant[]> {
     const rows = await this.db.raw<
-      { user_id: number; username: string; email: string | null; system: string; access_level: string; updated_dt: number }[]
+      {
+        user_id: number;
+        username: string;
+        email: string | null;
+        system: string;
+        access_level: string;
+        updated_dt: number;
+      }[]
     >(
       `SELECT ra.user_id, u.username, u.email, u.\`system\`, ra.access_level, ra.updated_dt
          FROM tb_aa_resource_access ra

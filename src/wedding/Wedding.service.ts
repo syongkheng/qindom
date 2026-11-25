@@ -315,16 +315,11 @@ export class WeddingService {
 
   // Sent to an additional guest: tells them who RSVP'd on their behalf and what
   // was recorded. No reservation ID — that belongs to the main submitter.
-  private async sendGuestConfirmationEmail(
-    payload: RsvpPayload,
-    guest: RsvpGuestPayload,
-    to: string,
-  ): Promise<void> {
+  private async sendGuestConfirmationEmail(payload: RsvpPayload, guest: RsvpGuestPayload, to: string): Promise<void> {
     const esc = (value: string) => MailerUtilities.escapeHtml(value);
     const submitter = esc(payload.name);
 
-    const p = (html: string) =>
-      `<p style="margin:0 0 14px;font-family:${SERIF};">${html}</p>`;
+    const p = (html: string) => `<p style="margin:0 0 14px;font-family:${SERIF};">${html}</p>`;
 
     await MailerUtilities.sendMail({
       to,
@@ -345,7 +340,7 @@ export class WeddingService {
                 emailDetailsPanel([
                   [
                     "Meal preference",
-                    guest.mealPreference ? MEAL_LABELS[guest.mealPreference] ?? esc(guest.mealPreference) : "—",
+                    guest.mealPreference ? (MEAL_LABELS[guest.mealPreference] ?? esc(guest.mealPreference)) : "—",
                   ],
                 ])
               : ""
@@ -363,11 +358,10 @@ export class WeddingService {
     replaced: ReplacedRsvpInfo | null = null,
   ): Promise<void> {
     const esc = (value: string) => MailerUtilities.escapeHtml(value);
-    const meal = (value?: string | null) => (value ? MEAL_LABELS[value] ?? esc(value) : "—");
+    const meal = (value?: string | null) => (value ? (MEAL_LABELS[value] ?? esc(value)) : "—");
 
     const updateLink = buildRsvpUpdateLink();
-    const p = (html: string) =>
-      `<p style="margin:0 0 14px;font-family:${SERIF};">${html}</p>`;
+    const p = (html: string) => `<p style="margin:0 0 14px;font-family:${SERIF};">${html}</p>`;
     const muted = (html: string) =>
       `<p style="margin:0 0 14px;font-family:${SERIF};font-size:15px;color:${COLORS.textMuted};">${html}</p>`;
 

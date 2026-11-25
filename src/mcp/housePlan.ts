@@ -22,17 +22,45 @@ const D = (x1: number, y1: number, x2: number, y2: number): Wall => ({ x1, y1, x
 const P = (x1: number, y1: number, x2: number, y2: number): Wall => ({ x1, y1, x2, y2, kind: "parapet" });
 
 export const DEFAULT_WALLS: Wall[] = [
-  W(0, 0, 15.1, 0), W(0, 0, 0, 7.7), W(15.1, 0, 15.1, 4.45), W(13.175, 4.45, 15.1, 4.45), W(13.175, 4.45, 13.175, 6.1),
-  W(0, 7.7, 1.75, 7.7), W(1.75, 7.7, 2.35, 7.7), D(2.35, 7.7, 3.35, 7.7), W(3.35, 7.7, 4.575, 7.7),
-  W(0, 4.9, 1.75, 4.9), W(1.75, 4.9, 1.75, 5.3), D(1.75, 5.3, 1.75, 6.1), W(1.75, 6.1, 1.75, 7.7),
-  W(4.575, 6.1, 4.575, 8.95), W(4.575, 8.95, 10.18, 8.95), W(10.18, 6.1, 10.18, 8.95),
-  W(8.75, 6.1, 8.75, 7.9), D(8.75, 7.9, 8.75, 8.7), W(8.75, 8.7, 8.75, 8.95),
-  W(5.8, 0, 5.8, 3.35), W(8.8, 0, 8.8, 3.35), W(11.8, 0, 11.8, 3.35),
-  W(5.8, 3.35, 7.9, 3.35), D(7.9, 3.35, 8.8, 3.35), W(8.8, 3.35, 9.0, 3.35), D(9.0, 3.35, 9.9, 3.35), W(9.9, 3.35, 11.8, 3.35),
+  W(0, 0, 15.1, 0),
+  W(0, 0, 0, 7.7),
+  W(15.1, 0, 15.1, 4.45),
+  W(13.175, 4.45, 15.1, 4.45),
+  W(13.175, 4.45, 13.175, 6.1),
+  W(0, 7.7, 1.75, 7.7),
+  W(1.75, 7.7, 2.35, 7.7),
+  D(2.35, 7.7, 3.35, 7.7),
+  W(3.35, 7.7, 4.575, 7.7),
+  W(0, 4.9, 1.75, 4.9),
+  W(1.75, 4.9, 1.75, 5.3),
+  D(1.75, 5.3, 1.75, 6.1),
+  W(1.75, 6.1, 1.75, 7.7),
+  W(4.575, 6.1, 4.575, 8.95),
+  W(4.575, 8.95, 10.18, 8.95),
+  W(10.18, 6.1, 10.18, 8.95),
+  W(8.75, 6.1, 8.75, 7.9),
+  D(8.75, 7.9, 8.75, 8.7),
+  W(8.75, 8.7, 8.75, 8.95),
+  W(5.8, 0, 5.8, 3.35),
+  W(8.8, 0, 8.8, 3.35),
+  W(11.8, 0, 11.8, 3.35),
+  W(5.8, 3.35, 7.9, 3.35),
+  D(7.9, 3.35, 8.8, 3.35),
+  W(8.8, 3.35, 9.0, 3.35),
+  D(9.0, 3.35, 9.9, 3.35),
+  W(9.9, 3.35, 11.8, 3.35),
   D(11.8, 3.35, 11.8, 4.45),
-  W(8.75, 4.45, 9.1, 4.45), D(9.1, 4.45, 9.9, 4.45), W(9.9, 4.45, 11.95, 4.45), D(11.95, 4.45, 12.65, 4.45), W(12.65, 4.45, 13.175, 4.45),
-  W(8.75, 4.45, 8.75, 6.1), W(10.925, 4.45, 10.925, 6.1), W(8.75, 6.1, 13.175, 6.1),
-  P(10.4, 7.0, 13.175, 7.0), P(10.4, 6.1, 10.4, 7.0), P(13.175, 6.1, 13.175, 7.0),
+  W(8.75, 4.45, 9.1, 4.45),
+  D(9.1, 4.45, 9.9, 4.45),
+  W(9.9, 4.45, 11.95, 4.45),
+  D(11.95, 4.45, 12.65, 4.45),
+  W(12.65, 4.45, 13.175, 4.45),
+  W(8.75, 4.45, 8.75, 6.1),
+  W(10.925, 4.45, 10.925, 6.1),
+  W(8.75, 6.1, 13.175, 6.1),
+  P(10.4, 7.0, 13.175, 7.0),
+  P(10.4, 6.1, 10.4, 7.0),
+  P(13.175, 6.1, 13.175, 7.0),
 ];
 
 export interface Rect {
@@ -139,13 +167,25 @@ const polygon = (item: Boxed): Pt[] => {
   const a = (item.rot * Math.PI) / 180;
   const c = Math.cos(a);
   const s = Math.sin(a);
-  return ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as Pt[]).map(([sx, sy]) => {
+  return (
+    [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ] as Pt[]
+  ).map(([sx, sy]) => {
     const lx = (sx * item.w) / 2;
     const ly = (sy * item.d) / 2;
     return [item.x + lx * c - ly * s, item.y + lx * s + ly * c] as Pt;
   });
 };
-const rectPoly = (r: Rect): Pt[] => [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]];
+const rectPoly = (r: Rect): Pt[] => [
+  [r.x0, r.y0],
+  [r.x1, r.y0],
+  [r.x1, r.y1],
+  [r.x0, r.y1],
+];
 
 /** Separating-axis test; touching edges do not overlap. */
 function polysOverlap(a: Pt[], b: Pt[]): boolean {
@@ -164,7 +204,8 @@ function polysOverlap(a: Pt[], b: Pt[]): boolean {
   return true;
 }
 
-export const rectsOverlap = (a: Rect, b: Rect) => a.x0 < b.x1 - EPS && a.x1 > b.x0 + EPS && a.y0 < b.y1 - EPS && a.y1 > b.y0 + EPS;
+export const rectsOverlap = (a: Rect, b: Rect) =>
+  a.x0 < b.x1 - EPS && a.x1 > b.x0 + EPS && a.y0 < b.y1 - EPS && a.y1 > b.y0 + EPS;
 
 /** Wall footprints with thickness; door openings stay passable. */
 export function wallRects(walls: Wall[]): Rect[] {
@@ -180,12 +221,18 @@ export function wallRects(walls: Wall[]): Rect[] {
 }
 
 /** What a piece collides with: walls, or the uids of other items. */
-export function conflictsFor(item: PlacedItem, others: PlacedItem[], walls: Wall[]): { wall: boolean; items: string[] } {
+export function conflictsFor(
+  item: PlacedItem,
+  others: PlacedItem[],
+  walls: Wall[],
+): { wall: boolean; items: string[] } {
   const r = footprint(item);
   const exact = (a: Boxed, ra: Rect, b: Boxed, rb: Rect) =>
     rectsOverlap(ra, rb) && (isQuarter(a.rot) && isQuarter(b.rot) ? true : polysOverlap(polygon(a), polygon(b)));
   return {
-    wall: wallRects(walls).some((w) => rectsOverlap(r, w) && (isQuarter(item.rot) || polysOverlap(polygon(item), rectPoly(w)))),
+    wall: wallRects(walls).some(
+      (w) => rectsOverlap(r, w) && (isQuarter(item.rot) || polysOverlap(polygon(item), rectPoly(w))),
+    ),
     items: others.filter((o) => o.uid !== item.uid && exact(item, r, o, footprint(o))).map((o) => o.uid),
   };
 }
@@ -240,7 +287,19 @@ export function placeAgainstWall(
 }
 
 // ---- fitted wardrobe ----------------------------------------------------------
-const part = (o: Partial<FurniturePart>): FurniturePart => ({ shape: "box", sx: 0.5, sy: 0.5, sz: 0.5, px: 0, py: 0, pz: 0, ry: 0, round: 0, taper: 1, ...o });
+const part = (o: Partial<FurniturePart>): FurniturePart => ({
+  shape: "box",
+  sx: 0.5,
+  sy: 0.5,
+  sz: 0.5,
+  px: 0,
+  py: 0,
+  pz: 0,
+  ry: 0,
+  round: 0,
+  taper: 1,
+  ...o,
+});
 
 /**
  * Built-in-wardrobe model: a carcass the full height, a dark plinth recess, and hinged door panels with handles.
@@ -257,10 +316,22 @@ export function fittedWardrobeParts(w: number, d: number, h: number, color = "#e
   ];
   for (let i = 0; i < doors; i++) {
     const cx = -w / 2 + dw * (i + 0.5);
-    parts.push(part({ sx: dw - 0.006, sy: h - plinth, sz: door, px: cx, py: plinth, pz: d / 2 - door / 2, color, round: 0.04 }));
+    parts.push(
+      part({ sx: dw - 0.006, sy: h - plinth, sz: door, px: cx, py: plinth, pz: d / 2 - door / 2, color, round: 0.04 }),
+    );
     // Handles sit on the inner edge of each pair of doors, at hand height.
     const edge = i % 2 === 0 ? 1 : -1;
-    parts.push(part({ sx: 0.02, sy: 0.5, sz: 0.014, px: cx + edge * (dw / 2 - 0.05), py: Math.min(1.0, h * 0.4), pz: d / 2 - 0.007, color: "#b9c1c9" }));
+    parts.push(
+      part({
+        sx: 0.02,
+        sy: 0.5,
+        sz: 0.014,
+        px: cx + edge * (dw / 2 - 0.05),
+        py: Math.min(1.0, h * 0.4),
+        pz: d / 2 - 0.007,
+        color: "#b9c1c9",
+      }),
+    );
   }
   return parts;
 }

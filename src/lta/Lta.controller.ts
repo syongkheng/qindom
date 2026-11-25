@@ -18,7 +18,10 @@ export default function createLtaController(db: KnexSqlUtilities) {
       const validationEvent = logContext
         ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request query")
         : undefined;
-      const { busStopCode } = LtaValidator.validateBusStopCodeFromQuery(req.query as Record<string, unknown>, validationEvent);
+      const { busStopCode } = LtaValidator.validateBusStopCodeFromQuery(
+        req.query as Record<string, unknown>,
+        validationEvent,
+      );
       return cr.ok(await svc.statistics(busStopCode));
     } catch (err) {
       return handleException(err, cr, "LtaController.GET /timing", "Failed to fetch bus timings");

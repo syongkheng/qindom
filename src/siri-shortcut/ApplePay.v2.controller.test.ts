@@ -36,7 +36,8 @@ describe("parseMerchant", () => {
   });
 
   test("Citi: 4-digit year date is also recognised", () => {
-    const sms = "There was a charge of SGD5.00 on your Card ending 3284 by GRAB    Singapore    SGP on 14/10/2026 18:13.";
+    const sms =
+      "There was a charge of SGD5.00 on your Card ending 3284 by GRAB    Singapore    SGP on 14/10/2026 18:13.";
     assert.equal(parseMerchant(sms), "GRAB");
   });
 

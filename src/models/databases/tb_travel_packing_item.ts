@@ -3,7 +3,7 @@ export interface ITB_TRAVEL_PACKING_ITEM {
   itinerary_id: number;
   label: string;
   category?: string;
-  packed: number;        // tinyint 0/1
+  packed: number; // tinyint 0/1
   quantity?: number;
   sort_order: number;
   created_dt: number;

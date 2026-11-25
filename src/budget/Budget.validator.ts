@@ -17,10 +17,7 @@ export class BudgetValidator {
     return { name, template: template ?? "other" };
   }
 
-  static validateRenameTableRequest(
-    body: Record<string, unknown>,
-    loggingEvent?: IRequestLogEvent,
-  ): { name: string } {
+  static validateRenameTableRequest(body: Record<string, unknown>, loggingEvent?: IRequestLogEvent): { name: string } {
     const { name } = body as any;
     V.requiredString(name, "name", loggingEvent);
     return { name };
@@ -62,8 +59,10 @@ export class BudgetValidator {
     if (name !== undefined) V.string(name, "name", loggingEvent, "(O)");
     if (category !== undefined) V.optionalString(category, "category", loggingEvent);
     if (status !== undefined) V.oneOf(status, BUDGET_ITEM_STATUSES, "status", loggingEvent, "(O)");
-    if (budgetAmount !== undefined && budgetAmount !== null) V.number(budgetAmount, "budgetAmount", loggingEvent, "(O)");
-    if (actualAmount !== undefined && actualAmount !== null) V.number(actualAmount, "actualAmount", loggingEvent, "(O)");
+    if (budgetAmount !== undefined && budgetAmount !== null)
+      V.number(budgetAmount, "budgetAmount", loggingEvent, "(O)");
+    if (actualAmount !== undefined && actualAmount !== null)
+      V.number(actualAmount, "actualAmount", loggingEvent, "(O)");
     if (notes !== undefined) V.optionalString(notes, "notes", loggingEvent);
     return { name, category, status, budgetAmount, actualAmount, notes };
   }

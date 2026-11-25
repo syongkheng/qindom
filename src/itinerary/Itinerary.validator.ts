@@ -6,24 +6,61 @@ export class ItineraryValidator {
     body: Record<string, unknown>,
     loggingEvent?: IRequestLogEvent,
   ): {
-    idempotencyKey?: string; sessionTitle: string; destination?: string;
-    destinationRaw?: any[]; country?: string; numberOfPax?: number;
-    itineraryDateRaw?: any[]; startDate?: string; endDate?: string;
-    unknownDate?: boolean; durationInDays?: number; challenge?: string;
-    agendaItems: any[]; paxNames: any[]; bookings: any[]; packingItems: any[];
+    idempotencyKey?: string;
+    sessionTitle: string;
+    destination?: string;
+    destinationRaw?: any[];
+    country?: string;
+    numberOfPax?: number;
+    itineraryDateRaw?: any[];
+    startDate?: string;
+    endDate?: string;
+    unknownDate?: boolean;
+    durationInDays?: number;
+    challenge?: string;
+    agendaItems: any[];
+    paxNames: any[];
+    bookings: any[];
+    packingItems: any[];
     noteItems: any[];
   } {
     const {
-      idempotencyKey, sessionTitle, destination, destinationRaw, country,
-      numberOfPax, itineraryDateRaw, startDate, endDate, unknownDate,
-      durationInDays, challenge, agendaItems = [], paxNames = [], bookings = [],
-      packingItems = [], noteItems = [],
+      idempotencyKey,
+      sessionTitle,
+      destination,
+      destinationRaw,
+      country,
+      numberOfPax,
+      itineraryDateRaw,
+      startDate,
+      endDate,
+      unknownDate,
+      durationInDays,
+      challenge,
+      agendaItems = [],
+      paxNames = [],
+      bookings = [],
+      packingItems = [],
+      noteItems = [],
     } = body as any;
     V.requiredString(sessionTitle, "sessionTitle", loggingEvent);
     return {
-      idempotencyKey, sessionTitle, destination, destinationRaw, country,
-      numberOfPax, itineraryDateRaw, startDate, endDate, unknownDate,
-      durationInDays, challenge, agendaItems, paxNames, bookings, packingItems,
+      idempotencyKey,
+      sessionTitle,
+      destination,
+      destinationRaw,
+      country,
+      numberOfPax,
+      itineraryDateRaw,
+      startDate,
+      endDate,
+      unknownDate,
+      durationInDays,
+      challenge,
+      agendaItems,
+      paxNames,
+      bookings,
+      packingItems,
       noteItems,
     };
   }
@@ -32,29 +69,73 @@ export class ItineraryValidator {
     body: Record<string, unknown>,
     loggingEvent?: IRequestLogEvent,
   ): {
-    sessionTitle?: string; destination?: string; destinationRaw?: any[];
-    country?: string; numberOfPax?: number; itineraryDateRaw?: any[];
-    startDate?: string; endDate?: string; unknownDate?: boolean;
-    durationInDays?: number; challenge?: string; agendaItems: any[];
-    _agendaIdsToDelete: any[]; _agendaIdsToUpdate: any[]; paxNames?: any[];
-    bookings: any[]; _bookingIdsToDelete: any[];
-    packingItems: any[]; _packingIdsToDelete: any[];
-    noteItems: any[]; _noteIdsToDelete: any[];
+    sessionTitle?: string;
+    destination?: string;
+    destinationRaw?: any[];
+    country?: string;
+    numberOfPax?: number;
+    itineraryDateRaw?: any[];
+    startDate?: string;
+    endDate?: string;
+    unknownDate?: boolean;
+    durationInDays?: number;
+    challenge?: string;
+    agendaItems: any[];
+    _agendaIdsToDelete: any[];
+    _agendaIdsToUpdate: any[];
+    paxNames?: any[];
+    bookings: any[];
+    _bookingIdsToDelete: any[];
+    packingItems: any[];
+    _packingIdsToDelete: any[];
+    noteItems: any[];
+    _noteIdsToDelete: any[];
   } {
     const {
-      sessionTitle, destination, destinationRaw, country, numberOfPax,
-      itineraryDateRaw, startDate, endDate, unknownDate, durationInDays,
-      challenge, agendaItems = [], _agendaIdsToDelete = [],
-      _agendaIdsToUpdate = [], paxNames, bookings = [], _bookingIdsToDelete = [],
-      packingItems = [], _packingIdsToDelete = [],
-      noteItems = [], _noteIdsToDelete = [],
+      sessionTitle,
+      destination,
+      destinationRaw,
+      country,
+      numberOfPax,
+      itineraryDateRaw,
+      startDate,
+      endDate,
+      unknownDate,
+      durationInDays,
+      challenge,
+      agendaItems = [],
+      _agendaIdsToDelete = [],
+      _agendaIdsToUpdate = [],
+      paxNames,
+      bookings = [],
+      _bookingIdsToDelete = [],
+      packingItems = [],
+      _packingIdsToDelete = [],
+      noteItems = [],
+      _noteIdsToDelete = [],
     } = body as any;
     return {
-      sessionTitle, destination, destinationRaw, country, numberOfPax,
-      itineraryDateRaw, startDate, endDate, unknownDate, durationInDays,
-      challenge, agendaItems, _agendaIdsToDelete, _agendaIdsToUpdate,
-      paxNames, bookings, _bookingIdsToDelete, packingItems, _packingIdsToDelete,
-      noteItems, _noteIdsToDelete,
+      sessionTitle,
+      destination,
+      destinationRaw,
+      country,
+      numberOfPax,
+      itineraryDateRaw,
+      startDate,
+      endDate,
+      unknownDate,
+      durationInDays,
+      challenge,
+      agendaItems,
+      _agendaIdsToDelete,
+      _agendaIdsToUpdate,
+      paxNames,
+      bookings,
+      _bookingIdsToDelete,
+      packingItems,
+      _packingIdsToDelete,
+      noteItems,
+      _noteIdsToDelete,
     };
   }
 

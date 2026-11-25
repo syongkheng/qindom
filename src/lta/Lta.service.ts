@@ -62,16 +62,13 @@ export class LtaService {
     if (!apiKey) {
       LoggingUtilities.service.error(
         "LtaService.statistics",
-        "LTA_DATAMALL_API_KEY is not set in environment variables"
+        "LTA_DATAMALL_API_KEY is not set in environment variables",
       );
       throw new Exceptions.Unknown();
     }
 
     try {
-      LoggingUtilities.service.debug(
-        "LtaService.statistics",
-        `busStopCode: ${busStopCode}`
-      );
+      LoggingUtilities.service.debug("LtaService.statistics", `busStopCode: ${busStopCode}`);
       const response = await fetch(
         `https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=${busStopCode}`,
         {
@@ -80,13 +77,13 @@ export class LtaService {
             AccountKey: apiKey,
             Accept: "application/json",
           },
-        }
+        },
       );
 
       if (!response.ok) {
         LoggingUtilities.service.error(
           "LtaService.statistics",
-          `LTA API request failed with status ${response.status}`
+          `LTA API request failed with status ${response.status}`,
         );
         throw new Exceptions.ExternalRequest("LTA Datamall");
       }
@@ -98,10 +95,7 @@ export class LtaService {
         source: "website",
       };
     } catch (error) {
-      LoggingUtilities.service.error(
-        "LtaService.statistics",
-        `Error fetching LTA data: ${toMessage(error)}`
-      );
+      LoggingUtilities.service.error("LtaService.statistics", `Error fetching LTA data: ${toMessage(error)}`);
     }
     throw new Exceptions.Unknown();
   }

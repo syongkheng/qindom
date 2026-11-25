@@ -111,7 +111,12 @@ export class CameraRelay {
     set.add(conn);
 
     for (const phone of this.phonesOf(userId)) {
-      this.sendJson(socket, { type: "device_online", deviceId: phone.deviceId, name: phone.name, status: phone.status });
+      this.sendJson(socket, {
+        type: "device_online",
+        deviceId: phone.deviceId,
+        name: phone.name,
+        status: phone.status,
+      });
       if (phone.lastFrame) this.deliverFrame(conn, phone.deviceId, phone.lastFrame);
     }
     return conn;
@@ -132,8 +137,7 @@ export class CameraRelay {
     if (!command) return;
 
     const owned = this.phonesOf(conn.userId);
-    const targets =
-      command.target === "all" ? owned : owned.filter((phone) => phone.deviceId === command.target);
+    const targets = command.target === "all" ? owned : owned.filter((phone) => phone.deviceId === command.target);
 
     const forward: Record<string, unknown> = { type: command.type, requestId: command.requestId };
     if (command.quality) forward.quality = command.quality;

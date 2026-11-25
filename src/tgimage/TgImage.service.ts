@@ -22,10 +22,7 @@ export class TgImageService {
     this.botToken = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN!;
   }
 
-  private async compressForTelegram(
-    buffer: Buffer,
-    mimetype: string,
-  ): Promise<{ buffer: Buffer; mimetype: string }> {
+  private async compressForTelegram(buffer: Buffer, mimetype: string): Promise<{ buffer: Buffer; mimetype: string }> {
     if (buffer.length <= TgImageService.MAX_TELEGRAM_FILE_BYTES) {
       return { buffer, mimetype };
     }
@@ -61,7 +58,7 @@ export class TgImageService {
 
   async getStorageChatId(): Promise<number | null> {
     const rows = await this.db.raw<{ telegram_chat_id: number }[]>(
-      `SELECT telegram_chat_id FROM ${TABLE_WHITELIST} WHERE record_status = 'A' AND telegram_chat_id IS NOT NULL LIMIT 1`
+      `SELECT telegram_chat_id FROM ${TABLE_WHITELIST} WHERE record_status = 'A' AND telegram_chat_id IS NOT NULL LIMIT 1`,
     );
     return rows[0]?.telegram_chat_id ?? null;
   }
@@ -82,7 +79,9 @@ export class TgImageService {
   ): Promise<{ shortCode: string; url: string }> {
     const storageChatId = await this.getStorageChatId();
     if (!storageChatId) {
-      throw new Exceptions.InvalidRequest("No storage chat configured. Open the CDN bot in Telegram and send /start to activate uploads.");
+      throw new Exceptions.InvalidRequest(
+        "No storage chat configured. Open the CDN bot in Telegram and send /start to activate uploads.",
+      );
     }
 
     const captionParts = ["📤 agenda_upload"];
@@ -97,22 +96,21 @@ export class TgImageService {
         ? { buffer: await sharp(fileBuffer).png().toBuffer(), mimetype: "image/png" }
         : { buffer: fileBuffer, mimetype };
 
-    const { buffer: uploadBuffer, mimetype: uploadMimetype } = await this.compressForTelegram(safe.buffer, safe.mimetype);
+    const { buffer: uploadBuffer, mimetype: uploadMimetype } = await this.compressForTelegram(
+      safe.buffer,
+      safe.mimetype,
+    );
 
     const formData = new FormData();
     formData.append("chat_id", String(storageChatId));
     formData.append("caption", captionParts.join("\n"));
-    formData.append(
-      "document",
-      new Blob([new Uint8Array(uploadBuffer)], { type: uploadMimetype }),
-      originalname,
-    );
+    formData.append("document", new Blob([new Uint8Array(uploadBuffer)], { type: uploadMimetype }), originalname);
 
     const tgRes = await fetch(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
       method: "POST",
       body: formData,
     });
-    const body = await tgRes.json() as {
+    const body = (await tgRes.json()) as {
       ok: boolean;
       result?: { document?: { file_id: string } };
     };
@@ -145,10 +143,11 @@ export class TgImageService {
     ]);
   }
 
-  async resolveStream(telegramFileId: string, mimeType: string): Promise<{ stream: NodeJS.ReadableStream; contentType: string }> {
-    const fileInfo = await axios.get(
-      `https://api.telegram.org/bot${this.botToken}/getFile?file_id=${telegramFileId}`,
-    );
+  async resolveStream(
+    telegramFileId: string,
+    mimeType: string,
+  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string }> {
+    const fileInfo = await axios.get(`https://api.telegram.org/bot${this.botToken}/getFile?file_id=${telegramFileId}`);
 
     if (!fileInfo.data?.ok || !fileInfo.data?.result?.file_path) {
       LoggingUtilities.service.error("TgImageService.resolveStream", "Telegram getFile failed");
@@ -156,10 +155,9 @@ export class TgImageService {
     }
 
     const filePath: string = fileInfo.data.result.file_path;
-    const fileResponse = await axios.get(
-      `https://api.telegram.org/file/bot${this.botToken}/${filePath}`,
-      { responseType: "stream" },
-    );
+    const fileResponse = await axios.get(`https://api.telegram.org/file/bot${this.botToken}/${filePath}`, {
+      responseType: "stream",
+    });
 
     // Rows stored before SVGs were rasterised at upload — never serve raw SVG.
     if (mimeType === "image/svg+xml") {
@@ -173,20 +171,38 @@ export class TgImageService {
 
   async listAdmins(): Promise<{ id: number; telegram_user_id: number; added_dt: number }[]> {
     return this.db.raw<{ id: number; telegram_user_id: number; added_dt: number }[]>(
-      `SELECT id, telegram_user_id, added_dt FROM ${TABLE_WHITELIST} WHERE record_status = 'A' ORDER BY added_dt DESC`
+      `SELECT id, telegram_user_id, added_dt FROM ${TABLE_WHITELIST} WHERE record_status = 'A' ORDER BY added_dt DESC`,
     );
   }
 
-  async listRecent(limit: number): Promise<{ short_code: string; file_name: string | null; mime_type: string | null; size_in_bytes: number | null; created_dt: number }[]> {
-    return this.db.raw<{ short_code: string; file_name: string | null; mime_type: string | null; size_in_bytes: number | null; created_dt: number }[]>(
+  async listRecent(
+    limit: number,
+  ): Promise<
+    {
+      short_code: string;
+      file_name: string | null;
+      mime_type: string | null;
+      size_in_bytes: number | null;
+      created_dt: number;
+    }[]
+  > {
+    return this.db.raw<
+      {
+        short_code: string;
+        file_name: string | null;
+        mime_type: string | null;
+        size_in_bytes: number | null;
+        created_dt: number;
+      }[]
+    >(
       `SELECT short_code, file_name, mime_type, size_in_bytes, created_dt FROM ${TABLE} WHERE record_status = 'A' ORDER BY id DESC LIMIT ?`,
-      [limit]
+      [limit],
     );
   }
 
   async getStats(): Promise<{ totalFiles: number; totalSizeBytes: number }> {
     const rows = await this.db.raw<{ count: string; total: string }[]>(
-      `SELECT COUNT(*) as count, COALESCE(SUM(size_in_bytes), 0) as total FROM ${TABLE} WHERE record_status = 'A'`
+      `SELECT COUNT(*) as count, COALESCE(SUM(size_in_bytes), 0) as total FROM ${TABLE} WHERE record_status = 'A'`,
     );
     const row = rows[0];
     return { totalFiles: Number(row.count), totalSizeBytes: Number(row.total) };
@@ -209,7 +225,11 @@ export class TgImageService {
     );
     if (existing) {
       if (existing.record_status === "A") return;
-      await this.db.update<ITbTgStatsWhitelist>(TABLE_WHITELIST, { telegram_user_id: telegramUserId }, { record_status: "A" });
+      await this.db.update<ITbTgStatsWhitelist>(
+        TABLE_WHITELIST,
+        { telegram_user_id: telegramUserId },
+        { record_status: "A" },
+      );
     } else {
       await this.db.insert<ITbTgStatsWhitelist>(TABLE_WHITELIST, {
         telegram_user_id: telegramUserId,
@@ -226,7 +246,11 @@ export class TgImageService {
       ["id"],
     );
     if (!existing) return false;
-    await this.db.update<ITbTgStatsWhitelist>(TABLE_WHITELIST, { telegram_user_id: telegramUserId }, { record_status: "I" });
+    await this.db.update<ITbTgStatsWhitelist>(
+      TABLE_WHITELIST,
+      { telegram_user_id: telegramUserId },
+      { record_status: "I" },
+    );
     return true;
   }
 }

@@ -3,11 +3,7 @@ import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { getUser, handleException } from "../utils/requestUtils.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
-import {
-  cameraClaimIpLimiter,
-  cameraClaimUserLimiter,
-  cameraRegisterLimiter,
-} from "../middlewares/RateLimiter.js";
+import { cameraClaimIpLimiter, cameraClaimUserLimiter, cameraRegisterLimiter } from "../middlewares/RateLimiter.js";
 import { CameraService } from "./Camera.service.js";
 import { CameraValidator } from "./Camera.validator.js";
 

@@ -86,7 +86,10 @@ export class CoordinateService {
       });
 
       if (!response.ok) {
-        LoggingUtilities.service.warn("CoordinateService.fetchOneMapCoordinates", `HTTP ${response.status} for ${address}`);
+        LoggingUtilities.service.warn(
+          "CoordinateService.fetchOneMapCoordinates",
+          `HTTP ${response.status} for ${address}`,
+        );
         return null;
       }
 
@@ -106,7 +109,10 @@ export class CoordinateService {
         lng: LONGITUDE,
       };
     } catch (error) {
-      LoggingUtilities.service.error("CoordinateService.fetchOneMapCoordinates", `Failed for ${address}: ${toMessage(error)}`);
+      LoggingUtilities.service.error(
+        "CoordinateService.fetchOneMapCoordinates",
+        `Failed for ${address}: ${toMessage(error)}`,
+      );
       return null;
     }
   }
@@ -129,7 +135,10 @@ export class CoordinateService {
       });
 
       if (!response.ok) {
-        LoggingUtilities.service.warn("CoordinateService.fetchNominatimCoordinates", `HTTP ${response.status} for ${address}`);
+        LoggingUtilities.service.warn(
+          "CoordinateService.fetchNominatimCoordinates",
+          `HTTP ${response.status} for ${address}`,
+        );
         return null;
       }
 
@@ -149,7 +158,10 @@ export class CoordinateService {
         lng: lon,
       };
     } catch (error) {
-      LoggingUtilities.service.error("CoordinateService.fetchNominatimCoordinates", `Failed for ${address}: ${toMessage(error)}`);
+      LoggingUtilities.service.error(
+        "CoordinateService.fetchNominatimCoordinates",
+        `Failed for ${address}: ${toMessage(error)}`,
+      );
       return null;
     }
   }
@@ -167,7 +179,7 @@ export class CoordinateService {
         orderBy: "created_dt",
         orderDirection: "desc",
         columns: ["formed_url", "lat", "lng"],
-      }
+      },
     );
 
     if (!records.length) return null;
@@ -194,7 +206,10 @@ export class CoordinateService {
   private async handleUnparseableAddress(address: string): Promise<CoordinateResult | null> {
     if (!address.includes("&")) return null;
 
-    LoggingUtilities.service.warn("CoordinateService.handleUnparseableAddress", `Multi-block address skipped: ${address}`);
+    LoggingUtilities.service.warn(
+      "CoordinateService.handleUnparseableAddress",
+      `Multi-block address skipped: ${address}`,
+    );
 
     await this.db.insert<ITB_HDB_PPHS_COORDINATE>("tb_hdb_pphs_coordinate", {
       building: address,
@@ -225,24 +240,30 @@ export class CoordinateService {
 
       LoggingUtilities.service.info("CoordinateService.storeCoordinates", `Stored coordinates for ${address}`);
     } catch (error) {
-      LoggingUtilities.service.error("CoordinateService.storeCoordinates", `DB insert failed for ${address}: ${toMessage(error)}`);
+      LoggingUtilities.service.error(
+        "CoordinateService.storeCoordinates",
+        `DB insert failed for ${address}: ${toMessage(error)}`,
+      );
     }
   }
 
-  async fetchAllCoordinateOptions(address: string): Promise<Array<{
-    source: 'onemap' | 'nominatim';
-    lat: string;
-    lng: string;
-    formedUrl: string;
-  }>> {
+  async fetchAllCoordinateOptions(address: string): Promise<
+    Array<{
+      source: "onemap" | "nominatim";
+      lat: string;
+      lng: string;
+      formedUrl: string;
+    }>
+  > {
     const decoded = address.replace(/\+/g, " ");
     const [oneMap, nominatim] = await Promise.all([
       this.fetchOneMapCoordinates(decoded).catch(() => null),
       this.fetchNominatimCoordinates(decoded).catch(() => null),
     ]);
-    const results: Array<{ source: 'onemap' | 'nominatim'; lat: string; lng: string; formedUrl: string }> = [];
-    if (oneMap) results.push({ source: 'onemap', lat: oneMap.lat, lng: oneMap.lng, formedUrl: oneMap.formed_url });
-    if (nominatim) results.push({ source: 'nominatim', lat: nominatim.lat, lng: nominatim.lng, formedUrl: nominatim.formed_url });
+    const results: Array<{ source: "onemap" | "nominatim"; lat: string; lng: string; formedUrl: string }> = [];
+    if (oneMap) results.push({ source: "onemap", lat: oneMap.lat, lng: oneMap.lng, formedUrl: oneMap.formed_url });
+    if (nominatim)
+      results.push({ source: "nominatim", lat: nominatim.lat, lng: nominatim.lng, formedUrl: nominatim.formed_url });
     return results;
   }
 
@@ -276,13 +297,16 @@ export class CoordinateService {
           lng: coordinates.lng,
           modified_dt: Date.now(),
           modified_by: username,
-        }
+        },
       );
 
       LoggingUtilities.service.info("CoordinateService.updateCoordinates", `Updated coordinates for ${address}`);
       return true;
     } catch (error) {
-      LoggingUtilities.service.error("CoordinateService.updateCoordinates", `DB update failed for ${address}: ${toMessage(error)}`);
+      LoggingUtilities.service.error(
+        "CoordinateService.updateCoordinates",
+        `DB update failed for ${address}: ${toMessage(error)}`,
+      );
       return false;
     }
   }
@@ -296,7 +320,10 @@ export class CoordinateService {
   }
 
   private logNoCoordinates(address: string): void {
-    LoggingUtilities.service.warn("CoordinateService.getCoordinatesOfAddress", `No coordinates resolved for: ${address}`);
+    LoggingUtilities.service.warn(
+      "CoordinateService.getCoordinatesOfAddress",
+      `No coordinates resolved for: ${address}`,
+    );
   }
 
   private async sleep(ms: number): Promise<void> {

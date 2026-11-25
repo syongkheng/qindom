@@ -131,7 +131,10 @@ test("each device has its own frame slot", () => {
   const phoneB = relay.addPhone(new FakeSocket(), { deviceId: DEVICE_B, userId: 1, name: "14 Pro Max" });
   relay.onPhoneFrame(phone, jpeg(1));
   relay.onPhoneFrame(phoneB, jpeg(2)); // A's in-flight frame must not block B
-  assert.deepEqual(dashSocket.frames.map((f) => decode(f).deviceId), [DEVICE_A, DEVICE_B]);
+  assert.deepEqual(
+    dashSocket.frames.map((f) => decode(f).deviceId),
+    [DEVICE_A, DEVICE_B],
+  );
 });
 
 test("a new dashboard gets online devices with status and the latest frame", () => {
@@ -152,7 +155,10 @@ test("status is sanitised and forwarded", () => {
   const { relay, phone, dashSocket } = setup();
   relay.onPhoneText(
     phone,
-    JSON.stringify({ type: "status", status: { recording: true, batteryLevel: 0.5, thermalState: "bogus", evil: "<script>" } }),
+    JSON.stringify({
+      type: "status",
+      status: { recording: true, batteryLevel: 0.5, thermalState: "bogus", evil: "<script>" },
+    }),
   );
   const [msg] = dashSocket.ofType("status");
   assert.equal(msg.deviceId, DEVICE_A);
@@ -172,9 +178,20 @@ test("malformed or oversize text is ignored", () => {
 
 test("acks are forwarded with the device id and start time", () => {
   const { relay, phone, dashSocket } = setup();
-  relay.onPhoneText(phone, JSON.stringify({ type: "ack", command: "start", requestId: "r1", ok: true, startedAtMs: 123 }));
+  relay.onPhoneText(
+    phone,
+    JSON.stringify({ type: "ack", command: "start", requestId: "r1", ok: true, startedAtMs: 123 }),
+  );
   const [ack] = dashSocket.ofType("ack");
-  assert.deepEqual(ack, { type: "ack", deviceId: DEVICE_A, command: "start", requestId: "r1", ok: true, error: null, startedAtMs: 123 });
+  assert.deepEqual(ack, {
+    type: "ack",
+    deviceId: DEVICE_A,
+    command: "start",
+    requestId: "r1",
+    ok: true,
+    error: null,
+    startedAtMs: 123,
+  });
 });
 
 test("start all reaches every phone the user owns, and only those", () => {
@@ -209,7 +226,10 @@ test("set_quality needs a valid quality and passes it through", () => {
   const { relay, dash, phoneSocket } = setup();
   relay.onDashboardText(dash, JSON.stringify({ type: "set_quality", target: DEVICE_A, quality: "8k" }));
   assert.equal(phoneSocket.ofType("set_quality").length, 0);
-  relay.onDashboardText(dash, JSON.stringify({ type: "set_quality", target: DEVICE_A, quality: "1080p", requestId: "q" }));
+  relay.onDashboardText(
+    dash,
+    JSON.stringify({ type: "set_quality", target: DEVICE_A, quality: "1080p", requestId: "q" }),
+  );
   assert.deepEqual(phoneSocket.ofType("set_quality"), [{ type: "set_quality", requestId: "q", quality: "1080p" }]);
 });
 

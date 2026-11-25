@@ -2,7 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { autoReplyMail, EnquirySchema, isSpam, loggablePayload, notificationMail } from "./PdcaEnquiry.js";
 
-const valid = { name: "Dr Tan", clinic: "Smile Clinic", phone: "", email: "tan@example.com", message: "Hello\nthere", consent: true, website: "" };
+const valid = {
+  name: "Dr Tan",
+  clinic: "Smile Clinic",
+  phone: "",
+  email: "tan@example.com",
+  message: "Hello\nthere",
+  consent: true,
+  website: "",
+};
 
 test("accepts a valid enquiry", () => {
   assert.equal(EnquirySchema.safeParse(valid).success, true);

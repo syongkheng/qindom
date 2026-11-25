@@ -115,37 +115,37 @@ async function startServer() {
 
   // Route table — [path, middlewares, router]
   const routes: [string, RequestHandler[], Router][] = [
-    ["/connectivity", mw.std,                                    createConnectivityController(db)],
-    ["/analytics",    mw.std,                                    createHeartbeatController(db)],   // legacy POST / and /heartbeat
-    ["/analytics",    mw.std,                                    createAnalyticsController(db)],   // v1: /collect, /systems, /admin/*
-    ["/hdb",          mw.std,                                    createHdbController(db)],
-    ["/lta",          mw.std,                                    createLtaController(db)],
-    ["/auth",         mw.std,                                    createAuthController(db)],
-    ["/pfp",          mw.std,                                    createPfpController(db)],
-    ["/itinerary",    mw.std,                                    createItineraryController(db)],
-    ["/budget",       mw.auth,                                   createBudgetController(db)],
-    ["/todo",         mw.auth,                                   createTodoController(db)],
-    ["/house-layout", mw.auth,                                   createHouseLayoutController(db)],
-    ["/house/share",  mw.auth,                                   createHouseShareController(db)],
-    ["/house/view",   mw.housePublic,                            createHouseShareViewController(db)],
-    ["/applepay",     mw.auth,                                   createApplePayDashboardController(db)],
-    ["/file",         mw.auth,                                   createFileController(db)],
-    ["/img",          mw.pub,                                    createTgImageGetController(db)],
-    ["/img",          [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)],  // no RHF — multipart upload
-    ["/geocode",      mw.std,                                    createGeocodeController(db)],
-    ["/v1/ss",        mw.ssKey,                                  createSsApplePayControllerV1(db)],
-    ["/v1/ss",        mw.ssKey,                                  createSsTodoControllerV1(db)],
-    ["/v2/ss",        mw.ssKey,                                  createSsApplePayControllerV2(db)],
-    ["/ss-key",       mw.auth,                                   createSsApiKeyController(db)],
-    ["/mcp-key",      mw.auth,                                   createMcpApiKeyController(db)],
-    ["/mcp",          mw.mcpPublic,                              createHouseMcpController()],
-    ["/wedding",      mw.std,                                    createWeddingController(db)],
-    ["/suggestion",   mw.std,                                    createSuggestionController(db)],
-    ["/camera",       mw.std,                                    createCameraController(cameraService)],  // auth per route
+    ["/connectivity", mw.std, createConnectivityController(db)],
+    ["/analytics", mw.std, createHeartbeatController(db)], // legacy POST / and /heartbeat
+    ["/analytics", mw.std, createAnalyticsController(db)], // v1: /collect, /systems, /admin/*
+    ["/hdb", mw.std, createHdbController(db)],
+    ["/lta", mw.std, createLtaController(db)],
+    ["/auth", mw.std, createAuthController(db)],
+    ["/pfp", mw.std, createPfpController(db)],
+    ["/itinerary", mw.std, createItineraryController(db)],
+    ["/budget", mw.auth, createBudgetController(db)],
+    ["/todo", mw.auth, createTodoController(db)],
+    ["/house-layout", mw.auth, createHouseLayoutController(db)],
+    ["/house/share", mw.auth, createHouseShareController(db)],
+    ["/house/view", mw.housePublic, createHouseShareViewController(db)],
+    ["/applepay", mw.auth, createApplePayDashboardController(db)],
+    ["/file", mw.auth, createFileController(db)],
+    ["/img", mw.pub, createTgImageGetController(db)],
+    ["/img", [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)], // no RHF — multipart upload
+    ["/geocode", mw.std, createGeocodeController(db)],
+    ["/v1/ss", mw.ssKey, createSsApplePayControllerV1(db)],
+    ["/v1/ss", mw.ssKey, createSsTodoControllerV1(db)],
+    ["/v2/ss", mw.ssKey, createSsApplePayControllerV2(db)],
+    ["/ss-key", mw.auth, createSsApiKeyController(db)],
+    ["/mcp-key", mw.auth, createMcpApiKeyController(db)],
+    ["/mcp", mw.mcpPublic, createHouseMcpController()],
+    ["/wedding", mw.std, createWeddingController(db)],
+    ["/suggestion", mw.std, createSuggestionController(db)],
+    ["/camera", mw.std, createCameraController(cameraService)], // auth per route
     // Public contact form; body logged as field lengths only (personal data)
-    ["/pdca",         [RestRequestLogger, stripPersonalDataFromLog, RequestHeaderFilter], createPdcaEnquiryController(db)],
+    ["/pdca", [RestRequestLogger, stripPersonalDataFromLog, RequestHeaderFilter], createPdcaEnquiryController(db)],
     // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
-    ["/debug",        process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController(db)],
+    ["/debug", process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController(db)],
   ];
   // Marks the request log's pipeline stage: events after the route's middlewares
   // belong to the controller (or the service layer, by event type).
@@ -186,4 +186,3 @@ async function startServer() {
 
 // Start the application
 startServer();
-

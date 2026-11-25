@@ -1,4 +1,3 @@
-
 import { BaseExceptions } from "./BaseException.js";
 
 export class RegistrationException extends BaseExceptions {

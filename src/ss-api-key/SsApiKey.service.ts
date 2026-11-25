@@ -26,7 +26,12 @@ export class SsApiKeyService {
       logEvent,
     );
     if (!existing) return { hasKey: false, name: null, createdDt: null, keyHint: null };
-    return { hasKey: true, name: existing.name ?? null, createdDt: existing.created_dt, keyHint: existing.key_hint ?? null };
+    return {
+      hasKey: true,
+      name: existing.name ?? null,
+      createdDt: existing.created_dt,
+      keyHint: existing.key_hint ?? null,
+    };
   }
 
   async generateKey(userId: number, logContext?: IRequestLogContext): Promise<{ key: string }> {

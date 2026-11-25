@@ -23,7 +23,8 @@ const CARD_LAST4_REGEX = /card\s+ending\s+(\d{3,4})/i;
 // boundary comes first: a trailing "on <day> <MON>" date, "was completed",
 // the "If unauthorised" boilerplate, or end-of-string. Lookahead so none of
 // those boundary words end up inside the captured merchant.
-const MERCHANT_REGEX_GENERIC = /\b(?:at|to)\s+(.+?)(?=\s+on\s+\d{1,2}\s+[A-Z]{3}\b|\s+was\s+completed\b|\.\s*(?:if unauthorised|$)|$)/i;
+const MERCHANT_REGEX_GENERIC =
+  /\b(?:at|to)\s+(.+?)(?=\s+on\s+\d{1,2}\s+[A-Z]{3}\b|\s+was\s+completed\b|\.\s*(?:if unauthorised|$)|$)/i;
 
 // Citibank SG: "There was a charge of SGD11.25 on your Card ending 3284 by
 // TikTok Shop Seller    Singapore    SGP on 14/10/26 18:13. If
@@ -90,7 +91,14 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
       const cardLast4 = cardMatch ? cardMatch[1] : null;
 
       const userId = logContext?.metadata?.userId as number;
-      const serviceResponse = await service.recordSmsTransaction(userId, parsedAmount, currency, merchant, cardLast4, logContext);
+      const serviceResponse = await service.recordSmsTransaction(
+        userId,
+        parsedAmount,
+        currency,
+        merchant,
+        cardLast4,
+        logContext,
+      );
 
       // Shortcut-friendly shape — just the fields extracted from the SMS,
       // for the automation to show back as a confirmation (e.g. via "Show

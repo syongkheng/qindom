@@ -23,9 +23,12 @@ function cleanName(name: string): string {
 // Only the envelope is checked here; the client re-sanitises every item and wall when it loads a layout.
 function cleanData(data: unknown): { json: string; itemCount: number } {
   const d = data as any;
-  if (!d || typeof d !== "object" || !Array.isArray(d.items) || d.items.length > MAX_ITEMS) throw new Exceptions.InvalidRequest("data", "format");
-  if (d.custom !== undefined && (!Array.isArray(d.custom) || d.custom.length > MAX_CUSTOM)) throw new Exceptions.InvalidRequest("data", "format");
-  if (d.walls !== undefined && (!Array.isArray(d.walls) || d.walls.length > MAX_WALLS)) throw new Exceptions.InvalidRequest("data", "format");
+  if (!d || typeof d !== "object" || !Array.isArray(d.items) || d.items.length > MAX_ITEMS)
+    throw new Exceptions.InvalidRequest("data", "format");
+  if (d.custom !== undefined && (!Array.isArray(d.custom) || d.custom.length > MAX_CUSTOM))
+    throw new Exceptions.InvalidRequest("data", "format");
+  if (d.walls !== undefined && (!Array.isArray(d.walls) || d.walls.length > MAX_WALLS))
+    throw new Exceptions.InvalidRequest("data", "format");
   const payload: LayoutPayload & { version: number; plan?: string } = {
     version: 1,
     plan: typeof d.plan === "string" ? d.plan.slice(0, 100) : undefined,

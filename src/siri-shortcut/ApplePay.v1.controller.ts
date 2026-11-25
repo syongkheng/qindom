@@ -46,7 +46,12 @@ export default function createSsApplePayControllerV1(db: KnexSqlUtilities) {
 
       return cr.ok(serviceResponse);
     } catch (err) {
-      return handleException(err, cr, "SsApplePayControllerV1.POST /ap/transaction", "Failed to record Apple Pay transaction");
+      return handleException(
+        err,
+        cr,
+        "SsApplePayControllerV1.POST /ap/transaction",
+        "Failed to record Apple Pay transaction",
+      );
     }
   });
 
@@ -58,7 +63,12 @@ export default function createSsApplePayControllerV1(db: KnexSqlUtilities) {
       const serviceResponse = await service.getTransactions(userId, logContext);
       return cr.ok(serviceResponse);
     } catch (err) {
-      return handleException(err, cr, "SsApplePayControllerV1.GET /ap/transaction", "Failed to retrieve Apple Pay transactions");
+      return handleException(
+        err,
+        cr,
+        "SsApplePayControllerV1.GET /ap/transaction",
+        "Failed to retrieve Apple Pay transactions",
+      );
     }
   });
 

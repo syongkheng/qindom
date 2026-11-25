@@ -102,7 +102,12 @@ export class LoggingUtilities {
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.startsWith("at ") && !line.includes("node:internal"))
-      .map((line) => line.replace(/file:\/\//g, "").split(`${LoggingUtilities.PROJECT_ROOT}/`).join(""))
+      .map((line) =>
+        line
+          .replace(/file:\/\//g, "")
+          .split(`${LoggingUtilities.PROJECT_ROOT}/`)
+          .join(""),
+      )
       .slice(0, LoggingUtilities.MAX_STACK_FRAMES);
     return frames.length ? frames : undefined;
   }
@@ -155,7 +160,11 @@ export class LoggingUtilities {
      * For middlewares mounted inside a router (after the controller stage has
      * started), so their events are still attributed to the middleware stage.
      */
-    static middleware(context: IRequestLogContext, category: IRequestLogEvent["type"], message: string): IRequestLogEvent {
+    static middleware(
+      context: IRequestLogContext,
+      category: IRequestLogEvent["type"],
+      message: string,
+    ): IRequestLogEvent {
       const event = this.branch(context, category, message);
       event.stage = "middleware";
       return event;
@@ -310,7 +319,9 @@ export class LoggingUtilities {
         lines.push("");
       }
 
-      lines.push(`${LoggingUtilities.END} RESPONSE ${context.statusCode} ${LoggingUtilities.statusIcon(context.statusCode)}`);
+      lines.push(
+        `${LoggingUtilities.END} RESPONSE ${context.statusCode} ${LoggingUtilities.statusIcon(context.statusCode)}`,
+      );
 
       if (context.response !== undefined) {
         let respLines = JSON.stringify(context.response, null, 2).split("\n");

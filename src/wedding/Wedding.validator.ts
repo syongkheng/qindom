@@ -88,10 +88,7 @@ export class WeddingValidator {
 
   // Status check requires BOTH the guest's name and the 4-digit pin — a pin
   // alone no longer reveals whether/how someone RSVP'd.
-  async validateRsvpStatusQuery(
-    req: Request,
-    loggingEvent?: IRequestLogEvent,
-  ): Promise<{ name: string; pin: string }> {
+  async validateRsvpStatusQuery(req: Request, loggingEvent?: IRequestLogEvent): Promise<{ name: string; pin: string }> {
     const { pin, name } = req.query;
 
     V.requiredString(name, "name", loggingEvent);

@@ -5,8 +5,7 @@ import { TgImageService } from "./TgImage.service.js";
 
 const CONTACT_EMAIL = "yongkhengs@gmail.com";
 
-const ADMIN_MENU =
-  "Commands:\n  /stats — hosting statistics\n  /list — recent files\n  /help — show this message";
+const ADMIN_MENU = "Commands:\n  /stats — hosting statistics\n  /list — recent files\n  /help — show this message";
 
 export async function initTgLogBot(db: KnexSqlUtilities): Promise<void> {
   const token = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
@@ -52,7 +51,7 @@ export async function initTgLogBot(db: KnexSqlUtilities): Promise<void> {
   // ─── /help ────────────────────────────────────────────────────────────────
 
   bot.onText(/\/help/, async (msg) => {
-    if (!await checkAdmin(msg.from!.id)) return;
+    if (!(await checkAdmin(msg.from!.id))) return;
     await bot.sendMessage(msg.chat.id, ADMIN_MENU);
   });
 
@@ -60,7 +59,7 @@ export async function initTgLogBot(db: KnexSqlUtilities): Promise<void> {
 
   bot.onText(/\/stats/, async (msg) => {
     const chatId = msg.chat.id;
-    if (!await checkAdmin(msg.from!.id)) {
+    if (!(await checkAdmin(msg.from!.id))) {
       await bot.sendMessage(chatId, "⛔ Access denied.");
       return;
     }
@@ -77,7 +76,7 @@ export async function initTgLogBot(db: KnexSqlUtilities): Promise<void> {
 
   bot.onText(/\/list/, async (msg) => {
     const chatId = msg.chat.id;
-    if (!await checkAdmin(msg.from!.id)) {
+    if (!(await checkAdmin(msg.from!.id))) {
       await bot.sendMessage(chatId, "⛔ Access denied.");
       return;
     }
@@ -91,11 +90,7 @@ export async function initTgLogBot(db: KnexSqlUtilities): Promise<void> {
       const sizeKb = item.size_in_bytes ? ` (${(item.size_in_bytes / 1024).toFixed(1)} KB)` : "";
       return `• <code>${item.short_code}</code> — ${name}${sizeKb}`;
     });
-    await bot.sendMessage(
-      chatId,
-      `📁 <b>Recent Files (last 10)</b>\n\n${lines.join("\n")}`,
-      { parse_mode: "HTML" },
-    );
+    await bot.sendMessage(chatId, `📁 <b>Recent Files (last 10)</b>\n\n${lines.join("\n")}`, { parse_mode: "HTML" });
   });
 
   bot.on("polling_error", (err) => {

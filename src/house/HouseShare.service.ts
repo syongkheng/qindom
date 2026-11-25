@@ -43,13 +43,18 @@ export class HouseShareService {
 
   /** Public read by token: the name, the snapshot and the date only — never who made it. */
   async view(token: string): Promise<any> {
-    const row = (await this.db.findOne<ITB_HOUSE_SHARE>(TB_HOUSE_SHARE, { token, record_status: "A" })) as ITB_HOUSE_SHARE | undefined;
+    const row = (await this.db.findOne<ITB_HOUSE_SHARE>(TB_HOUSE_SHARE, { token, record_status: "A" })) as
+      ITB_HOUSE_SHARE | undefined;
     if (!row) throw new Exceptions.NotFound();
     return { name: row.name, createdAt: Number(row.created_dt), data: JSON.parse(row.data) };
   }
 
   async revoke(userId: number, token: string): Promise<{ deleted: true }> {
-    const row = (await this.db.findOne<ITB_HOUSE_SHARE>(TB_HOUSE_SHARE, { token, created_by_id: userId, record_status: "A" })) as ITB_HOUSE_SHARE | undefined;
+    const row = (await this.db.findOne<ITB_HOUSE_SHARE>(TB_HOUSE_SHARE, {
+      token,
+      created_by_id: userId,
+      record_status: "A",
+    })) as ITB_HOUSE_SHARE | undefined;
     if (!row) throw new Exceptions.NotFound();
     await this.db.update<ITB_HOUSE_SHARE>(TB_HOUSE_SHARE, { token, created_by_id: userId }, { record_status: "D" });
     return { deleted: true };

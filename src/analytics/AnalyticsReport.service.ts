@@ -51,7 +51,9 @@ export class AnalyticsReportService {
 
   /** Creates a new random read key (returned once) and stores only its hash. Old key stops working. */
   async rotateReadKey(systemKey: string): Promise<string | null> {
-    const existing = await this.db.findOne<ITB_ANALYTIC_SYSTEM>("tb_analytic_system", { system_key: systemKey }, ["id"]);
+    const existing = await this.db.findOne<ITB_ANALYTIC_SYSTEM>("tb_analytic_system", { system_key: systemKey }, [
+      "id",
+    ]);
     if (!existing?.id) return null;
     const key = `rk_${crypto.randomBytes(24).toString("base64url")}`;
     await this.db.update<ITB_ANALYTIC_SYSTEM>(
@@ -63,7 +65,12 @@ export class AnalyticsReportService {
     return key;
   }
 
-  async report(systemKey: string, req: ReportRequest, ownHosts: string[] = [], now = Date.now()): Promise<ReportResponse> {
+  async report(
+    systemKey: string,
+    req: ReportRequest,
+    ownHosts: string[] = [],
+    now = Date.now(),
+  ): Promise<ReportResponse> {
     const cp = comparePeriod(req.period);
     const from = Math.min(periodRangeMs(cp).from, periodRangeMs(req.period).from);
     const to = Math.max(periodRangeMs(cp).to, periodRangeMs(req.period).to);

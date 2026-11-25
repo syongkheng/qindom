@@ -19,7 +19,10 @@ export function createTgImageGetController(db: KnexSqlUtilities): Router {
     try {
       const record = await svc.getByShortCode(req.params.shortCode);
       if (!record) throw new Exceptions.NotFound();
-      const { stream, contentType } = await svc.resolveStream(record.telegram_file_id, record.mime_type ?? "image/jpeg");
+      const { stream, contentType } = await svc.resolveStream(
+        record.telegram_file_id,
+        record.mime_type ?? "image/jpeg",
+      );
       res.setHeader("Cache-Control", "public, max-age=86400");
       // User content on the API origin — if anything ever renders as a document,
       // it gets no script, no requests and a unique origin.
@@ -46,12 +49,12 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
       const ip = req.ip ?? req.socket?.remoteAddress ?? "unknown";
       const sessionId = req.body?.sessionId as string | undefined;
       const uuid = req.body?.uuid as string | undefined;
-      const result = await svc.upload(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype,
-        { username, ip, sessionId, uuid },
-      );
+      const result = await svc.upload(req.file.buffer, req.file.originalname, req.file.mimetype, {
+        username,
+        ip,
+        sessionId,
+        uuid,
+      });
       return cr.ok(result);
     } catch (err) {
       return handleException(err, cr, "TgImageController.POST /upload", "Upload failed");

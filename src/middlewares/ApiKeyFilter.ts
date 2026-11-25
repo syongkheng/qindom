@@ -19,90 +19,96 @@ export type ApiKeyPrefix = "ss" | "mcp";
  * Each route must name its own key type, so a key minted for one integration can never
  * authenticate another's routes (every key type resolves to the owner's userId).
  */
-export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) => async function (req: RequestWithUserInfo, res: Response, next: NextFunction) {
-  const cr = new ControllerResponse(req, res);
-  const logContext: IRequestLogContext = req.logContext;
+export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) =>
+  async function (req: RequestWithUserInfo, res: Response, next: NextFunction) {
+    const cr = new ControllerResponse(req, res);
+    const logContext: IRequestLogContext = req.logContext;
 
-  // Header Validation
-  const apiKeyValidationLoggingEvent = logContext
-    ? LoggingUtilities.request.middleware(logContext, "VALIDATION", "Specific headers")
-    : undefined;
+    // Header Validation
+    const apiKeyValidationLoggingEvent = logContext
+      ? LoggingUtilities.request.middleware(logContext, "VALIDATION", "Specific headers")
+      : undefined;
 
-  try {
-    const apiKey = HeaderValidationUtilities.required(req.headers, "x-api-key", apiKeyValidationLoggingEvent);
+    try {
+      const apiKey = HeaderValidationUtilities.required(req.headers, "x-api-key", apiKeyValidationLoggingEvent);
 
-    const apiKeyPrefix = apiKey.split("_")[0];
+      const apiKeyPrefix = apiKey.split("_")[0];
 
-    const apiKeyValue = apiKey.split("_")[1];
-    const apiKeyHash = crypto.createHash("sha256").update(apiKeyValue).digest("hex");
+      const apiKeyValue = apiKey.split("_")[1];
+      const apiKeyHash = crypto.createHash("sha256").update(apiKeyValue).digest("hex");
 
-    apiKeyValidationLoggingEvent?.children?.push(`Prefix: '${apiKeyPrefix}'`);
+      apiKeyValidationLoggingEvent?.children?.push(`Prefix: '${apiKeyPrefix}'`);
 
-    if (!(allowedPrefixes as string[]).includes(apiKeyPrefix)) {
-      apiKeyValidationLoggingEvent?.children?.push(
-        `Key Prefix: ${LogEmoji.error} '${apiKeyPrefix}' not allowed here (expects ${allowedPrefixes.join("/")})`,
-      );
-      throw new Exceptions.InvalidRequest("Invalid API key");
-    }
-
-    if (apiKeyPrefix === "ss") {
-      const validKeys = await db.findOne<ITbSsApiKey>(
-        "tb_ss_api_key",
-        { api_key_prefix: apiKeyPrefix, api_key_hash: apiKeyHash, record_status: "A" },
-        ["*"],
-        apiKeyValidationLoggingEvent,
-      );
-      if (!validKeys) {
-        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
+      if (!(allowedPrefixes as string[]).includes(apiKeyPrefix)) {
+        apiKeyValidationLoggingEvent?.children?.push(
+          `Key Prefix: ${LogEmoji.error} '${apiKeyPrefix}' not allowed here (expects ${allowedPrefixes.join("/")})`,
+        );
         throw new Exceptions.InvalidRequest("Invalid API key");
       }
-      apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
-      const user = await db.findOne<ITB_AA_USER>(
-        "tb_aa_user",
-        { id: validKeys.user_id },
-        ["username"],
-        apiKeyValidationLoggingEvent,
-      );
-      if (!user) {
-        apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.error} `);
-        throw new Exceptions.InvalidRequest("Invalid API key");
+
+      if (apiKeyPrefix === "ss") {
+        const validKeys = await db.findOne<ITbSsApiKey>(
+          "tb_ss_api_key",
+          { api_key_prefix: apiKeyPrefix, api_key_hash: apiKeyHash, record_status: "A" },
+          ["*"],
+          apiKeyValidationLoggingEvent,
+        );
+        if (!validKeys) {
+          apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
+          throw new Exceptions.InvalidRequest("Invalid API key");
+        }
+        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
+        const user = await db.findOne<ITB_AA_USER>(
+          "tb_aa_user",
+          { id: validKeys.user_id },
+          ["username"],
+          apiKeyValidationLoggingEvent,
+        );
+        if (!user) {
+          apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.error} `);
+          throw new Exceptions.InvalidRequest("Invalid API key");
+        }
+        apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.success} `);
+        logContext.metadata = {
+          ...logContext.metadata,
+          username: user.username,
+          userId: validKeys.user_id,
+        };
       }
-      apiKeyValidationLoggingEvent?.children?.push(`User Exists: ${LogEmoji.success} `);
+
+      if (apiKeyPrefix === "mcp") {
+        const validKey = await db.findOne<ITbMcpApiKey>(
+          "tb_mcp_api_key",
+          { api_key_hash: apiKeyHash, record_status: "A" },
+          ["*"],
+          apiKeyValidationLoggingEvent,
+        );
+        if (!validKey) {
+          apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
+          throw new Exceptions.InvalidRequest("Invalid API key");
+        }
+        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
+        const user = await db.findOne<ITB_AA_USER>(
+          "tb_aa_user",
+          { id: validKey.user_id },
+          ["username"],
+          apiKeyValidationLoggingEvent,
+        );
+        if (!user) throw new Exceptions.InvalidRequest("Invalid API key");
+        logContext.metadata = {
+          ...logContext.metadata,
+          username: user.username,
+          userId: validKey.user_id,
+        };
+      }
+
       logContext.metadata = {
         ...logContext.metadata,
-        username: user.username,
-        userId: validKeys.user_id,
+        apiKey,
       };
+    } catch (err) {
+      return cr.badAuthorization("Unauthorized. Missing or invalid API key.");
     }
 
-    if (apiKeyPrefix === "mcp") {
-      const validKey = await db.findOne<ITbMcpApiKey>(
-        "tb_mcp_api_key",
-        { api_key_hash: apiKeyHash, record_status: "A" },
-        ["*"],
-        apiKeyValidationLoggingEvent,
-      );
-      if (!validKey) {
-        apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.error} `);
-        throw new Exceptions.InvalidRequest("Invalid API key");
-      }
-      apiKeyValidationLoggingEvent?.children?.push(`Key Validity: ${LogEmoji.success} `);
-      const user = await db.findOne<ITB_AA_USER>("tb_aa_user", { id: validKey.user_id }, ["username"], apiKeyValidationLoggingEvent);
-      if (!user) throw new Exceptions.InvalidRequest("Invalid API key");
-      logContext.metadata = {
-        ...logContext.metadata,
-        username: user.username,
-        userId: validKey.user_id,
-      };
-    }
-
-    logContext.metadata = {
-      ...logContext.metadata,
-      apiKey,
-    };
-  } catch (err) {
-    return cr.badAuthorization("Unauthorized. Missing or invalid API key.");
-  }
-
-  next();
-};
+    next();
+  };

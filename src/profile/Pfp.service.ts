@@ -11,9 +11,7 @@ export class PfpService {
     this.tokenService = new TokenService(db);
   }
 
-  async getCountry(
-    username_system: string
-  ): Promise<{ country: string | null }> {
+  async getCountry(username_system: string): Promise<{ country: string | null }> {
     try {
       const userRecord = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
         username_system,
@@ -25,15 +23,12 @@ export class PfpService {
     }
   }
 
-  async updateCountry(
-    username_system: string,
-    country: string
-  ): Promise<ITB_AA_USER[]> {
+  async updateCountry(username_system: string, country: string): Promise<ITB_AA_USER[]> {
     try {
       const updatedUser = await this.db.update<ITB_AA_USER>(
         "tb_aa_user",
         { username_system, record_status: "A" },
-        { country }
+        { country },
       );
       return updatedUser.map(({ record_status, created_dt, ...user }: any) => ({
         ...user,
@@ -45,15 +40,12 @@ export class PfpService {
     }
   }
 
-  async updateProfilePhoto(
-    username_system: string,
-    photoUrl: string
-  ): Promise<ITB_AA_USER[]> {
+  async updateProfilePhoto(username_system: string, photoUrl: string): Promise<ITB_AA_USER[]> {
     try {
       const updatedUser = await this.db.update<ITB_AA_USER>(
         "tb_aa_user",
         { username_system, record_status: "A" },
-        { pfp_picture_blob: photoUrl }
+        { pfp_picture_blob: photoUrl },
       );
       return updatedUser.map(({ record_status, created_dt, ...user }: any) => ({
         ...user,
@@ -66,9 +58,7 @@ export class PfpService {
     }
   }
 
-  async getProfilePhoto(
-    username_system: string
-  ): Promise<{ blobString: string | null }> {
+  async getProfilePhoto(username_system: string): Promise<{ blobString: string | null }> {
     try {
       const userRecord = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
         username_system,
@@ -88,7 +78,7 @@ export class PfpService {
   async updateUsername(
     username_system: string,
     newUsername: string,
-    system: string
+    system: string,
   ): Promise<{ token: string; username: string }> {
     const user = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
       username_system,
@@ -106,11 +96,15 @@ export class PfpService {
     await this.db.update<ITB_AA_USER>(
       "tb_aa_user",
       { username_system, record_status: "A" },
-      { username: newUsername, username_system: newUsernameSystem }
+      { username: newUsername, username_system: newUsernameSystem },
     );
 
     const parsedRoles: string[] = (() => {
-      try { return JSON.parse(user.roles ?? "[]"); } catch { return []; }
+      try {
+        return JSON.parse(user.roles ?? "[]");
+      } catch {
+        return [];
+      }
     })();
 
     const token = await this.tokenService.generateToken({
@@ -121,11 +115,7 @@ export class PfpService {
       lastLoggedInDt: user.last_logged_in_dt,
     });
 
-    await this.db.update<ITB_AA_USER>(
-      "tb_aa_user",
-      { username_system: newUsernameSystem },
-      { token }
-    );
+    await this.db.update<ITB_AA_USER>("tb_aa_user", { username_system: newUsernameSystem }, { token });
 
     return { token, username: newUsername };
   }

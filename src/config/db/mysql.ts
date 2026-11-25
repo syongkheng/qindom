@@ -41,15 +41,9 @@ const db = new KnexSqlUtilities(knexInstance);
 // Test connection and log status
 export async function initializeDatabase() {
   try {
-    LoggingUtilities.service.info(
-      "init_db",
-      "Attempting to connect to database..."
-    );
+    LoggingUtilities.service.info("init_db", "Attempting to connect to database...");
     LoggingUtilities.service.info("init_db", `   Host: ${process.env.DB_URL}`);
-    LoggingUtilities.service.info(
-      "init_db",
-      `   Database: ${process.env.DB_NAME}`
-    );
+    LoggingUtilities.service.info("init_db", `   Database: ${process.env.DB_NAME}`);
     LoggingUtilities.service.info("init_db", `   User: ${process.env.DB_USER}`);
 
     // Test the connection
