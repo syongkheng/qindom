@@ -31,7 +31,7 @@ import createTodoController from "./todo/Todo.controller.js";
 import createHouseLayoutController from "./house/HouseLayout.controller.js";
 import { createHouseShareController, createHouseShareViewController } from "./house/HouseShare.controller.js";
 import createSsTodoControllerV1 from "./siri-shortcut/Todo.v1.controller.js";
-import createApplePayDashboardController from "./applepay/ApplePayDashboard.controller.js";
+import createApplePayController from "./applepay/ApplePay.controller.js";
 import createFileController from "./file/File.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
@@ -128,7 +128,7 @@ async function startServer() {
     ["/house-layout", mw.auth, createHouseLayoutController(db)],
     ["/house/share", mw.auth, createHouseShareController(db)],
     ["/house/view", mw.housePublic, createHouseShareViewController(db)],
-    ["/applepay", mw.auth, createApplePayDashboardController(db)],
+    ["/applepay", mw.auth, createApplePayController(db)],
     ["/file", mw.auth, createFileController(db)],
     ["/img", mw.pub, createTgImageGetController(db)],
     ["/img", [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)], // no RHF — multipart upload

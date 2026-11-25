@@ -24,6 +24,7 @@ Each feature folder `src/<module>/` holds:
 
 - File names: `PascalCase.<role>.ts`, named after the **folder** (`src/profile/Profile.service.ts` → `ProfileService`, `createProfileController`), even when the URL prefix differs (`/pfp`). Shared helpers: `XyzUtilities.ts`.
 - DB row types stay in `src/models/databases/` (`ITB_*`), because migrations and several modules share them.
+- A service lives in the module that **owns its tables**. Other modules (e.g. `siri-shortcut` ingestion routes) import it from there; they never host it.
 
 ## 3. Controllers
 - Factory: `export default function createXyzController(db: KnexSqlUtilities): Router`. Take **only what the controller uses**: no unused `db` / `_db` (e.g. `createDebugController()`).
@@ -63,7 +64,10 @@ Each feature folder `src/<module>/` holds:
 - Throw typed exceptions; never return error strings or `""` as failure.
 - Don't wrap a method body in `try { ... } catch { throw new Exceptions.Unknown() }`: it hides the real cause from the request tree. Let errors propagate; `route()` turns them into a 500 and logs them.
 - Never return DB rows to the client (not even "redacted"). Return a DTO with just the fields the client needs; for writes, the new value or `{ updated: true }`.
-- Look up the current user by `getUser(req).id`, not by rebuilding `username_system` strings.
+- Look up the current user by `getUser(req).id` (JWT routes) or `getApiKeyUserId(req)` (x-api-key routes), never `logContext.metadata.userId as number` or rebuilt `username_system` strings.
+- More than ~3 positional parameters of the same kind → pass an input object (`recordSmsTransaction(userId, { amount, currency, merchant, cardLast4 })`).
+- Fixed sets of stored string values get an enum-like constant + type (`TransactionSource.V2`), not bare `"v2"`.
+- Free-text fields are length-checked against their column in the validator (and the column width noted in a comment), so an oversized value is a 400, never a DB error/truncation.
 
 ## 4c. Exceptions
 - **Every exception must be in the `Exceptions` registry.** No exception class may exist outside it:
@@ -146,6 +150,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `parseRoles()` (auth/Permission) and `validateUsername()` (auth validator). |
 | 2026-11-25 | `InvalidRequest` gains `"limit"` error type for per-user caps. |
 | 2026-11-25 | No `any` in service signatures; `toXyzDto` mappers. |
+| 2026-11-25 | Services live with the tables they own (`SsApplePayV1Service` → `applepay/ApplePayService`). |
+| 2026-11-25 | `getApiKeyUserId(req)` for API-key routes; input objects over long positional lists; `TransactionSource` enum. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions

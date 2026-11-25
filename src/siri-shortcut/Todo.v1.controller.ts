@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { handleException } from "../utils/requestUtils.js";
+import { getApiKeyUserId, handleException } from "../utils/requestUtils.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { TodoService } from "../todo/Todo.service.js";
 import { TodoWidgetDto } from "../todo/Todo.types.js";
@@ -17,8 +17,7 @@ export default function createSsTodoControllerV1(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;
-      const userId = logContext?.metadata?.userId as number;
-      return cr.ok<TodoWidgetDto>(await service.widget(userId, logContext));
+      return cr.ok<TodoWidgetDto>(await service.widget(getApiKeyUserId(req), logContext));
     } catch (err) {
       return handleException(err, cr, "SsTodoControllerV1.GET /todo", "Failed to load tasks");
     }

@@ -11,6 +11,16 @@ export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {
   return req.user;
 }
 
+/**
+ * The user resolved by `RequestApiKeyFilter` (x-api-key routes). It stores the id in
+ * `logContext.metadata.userId`, not `req.user`; throws 401 if it's missing.
+ */
+export function getApiKeyUserId(req: Request): number {
+  const userId = req.logContext?.metadata?.userId;
+  if (typeof userId !== "number") throw new Exceptions.UnauthorizedAccess();
+  return userId;
+}
+
 export function hasRole(req: RequestWithUserInfo, ...roles: string[]): boolean {
   return roles.some((r) => req.user?.roles?.includes(r) ?? false);
 }

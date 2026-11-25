@@ -2,16 +2,16 @@ import { Router, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { handleException } from "../utils/requestUtils.js";
+import { getApiKeyUserId, handleException } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { SsApplePayV1Service } from "./ApplePay.v1.service.js";
+import { ApplePayService } from "../applepay/ApplePay.service.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 export default function createSsApplePayControllerV1(db: KnexSqlUtilities) {
   const router = Router();
-  const service = new SsApplePayV1Service(db);
+  const service = new ApplePayService(db);
 
   // Called by the "When Apple Pay is used" Shortcuts automation.
   router.post("/ap/transaction", async (req: RequestWithUserInfo, res: Response) => {
@@ -41,8 +41,11 @@ export default function createSsApplePayControllerV1(db: KnexSqlUtilities) {
       const parsedAmount = Number(String(amount).trim().replace(/^\$/, ""));
       if (Number.isNaN(parsedAmount)) throw new Exceptions.InvalidRequest("amount", "format");
 
-      const userId = logContext?.metadata?.userId as number;
-      const serviceResponse = await service.recordTransaction(userId, parsedAmount, merchant, name, logContext);
+      const serviceResponse = await service.recordTapTransaction(
+        getApiKeyUserId(req),
+        { amount: parsedAmount, merchant, name },
+        logContext,
+      );
 
       return cr.ok(serviceResponse);
     } catch (err) {
@@ -59,8 +62,7 @@ export default function createSsApplePayControllerV1(db: KnexSqlUtilities) {
     const cr = new ControllerResponse(req, res);
     try {
       const logContext: IRequestLogContext = req.logContext;
-      const userId = logContext?.metadata?.userId as number;
-      const serviceResponse = await service.getTransactions(userId, logContext);
+      const serviceResponse = await service.getTransactions(getApiKeyUserId(req), logContext);
       return cr.ok(serviceResponse);
     } catch (err) {
       return handleException(

@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import assert from "node:assert/strict";
-import { ApplePayDashboardValidator } from "./ApplePayDashboard.validator.js";
+import { validateManualTransactionBody } from "./ApplePay.validator.js";
 
-const validate = ApplePayDashboardValidator.validateCreateManualTransactionRequest;
+const validate = validateManualTransactionBody;
 // Fixed past timestamp so the "no future dates" rule never depends on wall clock.
 const PAST = Date.UTC(2026, 9, 14, 10, 13);
 
@@ -11,7 +11,7 @@ function body(extra: Record<string, unknown> = {}) {
   return { amount: 12.5, merchant: "Kopitiam", occurredDt: PAST, ...extra };
 }
 
-describe("validateCreateManualTransactionRequest — currency", () => {
+describe("validateManualTransactionBody — currency", () => {
   test("defaults to SGD when currency is omitted", () => {
     assert.equal(validate(body()).currency, "SGD");
   });

@@ -16,8 +16,8 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 8 | `ss-api-key` | [x] | 29974cb | `route()` + typed `cr.ok`; `SsApiKey.types.ts`; validator → function; `RecordStatus`; named constants; consistent `logContext?`; `sha256Hex` shared with ApiKeyFilter; DELETE → `POST /api-key/delete` (fndom); tests + README |
 | 9 | `file` | [x] | a005e9d | dead `POST /file/tg` deleted (+ fndom `CREATE_TG`); `route()` + `cr.ok<FileDeletedDto>`; `File.types.ts`; validator → function (uuid strings, ≤100); `RecordStatus` bindings; real `affectedRows` count; logContext; tests + README rewritten |
 | 10 | `profile` | [x] | 5001889 | `Pfp.*` → `Profile.*`; mounted `mw.auth` (per-route filters dropped); `route()` + typed DTOs; validators (country, image data URL, shared `validateUsername`); no more user rows in responses; no try/catch→Unknown; lookups by id; one atomic username+token update; `parseRoles` shared; tests + README |
-| 11 | `todo` | [~] in review | | `route()` + typed DTOs (no more `any`); `Todo.types.ts`; validators → functions; pin cap → `InvalidRequest("pinned","limit")`; `RecordStatus`; logContext through every query; shared `activeTasks`; widget call typed; tests + README (none before) |
-| 12 | `applepay` | [ ] | | |
+| 11 | `todo` | [x] | 009fe60 | `route()` + typed DTOs (no more `any`); `Todo.types.ts`; validators → functions; pin cap → `InvalidRequest("pinned","limit")`; `RecordStatus`; logContext through every query; shared `activeTasks`; widget call typed; tests + README (none before) |
+| 12 | `applepay` | [~] in review | | service moved in from siri-shortcut (`ApplePayService`) + body types from models/requests; `ApplePayDashboard.*` → `ApplePay.*`; `route()` + typed DTOs; validators → functions with 64-char caps on category/label (were unchecked); `TransactionSource`; `RecordStatus`; shared `setRecordStatus`/`loadOrThrow`; `getApiKeyUserId` (siri-shortcut + todo widget); tests + README |
 | 13 | `suggestion` | [ ] | | inline `cr.result(403, ...)` ×4 → `requireRole()` |
 | 14 | `house` | [ ] | | |
 | 15 | `pdca` | [ ] | | replace zod with hand-written validator |

@@ -2,11 +2,11 @@ import { Router, Response } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { handleException } from "../utils/requestUtils.js";
+import { getApiKeyUserId, handleException } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { SsApplePayV1Service } from "./ApplePay.v1.service.js";
+import { ApplePayService } from "../applepay/ApplePay.service.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 // "SGD 1.99", "USD 12.50", "SGD11.25" (Citi, no space) — the currency code
@@ -60,7 +60,7 @@ export function parseMerchant(text: string): string | null {
 // dashboard already shows a single combined feed.
 export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
   const router = Router();
-  const service = new SsApplePayV1Service(db);
+  const service = new ApplePayService(db);
 
   router.post("/ap/sms", async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);
@@ -90,13 +90,9 @@ export default function createSsApplePayControllerV2(db: KnexSqlUtilities) {
       const cardMatch = CARD_LAST4_REGEX.exec(text);
       const cardLast4 = cardMatch ? cardMatch[1] : null;
 
-      const userId = logContext?.metadata?.userId as number;
       const serviceResponse = await service.recordSmsTransaction(
-        userId,
-        parsedAmount,
-        currency,
-        merchant,
-        cardLast4,
+        getApiKeyUserId(req),
+        { amount: parsedAmount, currency, merchant, cardLast4 },
         logContext,
       );
 
