@@ -54,7 +54,8 @@ import createSuggestionController from "./suggestion/Suggestion.controller.js";
 import createCameraController from "./camera/Camera.controller.js";
 
 // PDCA website (dental-directory) contact form
-import createPdcaEnquiryController, { stripPersonalDataFromLog } from "./pdca/PdcaEnquiry.controller.js";
+import createPdcaEnquiryController from "./pdca/PdcaEnquiry.controller.js";
+import { stripPersonalDataFromLog } from "./pdca/PdcaEnquiry.middleware.js";
 import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter.js";
 import { CameraService } from "./camera/Camera.service.js";
 import { CameraRelay } from "./camera/Camera.relay.js";

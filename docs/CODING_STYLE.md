@@ -86,7 +86,8 @@ Each feature folder `src/<module>/` holds:
 - Need a new error kind? Add a class + registry entry in `AppExceptions.ts` and a row in `src/exceptions/README.md`.
 
 ## 4a. Validation
-- Request validation uses our own hand-written `<Module>.validator.ts` (no zod or other schema libraries).
+- Request validation uses our own hand-written `<Module>.validator.ts` (no zod or other schema libraries). zod remains only in `analytics` until that folder is done, then it's uninstalled.
+- Role suffixes beyond controller/service/validator/types/test are fine when a file has one clear job (e.g. `PdcaEnquiry.middleware.ts`).
 - Validators throw `InvalidRequestException(field, "mandatory" | "format")` and return the typed `XyzBody`.
 
 ## 5. Constants and magic values
@@ -160,6 +161,9 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | pdca requires an Origin header (option A); analytics `/collect` stays lenient. |
+| 2026-11-26 | pdca: zod → hand-written validator; mail-sending logic moved from controller to `PdcaEnquiryService`. |
+| 2026-11-26 | File deletions needed by the refactor are pre-approved (still listed in summaries; `git mv` for renames). |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions
