@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import express from "express";
-import createSsApplePayControllerV2, { parseMerchant } from "./ApplePay.v2.controller.js";
+import createSsApplePayControllerV2 from "./ApplePay.v2.controller.js";
 
+// Real alert texts (card digits anonymised). The parser's own cases are in SiriShortcut.test.ts.
 const CITI_TIKTOK =
   "There was a charge of SGD11.25 on your Card ending 3284 by TikTok Shop Seller    Singapore    SGP on 14/10/26 18:13. If unauthorized, call our hotline.";
 const CITI_SPOTIFY =
@@ -15,49 +16,6 @@ const UOB_DOUYIN =
   "A transaction of SGD 1.99 was made with your UOB Card ending 1986 on 13/10/26 at Douyin Live. If unauthorised, call 24/7 Fraud Hotline now";
 const DBS_7ELEVEN =
   "Transaction Alert: Your DBS/POSB card ending 5244 transaction of SGD 4.20 to 7-ELEVEN -TAMPINES MAR on 27 SEP 12:44 (SGT) was completed. If unauthorised, call 18001111111.";
-
-describe("parseMerchant", () => {
-  test("Citi: strips padded city/country (TikTok)", () => {
-    assert.equal(parseMerchant(CITI_TIKTOK), "TikTok Shop Seller");
-  });
-
-  test("Citi: keeps alphanumeric descriptor, drops foreign city/country (Spotify)", () => {
-    assert.equal(parseMerchant(CITI_SPOTIFY), "Spotify P480A42C6A");
-  });
-
-  test("Citi: single-space-separated words inside merchant are kept (SPAYLATER SG)", () => {
-    assert.equal(parseMerchant(CITI_SPAYLATER), "SPAYLATER SG");
-  });
-
-  test("Citi: collapsed spacing keeps the whole descriptor rather than guessing", () => {
-    const sms =
-      "There was a charge of SGD11.25 on your Card ending 3284 by TikTok Shop Seller Singapore SGP on 14/10/26 18:13. If unauthorized, call our hotline.";
-    assert.equal(parseMerchant(sms), "TikTok Shop Seller Singapore SGP");
-  });
-
-  test("Citi: 4-digit year date is also recognised", () => {
-    const sms =
-      "There was a charge of SGD5.00 on your Card ending 3284 by GRAB    Singapore    SGP on 14/10/2026 18:13.";
-    assert.equal(parseMerchant(sms), "GRAB");
-  });
-
-  test("UOB format still parses (numeric date but no 'by')", () => {
-    assert.equal(parseMerchant(UOB_DOUYIN), "Douyin Live");
-  });
-
-  test("DBS format still parses", () => {
-    assert.equal(parseMerchant(DBS_7ELEVEN), "7-ELEVEN -TAMPINES MAR");
-  });
-
-  test("generic 'at' with trailing period at end of string", () => {
-    assert.equal(parseMerchant("SGD 3.00 spent at Kopitiam."), "Kopitiam");
-  });
-
-  test("returns null when no merchant can be found", () => {
-    assert.equal(parseMerchant("Your OTP is 123456. Do not share it."), null);
-    assert.equal(parseMerchant(""), null);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // HTTP: POST /ap/sms with an in-memory fake DB (no MySQL needed).
@@ -81,7 +39,7 @@ describe("POST /ap/sms", () => {
     const app = express();
     app.use(express.json());
     app.use((req: any, _res, next) => {
-      // Mimic the API-key filter having resolved the user.
+      // Mimic the API-key filter having resolved the user (except under /no-user).
       req.logContext = {
         requestId: "test",
         currentStage: "controller",
@@ -90,11 +48,12 @@ describe("POST /ap/sms", () => {
         path: req.path,
         ip: "127.0.0.1",
         events: [],
-        metadata: { userId: 42 },
+        metadata: req.path.startsWith("/no-user") ? {} : { userId: 42 },
       };
       next();
     });
     app.use("/v2/ss", createSsApplePayControllerV2(fakeDb as any));
+    app.use("/no-user", createSsApplePayControllerV2(fakeDb as any));
     await new Promise<void>((resolve) => {
       server = app.listen(0, "127.0.0.1", () => resolve());
     });
@@ -191,5 +150,34 @@ describe("POST /ap/sms", () => {
     const { status } = await post({});
     assert.equal(status, 400);
     assert.equal(inserts.length, 0);
+  });
+
+  test("merchant longer than the 255-char column -> 400, nothing inserted", async () => {
+    const { status, json } = await post({ smsBody: `SGD 5.00 spent at ${"M".repeat(256)}.` });
+    assert.equal(status, 400);
+    assert.equal(json.data.code, "invalid_request_merchant");
+    assert.equal(inserts.length, 0);
+  });
+
+  test("amount beyond DECIMAL(10,2) -> 400 instead of a DB error", async () => {
+    const { status, json } = await post({ smsBody: UOB_DOUYIN.replace("SGD 1.99", "SGD 123,456,789.00") });
+    assert.equal(status, 400);
+    assert.equal(json.data.code, "invalid_request_amount");
+    assert.equal(inserts.length, 0);
+  });
+
+  test("oversized smsBody -> 400 without running the parser", async () => {
+    const { status, json } = await post({ smsBody: `by${" ".repeat(5000)}x` });
+    assert.equal(status, 400);
+    assert.equal(json.data.code, "invalid_request_smsBody");
+  });
+
+  test("no API-key user on the request -> 401", async () => {
+    const res = await fetch(`${baseUrl}/no-user/ap/sms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ smsBody: UOB_DOUYIN }),
+    });
+    assert.equal(res.status, 401);
   });
 });

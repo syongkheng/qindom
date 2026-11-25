@@ -1,78 +1,37 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { getApiKeyUserId, handleException } from "../utils/requestUtils.js";
+import { getApiKeyUserId, route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { StructuralValidationUtilities } from "../utils/StructualValidationUtilities.js";
-import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { ApplePayService } from "../applepay/ApplePay.service.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
+import { ApplePayTransactionDto } from "../applepay/ApplePay.types.js";
+import { validateTapTransactionBody } from "./SiriShortcut.validator.js";
 
-export default function createSsApplePayControllerV1(db: KnexSqlUtilities) {
+/**
+ * V1 Apple Pay ingestion (`/v1/ss`, `ss_` API key), fed by the "When Apple Pay is used" Shortcuts
+ * automation (NFC taps only, fields arrive pre-structured). V2 (`ApplePay.v2.controller.ts`) parses
+ * bank SMS instead; both write `tb_applepay_transaction` through `ApplePayService`.
+ */
+export default function createSsApplePayControllerV1(db: KnexSqlUtilities): Router {
   const router = Router();
-  const service = new ApplePayService(db);
+  const svc = new ApplePayService(db);
 
-  // Called by the "When Apple Pay is used" Shortcuts automation.
-  router.post("/ap/transaction", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
+  router.post(
+    "/ap/transaction",
+    route("SsApplePayControllerV1.POST /ap/transaction", "Failed to record Apple Pay transaction", async (req, cr) => {
+      const userId = getApiKeyUserId(req);
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const input = validateTapTransactionBody(req.body, event);
+      return cr.ok<ApplePayTransactionDto>(await svc.recordTapTransaction(userId, input, req.logContext));
+    }),
+  );
 
-      const requestBodyStructuralValidationLoggingEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-
-      const { amount, merchant, name } = req.body;
-
-      // The Shortcuts automation sends every field as text (Siri Shortcuts'
-      // dictionary values are string by default), so amount arrives as e.g.
-      // "12.50" rather than a JSON number — validate as a required string,
-      // then parse to the real number the DB expects. occurred_dt is no
-      // longer taken from the client at all — see recordTransaction, which
-      // stamps it with the server's own clock instead.
-      StructuralValidationUtilities.requiredString(amount, "amount", requestBodyStructuralValidationLoggingEvent);
-      StructuralValidationUtilities.requiredString(merchant, "merchant", requestBodyStructuralValidationLoggingEvent);
-      StructuralValidationUtilities.requiredString(name, "name", requestBodyStructuralValidationLoggingEvent);
-
-      // Accept "$12.50" or "12.50" — the Shortcut sometimes includes the
-      // currency symbol depending on how the automation formats it. Only the
-      // parsed numeric value is ever stored; the $ is never persisted.
-      const parsedAmount = Number(String(amount).trim().replace(/^\$/, ""));
-      if (Number.isNaN(parsedAmount)) throw new Exceptions.InvalidRequest("amount", "format");
-
-      const serviceResponse = await service.recordTapTransaction(
-        getApiKeyUserId(req),
-        { amount: parsedAmount, merchant, name },
-        logContext,
-      );
-
-      return cr.ok(serviceResponse);
-    } catch (err) {
-      return handleException(
-        err,
-        cr,
-        "SsApplePayControllerV1.POST /ap/transaction",
-        "Failed to record Apple Pay transaction",
-      );
-    }
-  });
-
-  router.get("/ap/transaction", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const serviceResponse = await service.getTransactions(getApiKeyUserId(req), logContext);
-      return cr.ok(serviceResponse);
-    } catch (err) {
-      return handleException(
-        err,
-        cr,
-        "SsApplePayControllerV1.GET /ap/transaction",
-        "Failed to retrieve Apple Pay transactions",
-      );
-    }
-  });
+  // No frontend calls this (fndom reads GET /applepay); kept because a user's Shortcut may.
+  router.get(
+    "/ap/transaction",
+    route("SsApplePayControllerV1.GET /ap/transaction", "Failed to retrieve Apple Pay transactions", async (req, cr) =>
+      cr.ok<ApplePayTransactionDto[]>(await svc.getTransactions(getApiKeyUserId(req), req.logContext)),
+    ),
+  );
 
   return router;
 }

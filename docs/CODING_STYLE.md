@@ -105,6 +105,9 @@ Each feature folder `src/<module>/` holds:
 - Never pipe untrusted data through a transform stream without error handling. Prefer buffering (`sharp(buf).toBuffer()`), so a bad input can't crash the process.
 - Callbacks the framework doesn't await (bot `onText`, emitters) must catch and log their promise.
 - User text inserted into HTML (emails, Telegram `parse_mode: "HTML"`) is always escaped.
+- Regexes on untrusted text: no two adjacent sub-patterns may match the same characters (e.g. `([\s\S]+?)\s+` backtracks catastrophically); anchor captures on `\S`. Cap the text length in the validator even if it isn't stored.
+- Free-form input parsing (SMS, scraped text) lives in a pure `<Feature>.parser.ts` returning null for missing parts; the validator decides which gaps are 400s.
+- When two modules check the same column, the owning module exports the limit (`MAX_AMOUNT`, `MERCHANT_MAX_LENGTH`).
 - Third-party calls: any failure (network error, non-OK status, unreadable body) → `Exceptions.ExternalRequest` (502); missing server config (API key) → `Unknown` (500) with a server log.
 - Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
@@ -171,6 +174,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | siri-shortcut: Citi SMS regex ReDoS fixed (2 KB of spaces blocked the event loop ~4 s); smsBody ≤ 2000; contract unchanged. Questions S1–S4 collected. |
 | 2026-11-26 | budget: paths → `/:id/update|delete`, `/:id/item/:itemId/update` (fndom); create accepts null amounts; fndom category clear fixed. Design questions B1–B5 collected for the user. |
 | 2026-11-26 | tgimage: image fetch buffered (a non-image used to crash the process); uploads image/* only; bot `/list` escaped; caption IP from x-real-ip; admin list camelCase (fndom). |
 | 2026-11-26 | No live server probes (they sent Telegram alerts); HTTP checks run in-process with fakes. |

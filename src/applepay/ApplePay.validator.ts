@@ -5,10 +5,10 @@ import { DEFAULT_CURRENCY } from "../constants/Locale.js";
 import { Time } from "../constants/Time.js";
 import { ApplePayCardLabelBody, ApplePayCategoryBody, ApplePayManualTransactionBody } from "./ApplePay.types.js";
 
-// tb_applepay_transaction.amount is DECIMAL(10,2).
-const MAX_AMOUNT = 99_999_999.99;
+// tb_applepay_transaction.amount is DECIMAL(10,2). Shared with the siri-shortcut ingestion validator.
+export const MAX_AMOUNT = 99_999_999.99;
 // tb_applepay_transaction.merchant is VARCHAR(255).
-const MERCHANT_MAX_LENGTH = 255;
+export const MERCHANT_MAX_LENGTH = 255;
 // tb_applepay_transaction.category and tb_applepay_card_label.label are VARCHAR(64).
 const CATEGORY_MAX_LENGTH = 64;
 const CARD_LABEL_MAX_LENGTH = 64;
