@@ -3,7 +3,9 @@ import { z } from "zod";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { MandatoryTokenFilter, OptionalTokenFilter } from "../middlewares/TokenFilter.js";
-import { adminLimiter, analyticsLimiter } from "../middlewares/RateLimiter.js";
+import { adminLimiter, analyticsLimiter, analyticsReportLimiter } from "../middlewares/RateLimiter.js";
+import { AnalyticsReportService, readKeyMatches } from "./AnalyticsReport.service.js";
+import { REPORT_SITES, ReportRequest, reportRequestProblems } from "./AnalyticsReport.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, handleException } from "../utils/requestUtils.js";
@@ -40,6 +42,8 @@ function resolveIp(req: RequestWithUserInfo): string {
 /**
  * Analytics v1 — mounted at /analytics alongside the legacy Heartbeat controller.
  *  POST /collect                                  public ingest (fixed contract, see AnalyticsContract.ts)
+ *  POST /report                                   pdca.analytics.report/v1 (viewer key in x-analytics-key, see AnalyticsReport.ts)
+ *  POST /admin/systems/:key/read-key              OWNER: rotate that viewer key (returned once)
  *  GET  /systems                                  systems the caller may view
  *  GET  /systems/:key/summary?hours=24            dashboard data (OWNER or granted viewer)
  *  GET  /admin/systems                            OWNER: full registry incl. disabled
@@ -52,6 +56,7 @@ export default function createAnalyticsController(db: KnexSqlUtilities) {
   const router = Router();
   const systems = new AnalyticSystemService(db);
   const dashboard = new AnalyticsDashboardService(db);
+  const reports = new AnalyticsReportService(db);
   const permissions = new PermissionService(db);
 
   router.post("/collect", [analyticsLimiter, OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
@@ -107,7 +112,47 @@ export default function createAnalyticsController(db: KnexSqlUtilities) {
     }
   });
 
+  // Private dashboard data (pdca.analytics.report/v1). No user login: the site has no accounts, so
+  // reads are authorised by the per-system viewer key in `x-analytics-key` (sha256 stored).
+  router.post("/report", [analyticsReportLimiter], async (req: RequestWithUserInfo, res: Response) => {
+    const cr = new ControllerResponse(req, res);
+    try {
+      const problems = reportRequestProblems(req.body);
+      if (problems.length) return cr.result(400, "Bad Request", { message: "Request rejected", problems });
+      const request = req.body as ReportRequest;
+
+      const systemKey = REPORT_SITES[request.site];
+      const system = systemKey ? await systems.getActive(systemKey) : undefined;
+      const presented = String(req.headers["x-analytics-key"] ?? "");
+      // Same 403 for unknown system, wrong origin and wrong key, so nothing can be probed.
+      if (!system || !isOriginAllowed(system, req.headers.origin)) throw new Exceptions.ForbiddenAccess();
+      if (!readKeyMatches(presented, await reports.readKeyHash(system.key))) throw new Exceptions.ForbiddenAccess();
+
+      const ownHosts = system.allowedOrigins.map((o) => new URL(o).hostname.replace(/^www\./, ""));
+      return cr.ok(await reports.report(system.key, request, ownHosts));
+    } catch (err) {
+      return handleException(err, cr, "AnalyticsController.POST /report", "Failed to build the analytics report");
+    }
+  });
+
   // ── OWNER-only administration ──────────────────────────────────────────────
+
+  // Rotates the viewer key for POST /report. The plain key is returned once; only its hash is kept.
+  router.post(
+    "/admin/systems/:key/read-key",
+    [MandatoryTokenFilter, adminLimiter],
+    async (req: RequestWithUserInfo, res: Response) => {
+      const cr = new ControllerResponse(req, res);
+      try {
+        if (!isOwner(req)) return cr.result(403, "Forbidden", "Insufficient permissions");
+        const readKey = await reports.rotateReadKey(String(req.params.key));
+        if (!readKey) throw new Exceptions.NotFound();
+        return cr.ok({ readKey });
+      } catch (err) {
+        return handleException(err, cr, "AnalyticsController.POST /admin/systems/:key/read-key", "Failed to rotate read key");
+      }
+    },
+  );
 
   router.get("/admin/systems", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
     const cr = new ControllerResponse(req, res);

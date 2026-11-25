@@ -54,6 +54,10 @@ import createSuggestionController from "./suggestion/Suggestion.controller.js";
 
 // Camera relay (phones ↔ dashboards)
 import createCameraController from "./camera/Camera.controller.js";
+
+// PDCA website (dental-directory) contact form
+import createPdcaEnquiryController, { stripPersonalDataFromLog } from "./pdca/PdcaEnquiry.controller.js";
+import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter.js";
 import { CameraService } from "./camera/Camera.service.js";
 import { CameraRelay } from "./camera/Camera.relay.js";
 import { PairingCodeStore } from "./camera/Camera.pairing.js";
@@ -138,6 +142,8 @@ async function startServer() {
     ["/wedding",      mw.std,                                    createWeddingController(db)],
     ["/suggestion",   mw.std,                                    createSuggestionController(db)],
     ["/camera",       mw.std,                                    createCameraController(cameraService)],  // auth per route
+    // Public contact form; body logged as field lengths only (personal data)
+    ["/pdca",         [RestRequestLogger, stripPersonalDataFromLog, RequestHeaderFilter], createPdcaEnquiryController(db)],
     // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
     ["/debug",        process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController(db)],
   ];

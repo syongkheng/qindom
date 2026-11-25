@@ -20,12 +20,16 @@ export interface MailOptions {
   subject: string
   text?: string
   html?: string
+  /** Display name for the From header (address is always SMTP_USER). Defaults to "no-reply". */
+  fromName?: string
+  replyTo?: string
 }
 
 export class MailerUtilities {
   static async sendMail(options: MailOptions): Promise<void> {
     await transporter.sendMail({
-      from: `"no-reply" <${process.env.SMTP_USER}>`,
+      from: `"${(options.fromName ?? 'no-reply').replace(/["\r\n]/g, '')}" <${process.env.SMTP_USER}>`,
+      replyTo: options.replyTo,
       to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
       subject: options.subject,
       text: options.text,
