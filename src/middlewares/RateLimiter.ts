@@ -156,3 +156,23 @@ export const cameraClaimUserLimiter = rateLimit({
   legacyHeaders: false,
   message: rateLimitResponse("Too many pairing attempts. Please try again in 15 minutes."),
 });
+
+/** POST /analytics/report — private dashboard reads (viewer key) */
+export const analyticsReportLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,       // 1 minute
+  limit: 30,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many report requests. Please slow down."),
+});
+
+/** POST /pdca/enquiry — PDCA website contact form */
+export const pdcaEnquiryLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,      // 10 minutes
+  limit: 5,
+  keyGenerator: clientIpKey,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: rateLimitResponse("Too many messages. Please try again in 10 minutes, or WhatsApp us."),
+});

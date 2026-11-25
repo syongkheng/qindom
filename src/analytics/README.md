@@ -24,6 +24,22 @@ One fixed shape for every frontend; the schema lives in `AnalyticsContract.ts`.
 - `event` is snake_case; `page_view` drives the dashboard. `properties` ≤ 4KB. Rate limit 120/min/IP.
 - Dashboard reads: `GET /analytics/systems`, `GET /analytics/systems/:key/summary?hours=24` (login; SYSTEM_R5 or a grant in `tb_aa_resource_access`).
 
+### Report — `POST /analytics/report` (PDCA website `/insights`)
+
+Takes a `pdca.analytics.report/v1` request (the PDCA site's `buildRequest()`) and returns the v1 response with `source: "qindom"`, wrapped in the usual `{ code, status, data }` envelope. Validation, periods and aggregation live in `AnalyticsReport.ts`; queries in `AnalyticsReport.service.ts`.
+
+- **Auth:** there is no login, because the PDCA site has no accounts. The header `x-analytics-key: <viewer key>` must match `tb_analytic_system.read_key_hash` (sha256, timing-safe), and the `Origin` must be in `allowed_origins`. Every failure gets the same 403. An OWNER rotates the key with `POST /analytics/admin/systems/:key/read-key`, which returns the plain key once and invalidates the old one. Share it as `https://<pdca-site>/insights?key=<key>`.
+- **Validation:** a bad request gets a 400 with `data.problems[]`. The messages match the frontend validator.
+- **Data:** events from `tb_analytic_event` for the site's system, counted on Singapore dates.
+  - `visitors` = distinct `properties.visitorId` (or `session_id` when there is none). `newVisitors` = visitors whose first-ever event falls in the period.
+  - Event counts: `page_view`, `whatsapp_click`, `call_click`, `email_click`, `directions_click`, `file_download` and `generate_lead`. `enquiries` = whatsapp + call + email + form.
+  - Breakdowns:
+    - source: the referrer of each visitor's first event in the period, classified as Google search, Google Maps, Instagram, Facebook, LinkedIn, TikTok, Other sites or Direct
+    - page: `page_view` by path
+    - device: each visitor's last `screen_size` (small = mobile, medium = tablet, large = desktop)
+    - tails beyond `limit` collapse into "Other"
+- **Not measurable:** `country` and `searchTerm` come back as `[]`, and `listing*` as 0. Rate limit 30/min/IP.
+
 To add a site: create its registry row with `POST /analytics/admin/systems` (SYSTEM_R5; body `{key, displayName, breakpoints, allowedOrigins, active}`), then send the payload above. fndom `/admin/analytics-access` manages viewers and allowed origins for existing rows.
 
 ### Legacy (deprecated, kept so nothing breaks)
