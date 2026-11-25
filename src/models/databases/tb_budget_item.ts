@@ -1,4 +1,4 @@
-export type BudgetItemStatus = "to_buy" | "bought";
+import type { BudgetItemStatus } from "../../budget/Budget.types.js";
 
 export interface ITB_BUDGET_ITEM {
   id?: number;

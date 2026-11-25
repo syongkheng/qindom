@@ -70,7 +70,10 @@ Each feature folder `src/<module>/` holds:
 - Never return DB rows to the client (not even "redacted"). Return a DTO with just the fields the client needs; for writes, the new value or `{ updated: true }`.
 - Look up the current user by `getUser(req).id` (JWT routes) or `getApiKeyUserId(req)` (x-api-key routes), never `logContext.metadata.userId as number` or rebuilt `username_system` strings.
 - More than ~3 positional parameters of the same kind → pass an input object (`recordSmsTransaction(userId, { amount, currency, merchant, cardLast4 })`).
-- Fixed sets of stored string values get an enum-like constant + type (`TransactionSource.V2`), not bare `"v2"`.
+- Numeric path params go through a `validateXyzParam` function; never pass `Number(req.params.x)` straight to SQL.
+- Numeric columns are range-checked against their DECIMAL width, like text against VARCHAR.
+- Child aggregates for N parents: one `whereIn` query grouped in JS, not one query per parent.
+- Fixed sets of stored string values get an enum-like constant + type (`TransactionSource.V2`), not bare `"v2"`. It lives in the module's `<Module>.types.ts`; the `ITB_*` row type imports it (`import type`) instead of repeating the union.
 - Use `V.requiredText(value, field, max)` / `V.optionalText(value, field, max)` for strings (trim + length cap + blank→null); don't hand-roll trim/length checks.
 - API JSON is **camelCase** everywhere; snake_case column names never reach the client.
 - Free-text fields are length-checked against their column in the validator (and the column width noted in a comment), so an oversized value is a 400, never a DB error/truncation.
@@ -168,6 +171,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | budget: paths → `/:id/update|delete`, `/:id/item/:itemId/update` (fndom); create accepts null amounts; fndom category clear fixed. Design questions B1–B5 collected for the user. |
 | 2026-11-26 | tgimage: image fetch buffered (a non-image used to crash the process); uploads image/* only; bot `/list` escaped; caption IP from x-real-ip; admin list camelCase (fndom). |
 | 2026-11-26 | No live server probes (they sent Telegram alerts); HTTP checks run in-process with fakes. |
 | 2026-11-26 | lta: `POST /lta/bus/services` → GET; camelCase `{ services, count }` (fndom updated); LTA/geo SQL moved from KnexSqlUtilities to LtaService; `raw()` takes a log event. |

@@ -22,8 +22,8 @@ Branch: `refactor/codebase-cleanup`. One commit per folder. Folders 1–15 were 
 | 14 | `house` | [x] | cc9bb4a | `route()` ×8 + typed DTOs (no `any`); `House.types.ts`; `HouseLayout.validator` → shared `House.validator.ts` functions (`requiredText`, named limits, format version); caps → `InvalidRequest("layouts"/"shares","limit")`; `RecordStatus`; logContext; share list sorted in SQL; view selects only needed columns; tests + README (none before) |
 | 15 | `pdca` | [x] | b756d3f | zod → `PdcaEnquiry.validator.ts`; `PdcaEnquiry.ts` → `.service.ts` (+ `PdcaEnquiryService.submit`, sending moved out of controller); `.types.ts`; log-scrub middleware → `.middleware.ts`; Origin now required (`isEnquiryOriginAllowed`); lab contact details + timezone named; `route()`; tests ported + send-flow tests; README |
 | 16 | `lta` | [x] | f7be3a5 | LTA SQL moved from `KnexSqlUtilities` (`db.lta`/`db.pphs` gone) into `LtaService` (hdb calls it, shape unchanged; MRT swapped-column POINT documented); `POST /bus/services` → `GET ?busStopCode=` + camelCase `{ services, count }` (fndom cards); `/timing` typed pass-through `{ records }` (unused `source` dropped); `statistics` → `getBusArrivals` (DataMall failure = 502, was swallowed → 500), URLSearchParams, lazy key, no dotenv; ~170 lines dead code; one validator fn; `route()`; `Lta.types.ts`; `db.raw` takes a log event; tests + README |
-| 17 | `tgimage` | [~] in review | | `route()` ×4 (GET buffered + re-encoded before any header, so no stream crash; headers unchanged) + typed DTOs; `requireRole(OWNER)`; inline 400s → `TgImage.validator.ts` (file, image/* only, column caps, positive-int `telegramUserId`); admin list camelCase (fndom); storage-chat sentence-`InvalidRequest` → `Unknown`; Telegram failures → 502; lazy token; `RecordStatus` + named constants; logContext; `TgLog.bot` → `TgImage.bot` (handlers catch, /list HTML-escaped); caption IP from X-Real-IP; tests + README |
-| 18 | `budget` | [ ] | | |
+| 17 | `tgimage` | [x] | f7fa44b | `route()` ×4 (GET buffered + re-encoded before any header, so no stream crash; headers unchanged) + typed DTOs; `requireRole(OWNER)`; inline 400s → `TgImage.validator.ts` (file, image/* only, column caps, positive-int `telegramUserId`); admin list camelCase (fndom); storage-chat sentence-`InvalidRequest` → `Unknown`; Telegram failures → 502; lazy token; `RecordStatus` + named constants; logContext; `TgLog.bot` → `TgImage.bot` (handlers catch, /list HTML-escaped); caption IP from X-Real-IP; tests + README |
+| 18 | `budget` | [~] in review | | `route()` ×11 + typed DTOs (no `any`); `Budget.types.ts` (+ `BudgetTemplate`/`BudgetItemStatus` enums, row types import them); static validator → functions w/ column caps (name 255, category 64, notes 1024, email 255, DECIMAL(12,2) amounts), empty item update → 400 (was a knex 500), `:userId` → 400 when not a positive int; `RecordStatus` (incl. raw-SQL binding); logContext through every query; shared `loadTable`/`loadOwnedTable`/`loadItem`; item writes scoped by `table_id`; list sums in one query (was N+1); access semantics unchanged; tests (access matrix + in-process HTTP) + README (none before); paths → `/:sessionId/update|delete`, `/item/:itemId/update` (fndom); create accepts `null` amounts; fndom category clear now sends `null` |
 | 19 | `siri-shortcut` | [ ] | | widget/ApplePay controllers read `logContext.metadata.userId as number` (ApiKeyFilter should set `req.user` so `getUser()` works); hand-written route code; |
 | 20 | `hdb` | [ ] | | |
 | 21 | `mcp` | [x] removed | | `/mcp`, `/mcp-key`, `mcpLimiter`, `mw.mcpPublic`, `mcp` key prefix, `@modelcontextprotocol/sdk` removed; migration 20261126000000 drops `tb_mcp_api_key` |
@@ -40,7 +40,7 @@ Branch: `refactor/codebase-cleanup`. One commit per folder. Folders 1–15 were 
 | 32 | empty folders `src/log`, `src/places` | [ ] | | delete only on explicit OK |
 
 ## fndom companion branch
-`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`; unused `ApiRoute.FILE.CREATE_TG` removed; suggestion panels → camelCase + delete routes → POST. lta bus services → GET + camelCase. tg image admin list → camelCase. **Deploy fndom together with qindom.**
+`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`; unused `ApiRoute.FILE.CREATE_TG` removed; suggestion panels → camelCase + delete routes → POST. lta bus services → GET + camelCase. tg image admin list → camelCase. budget rename/delete/item-update paths → `/:id/update|delete`; budget category clear sends `null`. **Deploy fndom together with qindom.**
 
 ## Cross-cutting smells (initial scan)
 - 5 inline `crypto.createHash("sha256")` → `sha256Hex()` (ss-api-key + ApiKeyFilter done; auth, camera, analytics left).
@@ -55,3 +55,13 @@ Branch: `refactor/codebase-cleanup`. One commit per folder. Folders 1–15 were 
 - Inline response types instead of named DTOs (only 4 DTOs exist).
 - Only 9 modules have a `README.md`, and connectivity's is already stale.
 - No formatter until now.
+
+## Open questions for the user (collected during autonomous run)
+Design/security decisions the refactor deliberately left unchanged. To be decided together at the end.
+
+**budget**
+- B1. `POST /budget/:id/collaborator` tells any table owner whether an email has an account (404 vs 200): email enumeration, only global rate limits.
+- B2. Invitees don't need a verified email (`email_verified` not checked).
+- B3. Every collaborator sees the other collaborators' emails in `GET /budget/:id`.
+- B4. Collaborators whose user account is soft-deleted still appear and keep their collaborator row.
+- B5. Collaborators can't leave a shared table themselves (only the owner can remove them).

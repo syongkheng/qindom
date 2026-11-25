@@ -1,4 +1,4 @@
-export type BudgetTemplate = "home_reno" | "wedding" | "travel" | "other";
+import type { BudgetTemplate } from "../../budget/Budget.types.js";
 
 export interface ITB_BUDGET_TABLE {
   id?: number;
