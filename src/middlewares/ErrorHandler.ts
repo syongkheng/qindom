@@ -1,7 +1,7 @@
 import { STATUS_CODES } from "node:http";
+import { BaseException } from "../exceptions/AppExceptions.js";
 import { ErrorRequestHandler } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { BaseExceptions } from "../exceptions/BaseException.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { toMessage } from "../utils/errorUtils.js";
 
@@ -10,7 +10,7 @@ const GENERIC_500 = "An internal error occurred. Please try again later.";
 // Client-safe status + message for an error that escaped a controller's own
 // try/catch, or null when it should be treated as an unexpected 500.
 function toClientError(err: unknown): { status: number; message: unknown } | null {
-  if (err instanceof BaseExceptions) {
+  if (err instanceof BaseException) {
     return { status: err.httpStatus, message: err.toResponseMessage() };
   }
   // Matched by shape rather than instanceof multer.MulterError, which misses

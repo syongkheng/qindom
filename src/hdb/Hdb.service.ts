@@ -1,10 +1,9 @@
 import { parse, HTMLElement } from "node-html-parser";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { CoordinateService } from "./Coordinate.service.js";
 import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
-import { UnknownException } from "../exceptions/UnknownException.js";
 import { toMessage } from "../utils/errorUtils.js";
 
 interface FlatRecord {
@@ -32,7 +31,7 @@ export class HdbService {
 
     if (typeof currentBatch !== "string" || !/^\d{6}$/.test(currentBatch)) {
       LoggingUtilities.service.error("HdbService.statistics", `Invalid batch format: ${currentBatch}`);
-      throw new InvalidRequestException("Invalid batch format. Expected 'YYYYMM'.");
+      throw new Exceptions.InvalidRequest("Invalid batch format. Expected 'YYYYMM'.");
     }
 
     // 1️⃣ Check if data exists in DB
@@ -78,7 +77,7 @@ export class HdbService {
       });
 
       if (!response.ok) {
-        throw new UnknownException();
+        throw new Exceptions.Unknown();
       }
 
       html = await response.text();
@@ -93,7 +92,7 @@ export class HdbService {
 
     if (!nextDataScript) {
       LoggingUtilities.service.error("HdbService.statistics", "Could not find __NEXT_DATA__ script on HDB page.");
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
 
     let bodyContentHtml: string | null = null;
@@ -116,7 +115,7 @@ export class HdbService {
       }
     } catch {
       LoggingUtilities.service.error("HdbService.statistics", "Failed to parse __NEXT_DATA__ JSON.");
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
 
     if (!bodyContentHtml) {
@@ -124,7 +123,7 @@ export class HdbService {
         "HdbService.statistics",
         "No accordion body content with table found in __NEXT_DATA__.",
       );
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
 
     const bodyRoot = parse(bodyContentHtml);
@@ -132,7 +131,7 @@ export class HdbService {
 
     if (tables.length === 0) {
       LoggingUtilities.service.error("HdbService.statistics", "No tables found in accordion body content.");
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
 
     const pphsTable = tables[0];
@@ -231,7 +230,7 @@ export class HdbService {
     try {
       return await this.db.pphs.findBusStopsWithinRadiusOfLatLng(lat, lng, radius);
     } catch (error) {
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 
@@ -239,7 +238,7 @@ export class HdbService {
     try {
       return await this.db.pphs.findMrtStationsWithinRadiusOfLatLng(lat, lng, limit ?? 3);
     } catch (error) {
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 

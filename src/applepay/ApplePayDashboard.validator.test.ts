@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 import assert from "node:assert/strict";
 import { ApplePayDashboardValidator } from "./ApplePayDashboard.validator.js";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 
 const validate = ApplePayDashboardValidator.validateCreateManualTransactionRequest;
 // Fixed past timestamp so the "no future dates" rule never depends on wall clock.
@@ -32,13 +32,13 @@ describe("validateCreateManualTransactionRequest — currency", () => {
 
   for (const bad of ["US", "USDX", "U5D", "S G", "   ", "€€€"]) {
     test(`rejects malformed currency ${JSON.stringify(bad)}`, () => {
-      assert.throws(() => validate(body({ currency: bad })), InvalidRequestException);
+      assert.throws(() => validate(body({ currency: bad })), Exceptions.InvalidRequest);
     });
   }
 
   test("rejects non-string currency", () => {
-    assert.throws(() => validate(body({ currency: 840 })), InvalidRequestException);
-    assert.throws(() => validate(body({ currency: ["SGD"] })), InvalidRequestException);
+    assert.throws(() => validate(body({ currency: 840 })), Exceptions.InvalidRequest);
+    assert.throws(() => validate(body({ currency: ["SGD"] })), Exceptions.InvalidRequest);
   });
 
   test("other fields still returned alongside currency", () => {

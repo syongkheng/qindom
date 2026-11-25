@@ -1,15 +1,13 @@
 import { Request, RequestHandler, Response } from "express";
+import { BaseException, Exceptions } from "../exceptions/AppExceptions.js";
 import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { BaseExceptions } from "../exceptions/BaseException.js";
-import { UnauthorizedAccessException } from "../exceptions/UnauthorizedAccessException.js";
-import { ForbiddenAccessException } from "../exceptions/ForbiddenAccessException.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { LoggingUtilities } from "./logging/LoggingUtilities.js";
 import { toMessage } from "./errorUtils.js";
 
 export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {
-  if (!req.user) throw new UnauthorizedAccessException();
+  if (!req.user) throw new Exceptions.UnauthorizedAccess();
   return req.user;
 }
 
@@ -17,13 +15,13 @@ export function hasRole(req: RequestWithUserInfo, ...roles: string[]): boolean {
   return roles.some((r) => req.user?.roles?.includes(r) ?? false);
 }
 
-/** Throws `ForbiddenAccessException` unless the user has at least one of `roles`. */
+/** Throws `Exceptions.ForbiddenAccess` unless the user has at least one of `roles`. */
 export function requireRole(req: RequestWithUserInfo, ...roles: string[]): void {
-  if (!hasRole(req, ...roles)) throw new ForbiddenAccessException("Insufficient permissions");
+  if (!hasRole(req, ...roles)) throw new Exceptions.ForbiddenAccess("Insufficient permissions");
 }
 
 export function handleException(err: unknown, cr: ControllerResponse, logLabel: string, fallback: string): Response {
-  if (err instanceof BaseExceptions) {
+  if (err instanceof BaseException) {
     return cr.result(err.httpStatus, err.name, err.toResponseMessage());
   }
   // One-liner for PM2's error log, tagged so it can be matched to the request tree
@@ -40,7 +38,7 @@ export type RouteHandler<R extends Request = Request> = (
 /**
  * Wraps a controller handler with the standard response + exception plumbing:
  * builds the `ControllerResponse`, and routes any thrown error through
- * `handleException` (typed `BaseExceptions` → their status, anything else → 500 with `fallback`).
+ * `handleException` (typed `BaseException` → their status, anything else → 500 with `fallback`).
  *
  * @param label    `"<Module>Controller.<METHOD> <path>"`, used in logs and the request tree
  * @param fallback client-facing message for unexpected (non-typed) errors

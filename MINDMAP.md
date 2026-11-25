@@ -24,7 +24,7 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 7. **MandatoryTokenFilter / OptionalTokenFilter** (`TokenFilter.ts`) — JWT in httpOnly cookie `jwt_token` (HS256 pinned, 30d; sign/verify + `JWT_ALGORITHM`/`JWT_TTL_MS` only in `src/token/Token.service.ts`, boot fails if `JWT_SECRET` missing), token compared to `tb_aa_user.token` (revocation; Optional drops to visitor on mismatch), roles read from DB row not JWT, double-submit CSRF (`csrf_token` cookie == `X-CSRF-Token` header on non-GET, timing-safe). Cookies scoped `.awense.com` in prd (`AuthCookieUtilities.ts`).
 8. **RequestApiKeyFilter(...prefixes)** — `x-api-key` → `tb_ss_api_key` hash lookup; only the `ss_` prefix remains (`mw.ssKey` → `/v1/ss`, `/v2/ss`). MCP server + `mcp_` keys removed Nov 2026 (`tb_mcp_api_key` dropped by migration 20261126000000). `TokenOrApiKeyFilter.ts` unused. IoT routes removed Oct 2026 (redaction still masks `iot_` keys).
 9. **404 catch-all** — after the route table, unmatched paths get JSON `{code:404, status:"Not Found"}` (no Express "Cannot GET" HTML); not logged/alerted.
-10. **ErrorHandler** — registered last; replaces Express default (no stack leaks). BaseExceptions → status, Multer → 413/400, http-errors → 4xx, else generic 500.
+10. **ErrorHandler** — registered last; replaces Express default (no stack leaks). `BaseException` → status, Multer → 413/400, http-errors → 4xx, else generic 500.
 
 ## Route table (index.ts) — `mw.std` open, `mw.auth` JWT, `mw.pub` public
 | Prefix | Auth | Module |
@@ -95,5 +95,5 @@ MySQL · Nominatim · LTA DataMall · `ws` (camera relay WebSockets) · Telegram
 - URLs use hyphens. Envelope `{ code, status: "Ok"|"Ko", data }`.
 - Env flags: `APP_ENV`/`IS_PRD`/`IS_DEV` from `src/config/env.ts`. Shared constants in `src/constants/` (`RecordStatus`, `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`). Role guard: `requireRole(req, ...roles)` throws ForbiddenAccess.
 - Controller factory `createXyzController(db)` → Router; handlers wrapped in `route(label, fallback, handler)` (`requestUtils`), which builds `cr` and calls `handleException` (migrating folder by folder). Role guard `hasRole(req, ...roles)` (`requestUtils`).
-- Exceptions: always throw typed `BaseExceptions` (never return error strings); controllers catch with `handleException(err, cr, label, fallback)`: BaseExceptions → `cr.result(status, name, clientMessage)`, else log + `cr.ko(fallback)` (real cause kept in request tree).
+- Exceptions: all in `src/exceptions/AppExceptions.ts`, thrown via `Exceptions.X` (never return error strings; `code` + class name are an fndom contract); handlers wrapped in `route()` → `handleException(err, cr, label, fallback)`: `BaseException` → `cr.result(status, name, clientMessage)`, else log + `cr.ko(fallback)` (real cause kept in request tree).
 - Logging: services take `logContext?: IRequestLogContext`, emit events via `LoggingUtilities.request.branch()` (pending-event pattern: set `.detail` after the async result); controllers pass `req.logContext`.

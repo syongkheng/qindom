@@ -1,6 +1,5 @@
-import { WeakPasswordException } from "../exceptions/WeakPasswordException.js";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 
@@ -40,26 +39,26 @@ export class AuthValidator {
     V.requiredString(username, "username", loggingEvent);
     if ((username as string).trim().length < 3) {
       loggingEvent?.children?.push(`'username' minLength ${LogEmoji.error} `);
-      throw new InvalidRequestException("username", "format");
+      throw new Exceptions.InvalidRequest("username", "format");
     }
     loggingEvent?.children?.push(`'username' minLength ${LogEmoji.success} `);
     // tb_aa_user.username is VARCHAR(64)
     if ((username as string).trim().length > 64) {
       loggingEvent?.children?.push(`'username' maxLength ${LogEmoji.error} `);
-      throw new InvalidRequestException("username", "format");
+      throw new Exceptions.InvalidRequest("username", "format");
     }
     loggingEvent?.children?.push(`'username' maxLength ${LogEmoji.success} `);
     V.requiredEmail(email, "email", loggingEvent);
     V.requiredString(password, "password", loggingEvent);
     if (!this._isStrongPassword(password as string)) {
       loggingEvent?.children?.push(`'password' strength ${LogEmoji.error} `);
-      throw new WeakPasswordException();
+      throw new Exceptions.WeakPassword();
     }
     loggingEvent?.children?.push(`'password' strength ${LogEmoji.success} `);
     V.requiredString(system, "system", loggingEvent);
     if (!REGISTER_SYSTEMS.includes(system as string)) {
       loggingEvent?.children?.push(`'system' allowlist ${LogEmoji.error} `);
-      throw new InvalidRequestException("system", "format");
+      throw new Exceptions.InvalidRequest("system", "format");
     }
     loggingEvent?.children?.push(`'system' allowlist ${LogEmoji.success} `);
     return {
@@ -106,7 +105,7 @@ export class AuthValidator {
     V.requiredString(newPassword, "newPassword", loggingEvent);
     if (!this._isStrongPassword(newPassword as string)) {
       loggingEvent?.children?.push(`'newPassword' strength ${LogEmoji.error} `);
-      throw new WeakPasswordException();
+      throw new Exceptions.WeakPassword();
     }
     loggingEvent?.children?.push(`'newPassword' strength ${LogEmoji.success} `);
     return { currentPassword: currentPassword as string, newPassword: newPassword as string };

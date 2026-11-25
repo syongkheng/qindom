@@ -33,7 +33,7 @@ Each feature folder `src/<module>/` holds:
   ```
 - `label` = `"<Module>Controller.<METHOD> <path>"`. `fallback` = the short client-facing 500 message.
 - Success is always `cr.ok<XyzDto>(data)`: **always pass the type argument** so the route shows what it returns (the compiler checks the value against it). Use `cr.ok<void>` / a small inline DTO such as `{ deleted: true }` → `DeletedDto` for acknowledgements.
-- Errors: throw a typed `BaseExceptions` subclass (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exception: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`.)
+- Errors: throw a typed exception via the registry (`throw new Exceptions.NotFound("...")`) (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exception: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`.)
 - Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
 - Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
 - Controllers hold no business logic and no SQL.
@@ -49,6 +49,17 @@ Each feature folder `src/<module>/` holds:
 - A service with no state or dependencies is a set of exported functions (e.g. `signToken`, `verifyToken`), not a class you have to `new` up.
 - One concern = one owner: a setting used by several modules (e.g. JWT algorithm/TTL) is exported from the module that owns it and imported everywhere else, never duplicated with a "keep in sync" comment.
 - Throw typed exceptions; never return error strings or `""` as failure.
+
+## 4c. Exceptions
+- **Every exception must be in the `Exceptions` registry.** No exception class may exist outside it:
+  - Every class lives in `src/exceptions/AppExceptions.ts` and has a registry entry. Never define an exception class in a module, and never extend `BaseException` elsewhere.
+  - Code throws only through the registry (`throw new Exceptions.X(...)`). Never import a class directly; the only direct import allowed is `BaseException`, for `instanceof`.
+  - Don't throw a plain `new Error(...)` for anything a client should see; it becomes a generic 500. Plain `Error` is only for startup/config failures and internal "should never happen" bugs.
+  - Enforced by `AppExceptions.test.ts`: it fails if any exported `BaseException` subclass is missing from the registry.
+- Every exception states its HTTP status explicitly and the status must match the meaning: 4xx for the caller's fault, 5xx for ours, 502 for a failing upstream service.
+- `InvalidRequest(field, "mandatory" | "format")` takes a **field name**, never a sentence. Use `NotFound(message)`, `ForbiddenAccess(message)`, `UnauthorizedAccess(message)` for custom text.
+- `code` and class names are a frontend contract (fndom maps `data.code` to translations). Check fndom before renaming either.
+- Need a new error kind? Add a class + registry entry in `AppExceptions.ts` and a row in `src/exceptions/README.md`.
 
 ## 4a. Validation
 - Request validation uses our own hand-written `<Module>.validator.ts` (no zod or other schema libraries).
@@ -100,6 +111,9 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | dotenv-loaded env vars are read lazily; required ones checked at boot. |
 | 2026-11-25 | `RecordStatus` constant replaces raw `'A'`/`'D'`; `Time` units; `APP_TIMEZONE` / `DEFAULT_CURRENCY`. |
 | 2026-11-25 | Enum-like objects PascalCase (`RESPONSE_STATUS` → `ResponseStatus`), single values UPPER_SNAKE. |
+| 2026-11-25 | Exceptions consolidated into `AppExceptions.ts`, used only via `Exceptions.X`; 4 unused deleted; `BaseExceptions` → `BaseException`. |
+| 2026-11-25 | Status fixes: ExternalRequest 502, EntityCreation/Update 500, MaxVerifyAttempts 429, VerifyCodeExpired 400. |
+| 2026-11-25 | All exceptions must be registered in `Exceptions`; no exception classes outside `AppExceptions.ts` (enforced by test). |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions

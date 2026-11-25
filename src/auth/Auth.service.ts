@@ -150,7 +150,7 @@ export class AuthService {
       return { requiresVerification: true, email };
     } catch (error) {
       LoggingUtilities.service.error("AuthService.createNewUser", `Registration failed for ${email}: ${error}`);
-      throw new Exceptions.RegistrationException();
+      throw new Exceptions.Registration();
     }
   }
 

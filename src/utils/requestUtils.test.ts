@@ -1,8 +1,8 @@
 import { test } from "node:test";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 import assert from "node:assert/strict";
 import type { Request, Response } from "express";
 import { requireRole, route } from "./requestUtils.js";
-import { ForbiddenAccessException } from "../exceptions/ForbiddenAccessException.js";
 
 interface Captured {
   status?: number;
@@ -50,12 +50,12 @@ test("route() sends the handler's cr.ok response", async () => {
   assert.deepEqual(captured.body, { code: 200, status: "Ok", data: { hello: "world" } });
 });
 
-test("route() maps a thrown BaseExceptions to its own status", async () => {
+test("route() maps a thrown BaseException to its own status", async () => {
   const captured: Captured = {};
   await route("Test.GET /", "fallback", async () => {
-    throw new ForbiddenAccessException();
+    throw new Exceptions.ForbiddenAccess();
   })(fakeReq(), fakeRes(captured), next);
-  assert.equal(captured.status, new ForbiddenAccessException().httpStatus);
+  assert.equal(captured.status, new Exceptions.ForbiddenAccess().httpStatus);
   assert.equal(captured.body?.status, "ForbiddenAccessException");
 });
 
@@ -69,11 +69,11 @@ test("route() turns an unexpected error into a 500 with the fallback message", a
   if (process.env.NODE_ENV !== "prd") assert.equal(captured.body?.data, "Failed to do thing");
 });
 
-test("requireRole() passes with a matching role and throws ForbiddenAccessException otherwise", () => {
+test("requireRole() passes with a matching role and throws Exceptions.ForbiddenAccess otherwise", () => {
   const withRole = { user: { roles: ["SYSTEM_R5"] } } as unknown as Request;
   const withoutRole = { user: { roles: ["MODULE_R1"] } } as unknown as Request;
   const anonymous = {} as Request;
   assert.doesNotThrow(() => requireRole(withRole, "SYSTEM_R5"));
-  assert.throws(() => requireRole(withoutRole, "SYSTEM_R5"), ForbiddenAccessException);
-  assert.throws(() => requireRole(anonymous, "SYSTEM_R5"), ForbiddenAccessException);
+  assert.throws(() => requireRole(withoutRole, "SYSTEM_R5"), Exceptions.ForbiddenAccess);
+  assert.throws(() => requireRole(anonymous, "SYSTEM_R5"), Exceptions.ForbiddenAccess);
 });

@@ -1,7 +1,7 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 
 export class SuggestionValidator {
   static validateCreatePacking(
@@ -26,7 +26,7 @@ export class SuggestionValidator {
     V.requiredString(country, "country", loggingEvent);
     if (!(country as string).trim()) {
       loggingEvent?.children?.push(`'country' nonEmpty ${LogEmoji.error}`);
-      throw new InvalidRequestException("country", "format");
+      throw new Exceptions.InvalidRequest("country", "format");
     }
     loggingEvent?.children?.push(`'country' nonEmpty ${LogEmoji.success}`);
     return { country: (country as string).trim() };
@@ -76,7 +76,7 @@ export class SuggestionValidator {
     const id = Number(params.id);
     if (!Number.isInteger(id) || id <= 0) {
       loggingEvent?.children?.push(`'id' invalid ${LogEmoji.error}`);
-      throw new InvalidRequestException("id", "format");
+      throw new Exceptions.InvalidRequest("id", "format");
     }
     loggingEvent?.children?.push(`'id' valid ${LogEmoji.success}`);
     return { id };

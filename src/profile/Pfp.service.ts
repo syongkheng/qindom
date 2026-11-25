@@ -1,6 +1,5 @@
-import { UnknownException } from "../exceptions/UnknownException.js";
-import { UsernameAlreadyTakenException } from "../exceptions/UsernameAlreadyTakenException.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 import { signToken } from "../token/Token.service.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 
@@ -15,7 +14,7 @@ export class PfpService {
       });
       return { country: userRecord?.country || null };
     } catch (error) {
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 
@@ -32,7 +31,7 @@ export class PfpService {
         token: "[REDACTED]",
       }));
     } catch (error) {
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 
@@ -50,7 +49,7 @@ export class PfpService {
         pfp_picture_blob: "[REDACTED]",
       }));
     } catch (error) {
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 
@@ -67,7 +66,7 @@ export class PfpService {
       const blobString = decoded.startsWith("data:") ? decoded : `data:image/jpeg;base64,${decoded}`;
       return { blobString };
     } catch (error) {
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 
@@ -80,14 +79,14 @@ export class PfpService {
       username_system,
       record_status: "A",
     });
-    if (!user) throw new UnknownException();
+    if (!user) throw new Exceptions.Unknown();
 
     const newUsernameSystem = `${newUsername}_${system}`;
     const conflict = await this.db.findOne<ITB_AA_USER>("tb_aa_user", {
       username_system: newUsernameSystem,
       record_status: "A",
     });
-    if (conflict) throw new UsernameAlreadyTakenException();
+    if (conflict) throw new Exceptions.UsernameAlreadyTaken();
 
     await this.db.update<ITB_AA_USER>(
       "tb_aa_user",

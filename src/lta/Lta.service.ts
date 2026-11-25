@@ -1,5 +1,4 @@
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { UnknownException } from "../exceptions/UnknownException.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import dotenv from "dotenv";
@@ -104,7 +103,7 @@ export class LtaService {
     try {
       return await this.db.lta.findBusServicesByBusStopCode(busStopCode);
     } catch (error) {
-      throw new UnknownException();
+      throw new Exceptions.Unknown();
     }
   }
 

@@ -1,8 +1,8 @@
 import { Request } from "express";
+import { Exceptions } from "../exceptions/AppExceptions.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { RsvpGuestPayload, RsvpPayload } from "./Wedding.service.js";
 import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
@@ -24,7 +24,7 @@ const MAX_LEN = {
 function maxLength(value: unknown, max: number, fieldName: string, loggingEvent?: IRequestLogEvent): void {
   if (typeof value === "string" && value.trim().length > max) {
     loggingEvent?.children?.push(`'${fieldName}' maxLength ${max} ${LogEmoji.error}`);
-    throw new InvalidRequestException(fieldName, "format");
+    throw new Exceptions.InvalidRequest(fieldName, "format");
   }
 }
 
@@ -95,7 +95,7 @@ export class WeddingValidator {
 
     if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
       loggingEvent?.children?.push(`'pin' must be exactly 4 digits ${LogEmoji.error}`);
-      throw new InvalidRequestException("pin", "format");
+      throw new Exceptions.InvalidRequest("pin", "format");
     }
 
     loggingEvent?.children?.push(`'name' + 'pin' validated ${LogEmoji.success}`);
@@ -109,17 +109,17 @@ export class WeddingValidator {
   ): void {
     if (!Array.isArray(contacts)) {
       loggingEvent?.children?.push(`additionalGuestContact must be an array ${LogEmoji.error}`);
-      throw new InvalidRequestException("additionalGuestContact", "format");
+      throw new Exceptions.InvalidRequest("additionalGuestContact", "format");
     }
     if (contacts.length > MAX_ADDITIONAL_GUESTS) {
       loggingEvent?.children?.push(`additionalGuestContact max ${MAX_ADDITIONAL_GUESTS} ${LogEmoji.error}`);
-      throw new InvalidRequestException("additionalGuestContact", "format");
+      throw new Exceptions.InvalidRequest("additionalGuestContact", "format");
     }
 
     contacts.forEach((contact, index) => {
       if (typeof contact !== "object" || contact === null || Array.isArray(contact)) {
         loggingEvent?.children?.push(`additionalGuestContact[${index}] format ${LogEmoji.error}`);
-        throw new InvalidRequestException(`additionalGuestContact[${index}]`, "format");
+        throw new Exceptions.InvalidRequest(`additionalGuestContact[${index}]`, "format");
       }
 
       const { name, email, contactNumber, dietaryRestrictions, mealPreference } = contact as Record<string, unknown>;
