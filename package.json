@@ -13,7 +13,9 @@
     "migrate:rollback": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
     "migrate:make": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make",
     "migrate:status": "node --import tsx ./node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:status",
-    "postinstall": "test ! -f scripts/apply-patches.js || node scripts/apply-patches.js"
+    "postinstall": "test ! -f scripts/apply-patches.js || node scripts/apply-patches.js",
+    "format": "prettier --write \"src/**/*.ts\" knexfile.ts",
+    "format:check": "prettier --check \"src/**/*.ts\" knexfile.ts"
   },
   "keywords": [],
   "author": "",
@@ -57,6 +59,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/nodemailer": "^7.0.11",
     "@types/ws": "^8.18.2",
+    "prettier": "3.10.1",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   }
