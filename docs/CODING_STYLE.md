@@ -22,6 +22,7 @@ Each feature folder `src/<module>/` holds:
 | `<Module>.constants.ts` | Module constants, only when there are too many to keep at the top of the file using them |
 | `<Module>.test.ts` | `node:test` unit tests |
 
+- A folder with several features prefixes each with the folder name (`house/HouseLayout.service.ts`, `house/HouseShare.service.ts`) and shares one `<Folder>.types.ts` / `<Folder>.validator.ts`.
 - File names: `PascalCase.<role>.ts`, named after the **folder** (`src/profile/Profile.service.ts` → `ProfileService`, `createProfileController`), even when the URL prefix differs (`/pfp`). Shared helpers: `XyzUtilities.ts`.
 - DB row types stay in `src/models/databases/` (`ITB_*`), because migrations and several modules share them.
 - A service lives in the module that **owns its tables**. Other modules (e.g. `siri-shortcut` ingestion routes) import it from there; they never host it.
@@ -58,6 +59,8 @@ Each feature folder `src/<module>/` holds:
 - Request-scoped outcomes (cache hit/miss, counts) go in the event's `detail`, not in extra `LoggingUtilities.service.info` lines. Keep `service.*` for things worth seeing in PM2 logs (external calls, failures).
 - Don't mark a method `async` unless it awaits something.
 - No `any` in service signatures (`Promise<any>`, `any[]`). Map DB rows to DTOs with a `toXyzDto(row)` function.
+- Sort in SQL (`orderBy`) rather than in JS unless the sort key needs a fallback the query options can't express.
+- `SELECT` only the columns a method needs (`["id"]` for existence checks, a `SUMMARY_COLUMNS` list for summaries).
 - When the same query appears in several methods, put it in one private helper (`activeTasks`, `loadOrThrow`).
 - A service with no state or dependencies is a set of exported functions (e.g. `signToken`, `verifyToken`), not a class you have to `new` up.
 - One concern = one owner: a setting used by several modules (e.g. JWT algorithm/TTL) is exported from the module that owns it and imported everywhere else, never duplicated with a "keep in sync" comment.
@@ -156,6 +159,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | `getApiKeyUserId(req)` for API-key routes; input objects over long positional lists; `TransactionSource` enum. |
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
+| 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions
