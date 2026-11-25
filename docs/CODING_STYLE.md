@@ -26,14 +26,14 @@ Each feature folder `src/<module>/` holds:
 - DB row types stay in `src/models/databases/` (`ITB_*`), because migrations and several modules share them.
 
 ## 3. Controllers
-- Factory: `export default function createXyzController(db: KnexSqlUtilities): Router`.
+- Factory: `export default function createXyzController(db: KnexSqlUtilities): Router`. Take **only what the controller uses**: no unused `db` / `_db` (e.g. `createDebugController()`).
 - Every handler is wrapped in `route(label, fallback, handler)` from `utils/requestUtils.ts`. Never write `new ControllerResponse` + try/catch + `handleException` by hand.
   ```ts
   router.get("/", route("XyzController.GET /", "Failed to load xyz", async (req, cr) => cr.ok<XyzDto[]>(await svc.list(req.logContext))));
   ```
 - `label` = `"<Module>Controller.<METHOD> <path>"`. `fallback` = the short client-facing 500 message.
 - Success is always `cr.ok<XyzDto>(data)`: **always pass the type argument** so the route shows what it returns (the compiler checks the value against it). Use `cr.ok<void>` / a small inline DTO such as `{ deleted: true }` → `DeletedDto` for acknowledgements.
-- Errors: throw a typed `BaseExceptions` subclass (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline.
+- Errors: throw a typed `BaseExceptions` subclass (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exception: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`.)
 - Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
 - Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
 - Controllers hold no business logic and no SQL.
@@ -42,6 +42,9 @@ Each feature folder `src/<module>/` holds:
 - Class `XyzService` built with `db: KnexSqlUtilities` (plus any other collaborators).
 - Public methods return named `XyzDto` types from `<Module>.types.ts`, never anonymous inline object types.
 - `logContext?: IRequestLogContext` is the **last** parameter; pass it to `KnexSqlUtilities` calls.
+
+## 4b. Logging
+- `req.logContext` is always set (every route preset starts with `RestRequestLogger`). Don't guard it: write `LoggingUtilities.request.branch(req.logContext, ...)`, not `if (req.logContext)` or `logContext ? ... : undefined`.
 - Don't mark a method `async` unless it awaits something.
 - Throw typed exceptions; never return error strings or `""` as failure.
 
@@ -54,6 +57,8 @@ Each feature folder `src/<module>/` holds:
 - A value used by more than one module goes in `src/constants/`.
 - Durations are written as expressions with units in the name: `const OTP_TTL_MS = 15 * 60 * 1000;`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
+- Environment checks use `APP_ENV` / `IS_PRD` / `IS_DEV` from `src/config/env.ts`. Never compare `process.env.NODE_ENV` inline or keep a local `isPrd` copy.
+- Name HTTP status thresholds and limits (`MIN_STATUS = 200`), even when the meaning seems obvious.
 
 ## 6. HTTP conventions
 - Envelope: `{ code, status: "Ok" | "Ko", data }`, produced only by `ControllerResponse`.
@@ -82,6 +87,10 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Controller errors are typed exceptions + `requireRole()`; one error shape everywhere. |
 | 2026-11-25 | MCP feature to be removed (not needed), which lets zod go. |
 | 2026-11-25 | Controllers show their response type with `cr.ok<XyzDto>(...)` (explicit type argument, every route). |
+| 2026-11-25 | Shared env flags in `src/config/env.ts` (`APP_ENV`, `IS_PRD`, `IS_DEV`). |
+| 2026-11-25 | No defensive `req.logContext` guards. |
+| 2026-11-25 | Controller factories take only the dependencies they use. |
+| 2026-11-25 | `requireRole(req, ...roles)` guard added to `requestUtils`. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions

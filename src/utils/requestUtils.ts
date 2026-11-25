@@ -3,6 +3,7 @@ import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { BaseExceptions } from "../exceptions/BaseException.js";
 import { UnauthorizedAccessException } from "../exceptions/UnauthorizedAccessException.js";
+import { ForbiddenAccessException } from "../exceptions/ForbiddenAccessException.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { LoggingUtilities } from "./logging/LoggingUtilities.js";
 import { toMessage } from "./errorUtils.js";
@@ -14,6 +15,11 @@ export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {
 
 export function hasRole(req: RequestWithUserInfo, ...roles: string[]): boolean {
   return roles.some((r) => req.user?.roles?.includes(r) ?? false);
+}
+
+/** Throws `ForbiddenAccessException` unless the user has at least one of `roles`. */
+export function requireRole(req: RequestWithUserInfo, ...roles: string[]): void {
+  if (!hasRole(req, ...roles)) throw new ForbiddenAccessException("Insufficient permissions");
 }
 
 export function handleException(err: unknown, cr: ControllerResponse, logLabel: string, fallback: string): Response {

@@ -141,7 +141,7 @@ async function startServer() {
     // Public contact form; body logged as field lengths only (personal data)
     ["/pdca", [RestRequestLogger, stripPersonalDataFromLog, RequestHeaderFilter], createPdcaEnquiryController(db)],
     // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
-    ["/debug", process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController(db)],
+    ["/debug", process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController()],
   ];
   // Marks the request log's pipeline stage: events after the route's middlewares
   // belong to the controller (or the service layer, by event type).
