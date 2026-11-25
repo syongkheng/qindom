@@ -1,72 +1,25 @@
 ## LTA Controller
 
-- Controller related to public transport data (bus arrival timings and services)
-------------------------------------------------------------------------------------------
+- Public bus data. **Auth:** none (`mw.std`).
+- `LtaService` owns `tb_lta_busstop`, `tb_lta_bus_info` and `tb_lrt_mrt_station` (static LTA data, loaded once; no write routes). It also serves the proximity lookups behind `/hdb/pphs/busstops` and `/hdb/pphs/mrt` (`findBusStopsNear`, `findNearestMrtStations`; response shape documented in hdb).
+- Env: `LTA_DATAMALL_API_KEY` (read lazily; missing = 500 + server log).
+- `tb_lrt_mrt_station` stores latitude in `lng` and longitude in `lat`; the MRT query's `POINT(e.lat, e.lng)` compensates on purpose. See the comment in `Lta.service.ts`.
 
-#### Get bus arrival timings for a stop
+---
 
-<details>
- <summary><code>GET</code> <code>/lta/timing</code></summary>
+| Method | Path | Query | Response (`data`) |
+|---|---|---|---|
+| `GET` | `/lta/timing` | `busStopCode` (5 digits) | `BusArrivalsDto` `{ records: BusArrivalServiceDto[] }` |
+| `GET` | `/lta/bus/services` | `busStopCode` (5 digits) | `BusServicesDto` `{ services: BusServiceDto[], count }` |
 
-##### Query Parameters
-```
-busStopCode: string   // required, e.g. "83139"
-```
+`BusArrivalServiceDto` is LTA DataMall's BusArrival v3 `Services[]` item, passed through unchanged (PascalCase is DataMall's):
+`{ ServiceNo, Operator, NextBus, NextBus2, NextBus3, … }`, each `NextBus*` = `{ EstimatedArrival, Load, Feature, Type, … }` (all `""` when there is no estimate). Only the fields fndom reads are typed.
 
-##### Response Format
-```
-{
-    "code": 200 | 400 | 500,
-    "status": "Ok" | "Ko",
-    "data": [
-        {
-            "serviceNo": string,
-            "operator": string,
-            "nextBus": { "estimatedArrival": string, "load": string, "type": string },
-            "nextBus2": { "estimatedArrival": string, "load": string, "type": string },
-            "nextBus3": { "estimatedArrival": string, "load": string, "type": string }
-        }
-    ]
-}
-```
-</details>
+`BusServiceDto` = `{ serviceNo, operator, direction, stopSequence, distance, weekdayFirstBus, weekdayLastBus, saturdayFirstBus, saturdayLastBus, sundayFirstBus, sundayLastBus }`, all strings as stored (times `"HHmm"`, `"-"` = no service), ordered by service number (13, 13A, 50).
 
-------------------------------------------------------------------------------------------
-
-#### Get bus services for a stop
-
-<details>
- <summary><code>POST</code> <code>/lta/bus/services</code></summary>
-
-##### Payload Format
-```
-{
-    "busStopCode": string
-}
-```
-
-##### Response Format
-```
-{
-    "code": 200 | 500,
-    "status": "Ok" | "Ko",
-    "data": [
-        {
-            "serviceNo": string,
-            "operator": string,
-            "direction": number,
-            "stopSequence": number,
-            "distance": number,
-            "wdFirstBus": string,
-            "wdLastBus": string,
-            "satFirstBus": string,
-            "satLastBus": string,
-            "sunFirstBus": string,
-            "sunLastBus": string
-        }
-    ]
-}
-```
-</details>
-
-------------------------------------------------------------------------------------------
+##### Errors
+| Status | When | `data.code` |
+|---|---|---|
+| 400 | missing / malformed `busStopCode` | `invalid_request_busStopCode` |
+| 500 | `LTA_DATAMALL_API_KEY` not configured (`/timing`) | `unknown` |
+| 502 | DataMall unreachable, non-OK status or unreadable body (`/timing`) | `external_request_exception` |

@@ -2,6 +2,7 @@ import { parse, HTMLElement } from "node-html-parser";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { CoordinateService } from "./Coordinate.service.js";
+import { LtaService } from "../lta/Lta.service.js";
 import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { toMessage } from "../utils/errorUtils.js";
@@ -19,8 +20,10 @@ interface FlatRecord {
 
 export class HdbService {
   private coordinateService: CoordinateService;
+  private ltaService: LtaService;
   constructor(private db: KnexSqlUtilities) {
     this.coordinateService = new CoordinateService(db);
+    this.ltaService = new LtaService(db);
   }
 
   async retrieveListOfPphs(batch: string | undefined): Promise<{
@@ -228,7 +231,7 @@ export class HdbService {
 
   async retrieveBusstopWithinRadiusOfLatLng(lat: string, lng: string, radius: number) {
     try {
-      return await this.db.pphs.findBusStopsWithinRadiusOfLatLng(lat, lng, radius);
+      return await this.ltaService.findBusStopsNear(lat, lng, radius);
     } catch (error) {
       throw new Exceptions.Unknown();
     }
@@ -236,7 +239,7 @@ export class HdbService {
 
   async retrieveNearestMrtStationsOfLatLng(lat: string, lng: string, limit?: number) {
     try {
-      return await this.db.pphs.findMrtStationsWithinRadiusOfLatLng(lat, lng, limit ?? 3);
+      return await this.ltaService.findNearestMrtStations(lat, lng, limit ?? 3);
     } catch (error) {
       throw new Exceptions.Unknown();
     }

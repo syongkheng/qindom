@@ -1,21 +1,10 @@
 import { Knex } from "knex";
 import { LoggingUtilities } from "./logging/LoggingUtilities.js";
-import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop.js";
-import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info.js";
-import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station.js";
+import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { toMessage } from "./errorUtils.js";
 
 class KnexSqlUtilities {
-  constructor(private knex: Knex) {
-    this.pphs = {
-      findBusStopsWithinRadiusOfLatLng: this._findBusStopsWithinRadiusOfLatLng.bind(this),
-      findMrtStationsWithinRadiusOfLatLng: this._findMrtStationsWithinRadiusOfLatLng.bind(this),
-    };
-    this.lta = {
-      findBusServicesByBusStopCode: this._findBusServicesByBusStopCode.bind(this),
-    };
-  }
+  constructor(private knex: Knex) {}
 
   private sqlEvent(logEvent: IRequestLogEvent | undefined, label: string, durationMs: number): void {
     if (logEvent) {
@@ -147,11 +136,15 @@ class KnexSqlUtilities {
   }
 
   // RAW
-  async raw<T = any>(sql: string, bindings: any[] = []): Promise<T> {
+  async raw<T = any>(sql: string, bindings: any[] = [], logEvent?: IRequestLogEvent): Promise<T> {
     try {
       const query = this.knex.raw(sql, bindings);
-      LoggingUtilities.service.debug("KnexSqlUtilities.raw", `Executing raw query - [ ${query.toQuery()} ]`);
+      const t0 = Date.now();
+      if (!logEvent) {
+        LoggingUtilities.service.debug("KnexSqlUtilities.raw", `Executing raw query - [ ${query.toQuery()} ]`);
+      }
       const [rows] = await query;
+      if (logEvent) this.sqlEvent(logEvent, "raw()", Date.now() - t0);
       return rows as T;
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.raw", `Raw query error: ${toMessage(error)}`);
@@ -192,172 +185,6 @@ class KnexSqlUtilities {
     } catch (error) {
       LoggingUtilities.service.error("KnexSqlUtilities.transaction", `Transaction failed: ${toMessage(error)}`);
       throw new Error(`Transaction failed: ${toMessage(error)}`);
-    }
-  }
-
-  pphs: {
-    findBusStopsWithinRadiusOfLatLng: (
-      pphsLat: string,
-      pphsLng: string,
-      radiusInMeters: number,
-    ) => Promise<{
-      rows: (ITB_LTA_BUSSTOP & { distance_m: number })[];
-      count: number;
-    }>;
-    findMrtStationsWithinRadiusOfLatLng: (
-      pphsLat: string,
-      pphsLng: string,
-      numberOfStations: number,
-    ) => Promise<{
-      rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
-      count: number;
-    }>;
-  };
-
-  private async _findBusStopsWithinRadiusOfLatLng(
-    pphsLat: string,
-    pphsLng: string,
-    radiusInMeters: number,
-  ): Promise<{
-    rows: (ITB_LTA_BUSSTOP & { distance_m: number })[];
-    count: number;
-  }> {
-    try {
-      const sql = `
-      SELECT 
-        b.busstop_code,
-        b.road_name,
-        b.desc,
-        b.lat,
-        b.lng,
-        ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) AS distance_m
-      FROM tb_lta_busstop b
-      WHERE ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) <= ?
-      ORDER BY distance_m ASC
-    `;
-
-      const bindings = [pphsLng, pphsLat, pphsLng, pphsLat, radiusInMeters];
-      const query = this.knex.raw(sql, bindings);
-
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Executing raw query - [ ${query.toQuery()} ]`,
-      );
-
-      const [rows] = await query;
-
-      // ✅ Normalize and count
-      const allRows = rows as (ITB_LTA_BUSSTOP & { distance_m: number })[];
-      const count = allRows.length;
-
-      const resultRows = allRows.slice(0, 10);
-
-      return { rows: resultRows, count };
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Query error: ${toMessage(error)}`,
-      );
-      throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
-    }
-  }
-
-  private async _findMrtStationsWithinRadiusOfLatLng(
-    pphsLat: string,
-    pphsLng: string,
-    numberOfStations: number,
-  ): Promise<{
-    rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
-    count: number;
-  }> {
-    try {
-      const sql = `
-        SELECT 
-            e.station,
-            e.type,
-            MIN(ST_Distance_Sphere(POINT(e.lat, e.lng), POINT(?, ?))) AS distance_m
-        FROM tb_lrt_mrt_station e
-        GROUP BY e.station, e.type
-        ORDER BY distance_m ASC
-        LIMIT ?;
-    `;
-
-      const bindings = [pphsLng, pphsLat, numberOfStations ?? 3];
-      const query = this.knex.raw(sql, bindings);
-
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Executing raw query - [ ${query.toQuery()} ]`,
-      );
-
-      const [rows] = await query;
-
-      // ✅ Normalize and count
-      const allRows = rows as (ITB_LTA_MRT_STATION & { distance_m: number })[];
-      const count = allRows.length;
-
-      return { rows: allRows, count };
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Query error: ${toMessage(error)}`,
-      );
-      throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
-    }
-  }
-
-  lta: {
-    findBusServicesByBusStopCode(busstopCode: string): Promise<{
-      rows: ITB_LTA_BUS_INFO[];
-      count: number;
-    }>;
-  };
-
-  private async _findBusServicesByBusStopCode(busstopCode: string): Promise<{
-    rows: ITB_LTA_BUS_INFO[];
-    count: number;
-  }> {
-    try {
-      const sql = `
-      SELECT 
-        service_no,
-        operator,
-        direction,
-        stop_sequence,
-        distance,
-        wd_first_bus,
-        wd_last_bus,
-        sat_first_bus,
-        sat_last_bus,
-        sun_first_bus,
-        sun_last_bus
-      FROM tb_lta_bus_info
-      WHERE busstop_code = ?
-      ORDER BY CAST(service_no AS UNSIGNED), service_no
-    `;
-
-      const bindings = [busstopCode];
-      const query = this.knex.raw(sql, bindings);
-
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.lta.findBusServicesByBusStopCode",
-        `Executing raw query - [ ${query.toQuery()} ]`,
-      );
-
-      const [rows] = await query;
-
-      const allRows = rows as ITB_LTA_BUS_INFO[];
-      const count = allRows.length;
-
-      const resultRows = allRows;
-
-      return { rows: resultRows, count };
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusServicesByBusStopCode",
-        `Query error: ${toMessage(error)}`,
-      );
-      throw new Error(`Failed to find bus services: ${toMessage(error)}`);
     }
   }
 

@@ -98,6 +98,7 @@ Each feature folder `src/<module>/` holds:
 - Durations use `Time` from `src/constants/Time.ts`, with the unit in the name: `const OTP_TTL_MS = 15 * Time.MINUTE_MS;`.
 - Shared constants (see `src/constants/README.md`): `RecordStatus` (never a raw `"A"`/`"D"`, in raw SQL pass it as a binding), `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`.
 - Hash secrets with `sha256Hex()` from `src/utils/HashUtilities.ts`; never inline `crypto.createHash("sha256")…`.
+- Third-party calls: any failure (network error, non-OK status, unreadable body) → `Exceptions.ExternalRequest` (502); missing server config (API key) → `Unknown` (500) with a server log.
 - Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
 - Env vars loaded by dotenv (secrets, URLs) must be read **lazily** inside a function (`getJwtSecret()`), never in a top-level `const`: ESM evaluates imports before `index.ts` runs `dotenv.config`. Required ones are checked once at boot in `index.ts`.
@@ -111,6 +112,8 @@ Each feature folder `src/<module>/` holds:
 
 ## 7. Database
 - Soft delete via `record_status` `'A'`/`'D'`; timestamps are ms epoch (`Date.now()`).
+- Module SQL never lives in `KnexSqlUtilities`; it goes in the service that owns the table, and other modules call that service (e.g. hdb → `LtaService`).
+- Raw SQL goes through `this.db.raw(sql, bindings, event)` so it's timed in the request tree.
 - All raw SQL uses bindings, including status values (`SET record_status = ?` with `RecordStatus.DELETED`, never `'D'` inline).
 - Responses that report a count (`deleted`, `updated`) return what the DB actually affected, not the input length.
 - Never edit the logic of an already-applied migration; add a new one.
@@ -161,6 +164,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | lta: `POST /lta/bus/services` → GET; camelCase `{ services, count }` (fndom updated); LTA/geo SQL moved from KnexSqlUtilities to LtaService; `raw()` takes a log event. |
+| 2026-11-26 | From folder 16 on, a `folder-refactorer` agent does each folder; the orchestrating session reviews and commits. |
 | 2026-11-26 | pdca requires an Origin header (option A); analytics `/collect` stays lenient. |
 | 2026-11-26 | pdca: zod → hand-written validator; mail-sending logic moved from controller to `PdcaEnquiryService`. |
 | 2026-11-26 | File deletions needed by the refactor are pre-approved (still listed in summaries; `git mv` for renames). |

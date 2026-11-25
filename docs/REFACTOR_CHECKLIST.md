@@ -1,6 +1,6 @@
 # Refactor checklist
 
-Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user approves it. Rules: [CODING_STYLE.md](./CODING_STYLE.md).
+Branch: `refactor/codebase-cleanup`. One commit per folder. Folders 1–15 were reviewed with the user; from 16 on, a `folder-refactorer` agent (`~/.claude/agents/folder-refactorer.md`) does each folder and the orchestrating session reviews, verifies and commits it, asking the user only when unsure. Rules: [CODING_STYLE.md](./CODING_STYLE.md).
 
 | # | Folder | Status | Commit | Notes |
 |---|---|---|---|---|
@@ -20,8 +20,8 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 12 | `applepay` | [x] | c5736ee | service moved in from siri-shortcut (`ApplePayService`) + body types from models/requests; `ApplePayDashboard.*` → `ApplePay.*`; `route()` + typed DTOs; validators → functions with 64-char caps on category/label (were unchecked); `TransactionSource`; `RecordStatus`; shared `setRecordStatus`/`loadOrThrow`; `getApiKeyUserId` (siri-shortcut + todo widget); tests + README |
 | 13 | `suggestion` | [x] | e865502 | `route()` + `requireRole(ADMIN_ROLES)`; DELETE ×2 → `POST /:id/delete`; raw rows → camelCase DTOs (fndom panels); `Suggestion.types.ts`; validators → functions w/ column caps, http(s) url, whole counts; `RecordStatus`; `any` casts gone; shared `V.requiredText/optionalText` (applepay switched); tests + README |
 | 14 | `house` | [x] | cc9bb4a | `route()` ×8 + typed DTOs (no `any`); `House.types.ts`; `HouseLayout.validator` → shared `House.validator.ts` functions (`requiredText`, named limits, format version); caps → `InvalidRequest("layouts"/"shares","limit")`; `RecordStatus`; logContext; share list sorted in SQL; view selects only needed columns; tests + README (none before) |
-| 15 | `pdca` | [~] in review | | zod → `PdcaEnquiry.validator.ts`; `PdcaEnquiry.ts` → `.service.ts` (+ `PdcaEnquiryService.submit`, sending moved out of controller); `.types.ts`; log-scrub middleware → `.middleware.ts`; Origin now required (`isEnquiryOriginAllowed`); lab contact details + timezone named; `route()`; tests ported + send-flow tests; README |
-| 16 | `lta` | [ ] | | take over LTA queries now inside `KnexSqlUtilities` |
+| 15 | `pdca` | [x] | b756d3f | zod → `PdcaEnquiry.validator.ts`; `PdcaEnquiry.ts` → `.service.ts` (+ `PdcaEnquiryService.submit`, sending moved out of controller); `.types.ts`; log-scrub middleware → `.middleware.ts`; Origin now required (`isEnquiryOriginAllowed`); lab contact details + timezone named; `route()`; tests ported + send-flow tests; README |
+| 16 | `lta` | [~] in review | | LTA SQL moved from `KnexSqlUtilities` (`db.lta`/`db.pphs` gone) into `LtaService` (hdb calls it, shape unchanged; MRT swapped-column POINT documented); `POST /bus/services` → `GET ?busStopCode=` + camelCase `{ services, count }` (fndom cards); `/timing` typed pass-through `{ records }` (unused `source` dropped); `statistics` → `getBusArrivals` (DataMall failure = 502, was swallowed → 500), URLSearchParams, lazy key, no dotenv; ~170 lines dead code; one validator fn; `route()`; `Lta.types.ts`; `db.raw` takes a log event; tests + README |
 | 17 | `tgimage` | [ ] | | |
 | 18 | `budget` | [ ] | | |
 | 19 | `siri-shortcut` | [ ] | | widget/ApplePay controllers read `logContext.metadata.userId as number` (ApiKeyFilter should set `req.user` so `getUser()` works); hand-written route code; |
@@ -40,7 +40,7 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 32 | empty folders `src/log`, `src/places` | [ ] | | delete only on explicit OK |
 
 ## fndom companion branch
-`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`; unused `ApiRoute.FILE.CREATE_TG` removed; suggestion panels → camelCase + delete routes → POST. **Deploy fndom together with qindom.**
+`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`; unused `ApiRoute.FILE.CREATE_TG` removed; suggestion panels → camelCase + delete routes → POST. lta bus services → GET + camelCase. **Deploy fndom together with qindom.**
 
 ## Cross-cutting smells (initial scan)
 - 5 inline `crypto.createHash("sha256")` → `sha256Hex()` (ss-api-key + ApiKeyFilter done; auth, camera, analytics left).
