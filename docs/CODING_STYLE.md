@@ -46,6 +46,8 @@ Each feature folder `src/<module>/` holds:
 ## 4b. Logging
 - `req.logContext` is always set (every route preset starts with `RestRequestLogger`). Don't guard it: write `LoggingUtilities.request.branch(req.logContext, ...)`, not `if (req.logContext)` or `logContext ? ... : undefined`.
 - Don't mark a method `async` unless it awaits something.
+- A service with no state or dependencies is a set of exported functions (e.g. `signToken`, `verifyToken`), not a class you have to `new` up.
+- One concern = one owner: a setting used by several modules (e.g. JWT algorithm/TTL) is exported from the module that owns it and imported everywhere else, never duplicated with a "keep in sync" comment.
 - Throw typed exceptions; never return error strings or `""` as failure.
 
 ## 4a. Validation
@@ -57,6 +59,7 @@ Each feature folder `src/<module>/` holds:
 - A value used by more than one module goes in `src/constants/`.
 - Durations are written as expressions with units in the name: `const OTP_TTL_MS = 15 * 60 * 1000;`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
+- Env vars loaded by dotenv (secrets, URLs) must be read **lazily** inside a function (`getJwtSecret()`), never in a top-level `const`: ESM evaluates imports before `index.ts` runs `dotenv.config`. Required ones are checked once at boot in `index.ts`.
 - Environment checks use `APP_ENV` / `IS_PRD` / `IS_DEV` from `src/config/env.ts`. Never compare `process.env.NODE_ENV` inline or keep a local `isPrd` copy.
 - Name HTTP status thresholds and limits (`MIN_STATUS = 200`), even when the meaning seems obvious.
 
@@ -91,6 +94,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | No defensive `req.logContext` guards. |
 | 2026-11-25 | Controller factories take only the dependencies they use. |
 | 2026-11-25 | `requireRole(req, ...roles)` guard added to `requestUtils`. |
+| 2026-11-25 | Stateless services are exported functions; shared settings have one owning module. |
+| 2026-11-25 | dotenv-loaded env vars are read lazily; required ones checked at boot. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions

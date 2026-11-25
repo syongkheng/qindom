@@ -9,6 +9,7 @@ import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import db from "../config/db/mysql.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { JWT_COOKIE, CSRF_COOKIE } from "../utils/AuthCookieUtilities.js";
+import { verifyToken } from "../token/Token.service.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -42,10 +43,9 @@ function parseRoles(raw: string | undefined): string[] {
  * CSRF is the caller's job (WebSockets check Origin instead).
  */
 export async function resolveSessionUser(token: string | undefined): Promise<IDecodedTokenUser | null> {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!token || !jwtSecret) return null;
+  if (!token) return null;
   try {
-    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as IDecodedTokenUser;
+    const decoded = verifyToken(token);
     const user = await db.findOne<ITB_AA_USER>(
       "tb_aa_user",
       { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },
@@ -60,7 +60,6 @@ export async function resolveSessionUser(token: string | undefined): Promise<IDe
 
 export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);
-  const jwtSecret = process.env.JWT_SECRET;
 
   const logContext: IRequestLogContext = req.logContext;
 
@@ -75,12 +74,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
       return response.result(401, "token_invalid", "Authentication required.");
     }
 
-    if (!jwtSecret) {
-      LoggingUtilities.service.error("TokenFilter", "Missing JWT_SECRET");
-      return response.ko("Server configuration error");
-    }
-
-    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as IDecodedTokenUser;
+    const decoded = verifyToken(token);
 
     // Verify the token matches the one stored in the DB — enables single-session revocation
     const user = await db.findOne<ITB_AA_USER>(
@@ -114,7 +108,6 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
  */
 export const OptionalTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
   const response = new ControllerResponse(req, res);
-  const jwtSecret = process.env.JWT_SECRET;
 
   try {
     const token = req.cookies?.[JWT_COOKIE];
@@ -123,14 +116,8 @@ export const OptionalTokenFilter = async (req: RequestWithUserInfo, res: Respons
       return next();
     }
 
-    if (!jwtSecret) {
-      LoggingUtilities.service.error("OptionalTokenFilter", "Missing JWT_SECRET");
-      // Proceed anyway; token cannot be verified
-      return next();
-    }
-
     try {
-      const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as IDecodedTokenUser;
+      const decoded = verifyToken(token);
 
       // Same server-side revocation check as MandatoryTokenFilter: the cookie's
       // token must still match the one stored for the user, so a token that was

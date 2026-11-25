@@ -60,8 +60,10 @@ import { CameraService } from "./camera/Camera.service.js";
 import { CameraRelay } from "./camera/Camera.relay.js";
 import { PairingCodeStore } from "./camera/Camera.pairing.js";
 import { attachCameraWebSockets } from "./camera/Camera.ws.js";
+import { getJwtSecret } from "./token/Token.service.js";
 
 async function startServer() {
+  getJwtSecret(); // fail fast at boot (PM2 restart loop → deploy health check fails) if JWT_SECRET is missing
   const app: Application = express();
   const port: number = Number(process.env.PORT) || 3000;
 

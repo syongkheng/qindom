@@ -1,17 +1,17 @@
 import crypto from "crypto";
 import { Response } from "express";
+import { JWT_TTL_MS } from "../token/Token.service.js";
 
 export const JWT_COOKIE = "jwt_token";
 export const CSRF_COOKIE = "csrf_token";
 
 const isPrd = process.env.NODE_ENV === "prd";
-const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30d — matches Token.service.ts jwtExpiration
 
 const commonCookieOptions = {
   secure: isPrd,
   sameSite: "lax" as const,
   path: "/",
-  maxAge: MAX_AGE_MS,
+  maxAge: JWT_TTL_MS,
 };
 
 const baseCookieOptions = {

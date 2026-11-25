@@ -1,11 +1,10 @@
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import bcrypt from "bcrypt";
-import { TokenService } from "../token/Token.service.js";
+import { signToken, verifyToken } from "../token/Token.service.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { MailerUtilities } from "../utils/MailerUtilities.js";
 
@@ -31,10 +30,7 @@ function isStaleUnverified(user: ITB_AA_USER): boolean {
 }
 
 export class AuthService {
-  private tokenService: TokenService;
-  constructor(private db: KnexSqlUtilities) {
-    this.tokenService = new TokenService(db);
-  }
+  constructor(private db: KnexSqlUtilities) {}
 
   async checkIfEmailExistsWithinSystem({
     email,
@@ -376,7 +372,7 @@ export class AuthService {
       parsedRoles = [];
     }
 
-    const generatedToken = await this.tokenService.generateToken({
+    const generatedToken = signToken({
       id: user.id!,
       username: user.username,
       system: user.system,
@@ -461,9 +457,7 @@ export class AuthService {
   // just means there's nothing to revoke; logout still clears the cookies.
   async invalidateSession(token: string): Promise<void> {
     try {
-      const secret = process.env.JWT_SECRET;
-      if (!secret) return;
-      const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as { username: string; system: string };
+      const decoded = verifyToken(token);
       await this.db.update<ITB_AA_USER>(
         "tb_aa_user",
         { username_system: `${decoded.username}_${decoded.system}`, record_status: "A" },

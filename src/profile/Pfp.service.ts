@@ -1,15 +1,11 @@
 import { UnknownException } from "../exceptions/UnknownException.js";
 import { UsernameAlreadyTakenException } from "../exceptions/UsernameAlreadyTakenException.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
-import { TokenService } from "../token/Token.service.js";
+import { signToken } from "../token/Token.service.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 
 export class PfpService {
-  private tokenService: TokenService;
-
-  constructor(private db: KnexSqlUtilities) {
-    this.tokenService = new TokenService(db);
-  }
+  constructor(private db: KnexSqlUtilities) {}
 
   async getCountry(username_system: string): Promise<{ country: string | null }> {
     try {
@@ -107,7 +103,7 @@ export class PfpService {
       }
     })();
 
-    const token = await this.tokenService.generateToken({
+    const token = signToken({
       id: user.id!,
       username: newUsername,
       system,
