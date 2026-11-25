@@ -15,8 +15,8 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 7 | `mcp-api-key` | [x] removed | | deleted with MCP (see 21) |
 | 8 | `ss-api-key` | [x] | 29974cb | `route()` + typed `cr.ok`; `SsApiKey.types.ts`; validator → function; `RecordStatus`; named constants; consistent `logContext?`; `sha256Hex` shared with ApiKeyFilter; DELETE → `POST /api-key/delete` (fndom); tests + README |
 | 9 | `file` | [x] | a005e9d | dead `POST /file/tg` deleted (+ fndom `CREATE_TG`); `route()` + `cr.ok<FileDeletedDto>`; `File.types.ts`; validator → function (uuid strings, ≤100); `RecordStatus` bindings; real `affectedRows` count; logContext; tests + README rewritten |
-| 10 | `profile` | [~] in review | | `Pfp.*` → `Profile.*`; mounted `mw.auth` (per-route filters dropped); `route()` + typed DTOs; validators (country, image data URL, shared `validateUsername`); no more user rows in responses; no try/catch→Unknown; lookups by id; one atomic username+token update; `parseRoles` shared; tests + README |
-| 11 | `todo` | [ ] | | |
+| 10 | `profile` | [x] | 5001889 | `Pfp.*` → `Profile.*`; mounted `mw.auth` (per-route filters dropped); `route()` + typed DTOs; validators (country, image data URL, shared `validateUsername`); no more user rows in responses; no try/catch→Unknown; lookups by id; one atomic username+token update; `parseRoles` shared; tests + README |
+| 11 | `todo` | [~] in review | | `route()` + typed DTOs (no more `any`); `Todo.types.ts`; validators → functions; pin cap → `InvalidRequest("pinned","limit")`; `RecordStatus`; logContext through every query; shared `activeTasks`; widget call typed; tests + README (none before) |
 | 12 | `applepay` | [ ] | | |
 | 13 | `suggestion` | [ ] | | inline `cr.result(403, ...)` ×4 → `requireRole()` |
 | 14 | `house` | [ ] | | |
@@ -24,7 +24,7 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 16 | `lta` | [ ] | | take over LTA queries now inside `KnexSqlUtilities` |
 | 17 | `tgimage` | [ ] | | |
 | 18 | `budget` | [ ] | | |
-| 19 | `siri-shortcut` | [ ] | | |
+| 19 | `siri-shortcut` | [ ] | | widget/ApplePay controllers read `logContext.metadata.userId as number` (ApiKeyFilter should set `req.user` so `getUser()` works); hand-written route code; |
 | 20 | `hdb` | [ ] | | |
 | 21 | `mcp` | [x] removed | | `/mcp`, `/mcp-key`, `mcpLimiter`, `mw.mcpPublic`, `mcp` key prefix, `@modelcontextprotocol/sdk` removed; migration 20261126000000 drops `tb_mcp_api_key` |
 | 22 | `wedding` | [ ] | | uses raw `res.status` |
@@ -33,7 +33,7 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 25 | `camera` | [ ] | | |
 | 26 | `analytics` | [ ] | | replace zod (3 files); then `npm uninstall zod` |
 | 27 | `middlewares` | [ ] | | `ApiKeyFilter` passes a sentence to `InvalidRequest` (code `invalid_request_Invalid API key`); `TokenOrApiKeyFilter.ts` unused (delete needs OK) |
-| 28 | `utils` + `utils/logging` | [ ] | | `KnexSqlUtilities.raw` takes no log event (raw SQL never appears in the request tree);  `KnexSqlUtilities.findOne` names its param `logContext` but it's an `IRequestLogEvent`;  `LoggingUtilities` imports dotenv (why?); rename `requestUtils.ts`, `errorUtils.ts`, typo `StructualValidationUtilities.ts`; move LTA SQL out of `KnexSqlUtilities` |
+| 28 | `utils` + `utils/logging` | [ ] | | `KnexSqlUtilities.transaction` hands out a raw knex trx (todo reorder can't log its N updates);  `KnexSqlUtilities.raw` takes no log event (raw SQL never appears in the request tree);  `KnexSqlUtilities.findOne` names its param `logContext` but it's an `IRequestLogEvent`;  `LoggingUtilities` imports dotenv (why?); rename `requestUtils.ts`, `errorUtils.ts`, typo `StructualValidationUtilities.ts`; move LTA SQL out of `KnexSqlUtilities` |
 | 29 | `models` | [ ] | | move `IDecodedTokenUser` → `token/Token.types.ts`; move DTO/Body types into modules; `BaseEntity.throwIfInvalid` throws plain `Error` |
 | 30 | `config/db`, `index.ts`, `migrate.ts` | [ ] | | index.ts still compares `NODE_ENV` inline → `config/env.ts` | |
 | 31 | `migrations` | [ ] | | format only, never change logic |

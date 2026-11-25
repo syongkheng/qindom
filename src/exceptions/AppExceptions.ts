@@ -39,6 +39,7 @@ export class BaseException extends Error {
 const INVALID_REQUEST_MESSAGES = {
   mandatory: (field: string) => `Missing field - ${field}`,
   format: (field: string) => `Invalid format - ${field}`,
+  limit: (field: string) => `Limit reached - ${field}`,
 } as const;
 
 export type InvalidRequestErrorType = keyof typeof INVALID_REQUEST_MESSAGES;

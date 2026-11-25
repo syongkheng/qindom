@@ -56,6 +56,8 @@ Each feature folder `src/<module>/` holds:
   `branch()` accepts an undefined context and returns undefined, so no guard is needed to create it. Private helpers take `event?: IRequestLogEvent`.
 - Request-scoped outcomes (cache hit/miss, counts) go in the event's `detail`, not in extra `LoggingUtilities.service.info` lines. Keep `service.*` for things worth seeing in PM2 logs (external calls, failures).
 - Don't mark a method `async` unless it awaits something.
+- No `any` in service signatures (`Promise<any>`, `any[]`). Map DB rows to DTOs with a `toXyzDto(row)` function.
+- When the same query appears in several methods, put it in one private helper (`activeTasks`, `loadOrThrow`).
 - A service with no state or dependencies is a set of exported functions (e.g. `signToken`, `verifyToken`), not a class you have to `new` up.
 - One concern = one owner: a setting used by several modules (e.g. JWT algorithm/TTL) is exported from the module that owns it and imported everywhere else, never duplicated with a "keep in sync" comment.
 - Throw typed exceptions; never return error strings or `""` as failure.
@@ -70,7 +72,7 @@ Each feature folder `src/<module>/` holds:
   - Don't throw a plain `new Error(...)` for anything a client should see; it becomes a generic 500. Plain `Error` is only for startup/config failures and internal "should never happen" bugs.
   - Enforced by `AppExceptions.test.ts`: it fails if any exported `BaseException` subclass is missing from the registry.
 - Every exception states its HTTP status explicitly and the status must match the meaning: 4xx for the caller's fault, 5xx for ours, 502 for a failing upstream service.
-- `InvalidRequest(field, "mandatory" | "format")` takes a **field name**, never a sentence. Use `NotFound(message)`, `ForbiddenAccess(message)`, `UnauthorizedAccess(message)` for custom text.
+- `InvalidRequest(field, "mandatory" | "format" | "limit")` takes a **field name**, never a sentence (`"limit"` = a per-user cap was hit, e.g. `InvalidRequest("pinned", "limit")`). Use `NotFound(message)`, `ForbiddenAccess(message)`, `UnauthorizedAccess(message)` for custom text.
 - `code` and class names are a frontend contract (fndom maps `data.code` to translations). Check fndom before renaming either.
 - Need a new error kind? Add a class + registry entry in `AppExceptions.ts` and a row in `src/exceptions/README.md`.
 
@@ -142,6 +144,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Files/classes named after their folder (`Pfp.*` → `Profile.*`). |
 | 2026-11-25 | Never return DB rows; no try/catch→Unknown wrappers; user lookups by id; auth on the mount. |
 | 2026-11-25 | Shared `parseRoles()` (auth/Permission) and `validateUsername()` (auth validator). |
+| 2026-11-25 | `InvalidRequest` gains `"limit"` error type for per-user caps. |
+| 2026-11-25 | No `any` in service signatures; `toXyzDto` mappers. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions

@@ -1,57 +1,47 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
+import { LogEmoji } from "../constants/LogEmoji.js";
+import { TodoCreateBody, TodoReorderBody, TodoUpdateBody } from "./Todo.types.js";
 
-export const TODO_MAX_TITLE = 500;
+// tb_todo_task.title is VARCHAR(500).
+const TITLE_MAX_LENGTH = 500;
 const MAX_REORDER_IDS = 1000;
+const UUID_MAX_LENGTH = 36;
 
-export interface UpdateTodoBody {
-  title?: string;
-  done?: boolean;
-  pinned?: boolean;
-}
-
-function cleanTitle(title: string): string {
-  const trimmed = title.trim();
-  if (!trimmed || trimmed.length > TODO_MAX_TITLE) throw new Exceptions.InvalidRequest("title", "format");
+function cleanTitle(title: unknown, event?: IRequestLogEvent): string {
+  V.requiredString(title, "title", event);
+  const trimmed = (title as string).trim();
+  if (!trimmed || trimmed.length > TITLE_MAX_LENGTH) throw new Exceptions.InvalidRequest("title", "format");
   return trimmed;
 }
 
-export class TodoValidator {
-  static validateCreateRequest(body: Record<string, unknown>, loggingEvent?: IRequestLogEvent): { title: string } {
-    const { title } = body as any;
-    V.requiredString(title, "title", loggingEvent);
-    return { title: cleanTitle(title) };
-  }
+export function validateCreateBody(body: Record<string, unknown>, event?: IRequestLogEvent): TodoCreateBody {
+  return { title: cleanTitle(body.title, event) };
+}
 
-  static validateUpdateRequest(body: Record<string, unknown>, loggingEvent?: IRequestLogEvent): UpdateTodoBody {
-    const { title, done, pinned } = body as any;
-    const out: UpdateTodoBody = {};
-    if (title !== undefined) {
-      V.requiredString(title, "title", loggingEvent);
-      out.title = cleanTitle(title);
-    }
-    if (done !== undefined) {
-      V.requiredBoolean(done, "done", loggingEvent);
-      out.done = done;
-    }
-    if (pinned !== undefined) {
-      V.requiredBoolean(pinned, "pinned", loggingEvent);
-      out.pinned = pinned;
-    }
-    if (Object.keys(out).length === 0) throw new Exceptions.InvalidRequest("body", "mandatory");
-    return out;
+export function validateUpdateBody(body: Record<string, unknown>, event?: IRequestLogEvent): TodoUpdateBody {
+  const update: TodoUpdateBody = {};
+  if (body.title !== undefined) update.title = cleanTitle(body.title, event);
+  if (body.done !== undefined) {
+    V.requiredBoolean(body.done, "done", event);
+    update.done = body.done as boolean;
   }
+  if (body.pinned !== undefined) {
+    V.requiredBoolean(body.pinned, "pinned", event);
+    update.pinned = body.pinned as boolean;
+  }
+  if (Object.keys(update).length === 0) throw new Exceptions.InvalidRequest("body", "mandatory");
+  return update;
+}
 
-  static validateReorderRequest(body: Record<string, unknown>): { ids: string[] } {
-    const { ids } = body as any;
-    if (
-      !Array.isArray(ids) ||
-      ids.length > MAX_REORDER_IDS ||
-      !ids.every((i) => typeof i === "string" && i.length <= 36)
-    ) {
-      throw new Exceptions.InvalidRequest("ids", "format");
-    }
-    return { ids };
-  }
+export function validateReorderBody(body: Record<string, unknown>, event?: IRequestLogEvent): TodoReorderBody {
+  const { ids } = body;
+  const isValid =
+    Array.isArray(ids) &&
+    ids.length <= MAX_REORDER_IDS &&
+    ids.every((id) => typeof id === "string" && id.length <= UUID_MAX_LENGTH);
+  event?.children?.push(`'ids' ≤${MAX_REORDER_IDS} uuids ${isValid ? LogEmoji.success : LogEmoji.error} `);
+  if (!isValid) throw new Exceptions.InvalidRequest("ids", "format");
+  return { ids: ids as string[] };
 }

@@ -1,18 +1,23 @@
 import crypto from "crypto";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ITB_TODO_TASK } from "../models/databases/tb_todo_task.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { UpdateTodoBody } from "./Todo.validator.js";
+import { RecordStatus } from "../constants/RecordStatus.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { TodoDeletedDto, TodoListDto, TodoTaskDto, TodoUpdateBody, TodoWidgetDto } from "./Todo.types.js";
 
-const TB_TODO_TASK = "tb_todo_task";
-export const TODO_MAX_PINNED = 3;
+const TODO_TASK_TABLE = "tb_todo_task";
+/** fndom enforces the same cap client-side (`stores/todo.ts` MAX_PINNED). */
+const MAX_PINNED = 3;
 const WIDGET_TASK_LIMIT = 3;
 
-function buildResponse(task: ITB_TODO_TASK) {
+function toTaskDto(task: ITB_TODO_TASK): TodoTaskDto {
   return {
     id: task.uuid,
     title: task.title,
     done: !!task.done,
+    // BIGINT columns can come back as strings.
     doneAt: task.done_dt != null ? Number(task.done_dt) : null,
     pinned: !!task.pinned,
     createdAt: Number(task.created_dt),
@@ -20,119 +25,164 @@ function buildResponse(task: ITB_TODO_TASK) {
   };
 }
 
+/** Personal to-do list. Every query is scoped to `created_by_id = userId`; the uuid is the public id. */
 export class TodoService {
   constructor(private db: KnexSqlUtilities) {}
 
-  private async loadOrThrow(userId: number, uuid: string, status: "A" | "D" = "A"): Promise<ITB_TODO_TASK> {
-    const task = (await this.db.findOne<ITB_TODO_TASK>(TB_TODO_TASK, {
-      uuid,
-      created_by_id: userId,
-      record_status: status,
-    })) as ITB_TODO_TASK | undefined;
-    if (!task) throw new Exceptions.NotFound();
-    return task;
+  async list(userId: number, logContext?: IRequestLogContext): Promise<TodoListDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List tasks");
+    return { tasks: (await this.activeTasks(userId, event)).map(toTaskDto) };
   }
 
-  private async pinnedCount(userId: number): Promise<number> {
-    return this.db.count<ITB_TODO_TASK>(TB_TODO_TASK, { created_by_id: userId, record_status: "A", pinned: 1 });
-  }
-
-  async list(userId: number): Promise<{ tasks: any[] }> {
-    const rows = await this.db.find<ITB_TODO_TASK>(
-      TB_TODO_TASK,
-      { created_by_id: userId, record_status: "A" },
-      { orderBy: "sort_order", orderDirection: "asc" },
-    );
-    return { tasks: rows.map(buildResponse) };
-  }
-
-  async create(userId: number, title: string): Promise<any> {
-    const last = await this.db.find<ITB_TODO_TASK>(
-      TB_TODO_TASK,
+  async create(userId: number, title: string, logContext?: IRequestLogContext): Promise<TodoTaskDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Create task");
+    // Includes deleted rows on purpose so sort_order only ever grows.
+    const [last] = await this.db.find<ITB_TODO_TASK>(
+      TODO_TASK_TABLE,
       { created_by_id: userId },
       { orderBy: "sort_order", orderDirection: "desc", limit: 1, columns: ["sort_order"] },
+      event,
     );
-    const task = await this.db.insert<ITB_TODO_TASK>(TB_TODO_TASK, {
-      uuid: crypto.randomUUID(),
-      title,
-      done: 0,
-      done_dt: null,
-      pinned: 0,
-      sort_order: (last[0]?.sort_order ?? 0) + 1,
-      record_status: "A",
-      created_dt: Date.now(),
-      created_by_id: userId,
-    });
-    return buildResponse(task);
+    const task = await this.db.insert<ITB_TODO_TASK>(
+      TODO_TASK_TABLE,
+      {
+        uuid: crypto.randomUUID(),
+        title,
+        done: 0,
+        done_dt: null,
+        pinned: 0,
+        sort_order: (last?.sort_order ?? 0) + 1,
+        record_status: RecordStatus.ACTIVE,
+        created_dt: Date.now(),
+        created_by_id: userId,
+      },
+      event,
+    );
+    return toTaskDto(task);
   }
 
-  async update(userId: number, uuid: string, input: UpdateTodoBody): Promise<any> {
-    const existing = await this.loadOrThrow(userId, uuid);
-    const patch: Partial<ITB_TODO_TASK> = { updated_dt: Date.now(), updated_by_id: userId };
+  /** Completing a task sets done_dt and un-pins it; done tasks can't be pinned; at most MAX_PINNED pins. */
+  async update(
+    userId: number,
+    uuid: string,
+    input: TodoUpdateBody,
+    logContext?: IRequestLogContext,
+  ): Promise<TodoTaskDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Update task");
+    const existing = await this.loadOrThrow(userId, uuid, RecordStatus.ACTIVE, event);
+    const now = Date.now();
+    const patch: Partial<ITB_TODO_TASK> = { updated_dt: now, updated_by_id: userId };
 
     if (input.title !== undefined) patch.title = input.title;
 
     if (input.done !== undefined && input.done !== !!existing.done) {
       patch.done = input.done ? 1 : 0;
-      patch.done_dt = input.done ? Date.now() : null;
+      patch.done_dt = input.done ? now : null;
     }
     const willBeDone = patch.done !== undefined ? !!patch.done : !!existing.done;
 
-    // Completing a task un-pins it; done tasks can't be pinned.
     if (willBeDone) {
       patch.pinned = 0;
     } else if (input.pinned !== undefined && input.pinned !== !!existing.pinned) {
-      if (input.pinned && (await this.pinnedCount(userId)) >= TODO_MAX_PINNED) {
-        throw new Exceptions.InvalidRequest("pin limit reached");
+      if (input.pinned && (await this.pinnedCount(userId, event)) >= MAX_PINNED) {
+        throw new Exceptions.InvalidRequest("pinned", "limit");
       }
       patch.pinned = input.pinned ? 1 : 0;
     }
 
-    const [updated] = await this.db.update<ITB_TODO_TASK>(TB_TODO_TASK, { uuid, created_by_id: userId }, patch);
-    return buildResponse(updated);
+    const [updated] = await this.db.update<ITB_TODO_TASK>(
+      TODO_TASK_TABLE,
+      { uuid, created_by_id: userId },
+      patch,
+      event,
+    );
+    return toTaskDto(updated);
   }
 
-  async delete(userId: number, uuid: string): Promise<{ deleted: true }> {
-    await this.loadOrThrow(userId, uuid);
+  async delete(userId: number, uuid: string, logContext?: IRequestLogContext): Promise<TodoDeletedDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Delete task");
+    await this.loadOrThrow(userId, uuid, RecordStatus.ACTIVE, event);
     await this.db.update<ITB_TODO_TASK>(
-      TB_TODO_TASK,
+      TODO_TASK_TABLE,
       { uuid, created_by_id: userId },
-      { record_status: "D", updated_dt: Date.now(), updated_by_id: userId },
+      { record_status: RecordStatus.DELETED, updated_dt: Date.now(), updated_by_id: userId },
+      event,
     );
     return { deleted: true };
   }
 
-  // The undo window is enforced client-side; this just flips the soft-delete flag back.
-  async restore(userId: number, uuid: string): Promise<any> {
-    const existing = await this.loadOrThrow(userId, uuid, "D");
-    const patch: Partial<ITB_TODO_TASK> = { record_status: "A", updated_dt: Date.now(), updated_by_id: userId };
+  /** Undo of delete. The undo window is enforced client-side; this just flips the soft-delete flag back. */
+  async restore(userId: number, uuid: string, logContext?: IRequestLogContext): Promise<TodoTaskDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Restore task");
+    const existing = await this.loadOrThrow(userId, uuid, RecordStatus.DELETED, event);
+    const patch: Partial<ITB_TODO_TASK> = {
+      record_status: RecordStatus.ACTIVE,
+      updated_dt: Date.now(),
+      updated_by_id: userId,
+    };
     // A pin taken since the delete may have used up the cap.
-    if (existing.pinned && (await this.pinnedCount(userId)) >= TODO_MAX_PINNED) patch.pinned = 0;
-    const [restored] = await this.db.update<ITB_TODO_TASK>(TB_TODO_TASK, { uuid, created_by_id: userId }, patch);
-    return buildResponse(restored);
+    if (existing.pinned && (await this.pinnedCount(userId, event)) >= MAX_PINNED) patch.pinned = 0;
+    const [restored] = await this.db.update<ITB_TODO_TASK>(
+      TODO_TASK_TABLE,
+      { uuid, created_by_id: userId },
+      patch,
+      event,
+    );
+    return toTaskDto(restored);
   }
 
-  // Receives the client's full manual order; ids it doesn't know about are ignored.
-  async reorder(userId: number, ids: string[]): Promise<{ tasks: any[] }> {
+  /** Applies the client's full manual order. Unknown ids are ignored. */
+  async reorder(userId: number, ids: string[], logContext?: IRequestLogContext): Promise<TodoListDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", `Reorder ${ids.length} task(s)`);
+    const now = Date.now();
     await this.db.transaction(async (trx) => {
-      for (let i = 0; i < ids.length; i++) {
-        await trx(TB_TODO_TASK)
-          .where({ uuid: ids[i], created_by_id: userId, record_status: "A" })
-          .update({ sort_order: i + 1, updated_dt: Date.now(), updated_by_id: userId });
+      for (const [index, uuid] of ids.entries()) {
+        await trx(TODO_TASK_TABLE)
+          .where({ uuid, created_by_id: userId, record_status: RecordStatus.ACTIVE })
+          .update({ sort_order: index + 1, updated_dt: now, updated_by_id: userId });
       }
     });
-    return this.list(userId);
+    return { tasks: (await this.activeTasks(userId, event)).map(toTaskDto) };
   }
 
-  // Read-only payload for the Scriptable lock-screen widget: pinned first, then
-  // oldest open tasks, at most WIDGET_TASK_LIMIT titles.
-  async widget(userId: number): Promise<{ tasks: string[]; openCount: number }> {
-    const rows = await this.db.find<ITB_TODO_TASK>(
-      TB_TODO_TASK,
-      { created_by_id: userId, record_status: "A", done: 0 },
+  /** Scriptable lock-screen widget: pinned first, then by manual order; at most WIDGET_TASK_LIMIT titles. */
+  async widget(userId: number, logContext?: IRequestLogContext): Promise<TodoWidgetDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Widget feed");
+    const open = (await this.activeTasks(userId, event)).filter((task) => !task.done);
+    const ordered = [...open.filter((task) => task.pinned), ...open.filter((task) => !task.pinned)];
+    return { tasks: ordered.slice(0, WIDGET_TASK_LIMIT).map((task) => task.title), openCount: open.length };
+  }
+
+  private activeTasks(userId: number, event?: IRequestLogEvent): Promise<ITB_TODO_TASK[]> {
+    return this.db.find<ITB_TODO_TASK>(
+      TODO_TASK_TABLE,
+      { created_by_id: userId, record_status: RecordStatus.ACTIVE },
       { orderBy: "sort_order", orderDirection: "asc" },
+      event,
     );
-    const ordered = [...rows.filter((r) => r.pinned), ...rows.filter((r) => !r.pinned)];
-    return { tasks: ordered.slice(0, WIDGET_TASK_LIMIT).map((r) => r.title), openCount: rows.length };
+  }
+
+  private async loadOrThrow(
+    userId: number,
+    uuid: string,
+    status: RecordStatus,
+    event?: IRequestLogEvent,
+  ): Promise<ITB_TODO_TASK> {
+    const task = await this.db.findOne<ITB_TODO_TASK>(
+      TODO_TASK_TABLE,
+      { uuid, created_by_id: userId, record_status: status },
+      ["*"],
+      event,
+    );
+    if (!task) throw new Exceptions.NotFound("Task not found");
+    return task;
+  }
+
+  private pinnedCount(userId: number, event?: IRequestLogEvent): Promise<number> {
+    return this.db.count<ITB_TODO_TASK>(
+      TODO_TASK_TABLE,
+      { created_by_id: userId, record_status: RecordStatus.ACTIVE, pinned: 1 },
+      event,
+    );
   }
 }
