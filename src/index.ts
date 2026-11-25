@@ -39,7 +39,7 @@ import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller
 import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
 import { setupTelegramLogSender } from "./tgimage/TgLog.logSender.js";
-import { initTgLogBot } from "./tgimage/TgLog.bot.js";
+import { initTgImageBot } from "./tgimage/TgImage.bot.js";
 
 // Wedding
 import createWeddingController from "./wedding/Wedding.controller.js";
@@ -166,17 +166,17 @@ async function startServer() {
   const server = app.listen(port, () => {
     LoggingUtilities.service.info("server", `Server started on port: ${port}`);
     LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
-    // TgLog.bot.ts's polling loop was previously left off — it isn't needed
+    // TgImage.bot.ts's polling loop was previously left off — it isn't needed
     // for the CDN upload/serve path (TgImageService talks to Telegram's HTTP
     // API directly) and it used to produce periodic "EFATAL: fetch failed"
     // polling-error log noise — but it's also the only place a new admin's
     // chat_id gets captured (via /start) for tb_tg_stats_whitelist, so it's
     // started here to unblock Telegram log alert onboarding. polling_error
-    // is caught and logged (see TgLog.bot.ts) rather than crashing the server.
+    // is caught and logged (see TgImage.bot.ts) rather than crashing the server.
     // The Telegram-based error-log sender doesn't depend on the bot/polling
     // at all, so it starts independently regardless.
     setupTelegramLogSender();
-    initTgLogBot(db).catch((err) => LoggingUtilities.service.error("TgLogBot", err?.message ?? String(err)));
+    initTgImageBot(db).catch((err) => LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err)));
   });
 
   // WebSocket upgrades bypass Express middleware; auth happens in the upgrade handler.

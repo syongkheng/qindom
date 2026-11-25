@@ -39,6 +39,7 @@ Each feature folder `src/<module>/` holds:
 - Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
 - Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
 - Auth goes on the mount in `index.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
+- Binary/raw responses use `route(label, fallback, async (req, _cr, res) => …)`: finish every lookup and upstream call **before** the first `setHeader` so failures still get the JSON error; send with `res.end(buffer)`.
 - Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
 - Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
 
@@ -98,6 +99,9 @@ Each feature folder `src/<module>/` holds:
 - Durations use `Time` from `src/constants/Time.ts`, with the unit in the name: `const OTP_TTL_MS = 15 * Time.MINUTE_MS;`.
 - Shared constants (see `src/constants/README.md`): `RecordStatus` (never a raw `"A"`/`"D"`, in raw SQL pass it as a binding), `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`.
 - Hash secrets with `sha256Hex()` from `src/utils/HashUtilities.ts`; never inline `crypto.createHash("sha256")…`.
+- Never pipe untrusted data through a transform stream without error handling. Prefer buffering (`sharp(buf).toBuffer()`), so a bad input can't crash the process.
+- Callbacks the framework doesn't await (bot `onText`, emitters) must catch and log their promise.
+- User text inserted into HTML (emails, Telegram `parse_mode: "HTML"`) is always escaped.
 - Third-party calls: any failure (network error, non-OK status, unreadable body) → `Exceptions.ExternalRequest` (502); missing server config (API key) → `Unknown` (500) with a server log.
 - Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
@@ -164,6 +168,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | tgimage: image fetch buffered (a non-image used to crash the process); uploads image/* only; bot `/list` escaped; caption IP from x-real-ip; admin list camelCase (fndom). |
+| 2026-11-26 | No live server probes (they sent Telegram alerts); HTTP checks run in-process with fakes. |
 | 2026-11-26 | lta: `POST /lta/bus/services` → GET; camelCase `{ services, count }` (fndom updated); LTA/geo SQL moved from KnexSqlUtilities to LtaService; `raw()` takes a log event. |
 | 2026-11-26 | From folder 16 on, a `folder-refactorer` agent does each folder; the orchestrating session reviews and commits. |
 | 2026-11-26 | pdca requires an Origin header (option A); analytics `/collect` stays lenient. |
