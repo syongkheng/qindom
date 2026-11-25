@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { RESPONSE_STATUS } from "../models/responses/ControllerResponse.js";
+import { ResponseStatus } from "../models/responses/ControllerResponse.js";
 import { requireRole, route } from "../utils/requestUtils.js";
 import { Roles } from "../auth/Permission.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
@@ -42,9 +42,9 @@ export default function createDebugController(): Router {
 
       if (code === INTERNAL_SERVER_ERROR) simulateUnhandledFailure();
       if (code < FIRST_NON_SUCCESS_STATUS) {
-        return cr.result(code, RESPONSE_STATUS.OK, { simulated: code } satisfies DebugStatusDto);
+        return cr.result(code, ResponseStatus.OK, { simulated: code } satisfies DebugStatusDto);
       }
-      const status = code < FIRST_SERVER_ERROR_STATUS ? `debug_${code}` : RESPONSE_STATUS.KO;
+      const status = code < FIRST_SERVER_ERROR_STATUS ? `debug_${code}` : ResponseStatus.KO;
       return cr.result(code, status, `Simulated ${code} response`);
     }),
   );

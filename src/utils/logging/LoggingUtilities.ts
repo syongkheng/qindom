@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { IRequestLogContext, IRequestLogEvent, LogStage } from "../../models/IRequestLogContext.js";
 import { appendRequestLog } from "./RequestLogFileWriter.js";
 import { redactForLog, redactTextForLog, redactUrlForLog } from "./LogRedaction.js";
+import { LogEmoji } from "../../constants/LogEmoji.js";
 
 dotenv.config();
 
@@ -116,9 +117,9 @@ export class LoggingUtilities {
   // there, unlike the Log Searcher frontend which renders its own icon.
   private static statusIcon(code?: number): string {
     if (code === undefined) return "";
-    if (code >= 500) return "❌";
-    if (code >= 400) return "⚠️";
-    return "✅";
+    if (code >= 500) return LogEmoji.error;
+    if (code >= 400) return LogEmoji.warning;
+    return LogEmoji.success;
   }
 
   // =========================================================

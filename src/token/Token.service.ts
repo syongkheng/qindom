@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { Time } from "../constants/Time.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
@@ -7,7 +8,7 @@ import { toMessage } from "../utils/errorUtils.js";
 /** The only algorithm we sign with and accept (pinned so `alg: none` / RS↔HS confusion can't happen). */
 export const JWT_ALGORITHM = "HS256";
 /** Session length. The auth cookie's `maxAge` uses the same value. */
-export const JWT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const JWT_TTL_MS = 30 * Time.DAY_MS;
 
 const JWT_SECRET_ENV = "JWT_SECRET";
 
@@ -27,7 +28,7 @@ export function signToken(payload: IDecodedTokenUser): string {
     const { id, username, system, roles, lastLoggedInDt } = payload;
     return jwt.sign({ id, username, system, roles, lastLoggedInDt }, getJwtSecret(), {
       algorithm: JWT_ALGORITHM,
-      expiresIn: JWT_TTL_MS / 1000,
+      expiresIn: JWT_TTL_MS / Time.SECOND_MS,
     });
   } catch (error) {
     LoggingUtilities.service.error("TokenService.signToken", `Failed to sign token: ${toMessage(error)}`);

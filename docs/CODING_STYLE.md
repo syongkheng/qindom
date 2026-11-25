@@ -55,9 +55,11 @@ Each feature folder `src/<module>/` holds:
 - Validators throw `InvalidRequestException(field, "mandatory" | "format")` and return the typed `XyzBody`.
 
 ## 5. Constants and magic values
-- No magic strings or numbers inside logic. Name them as `UPPER_SNAKE_CASE` module-level `const`s at the top of the file.
+- No magic strings or numbers inside logic. Name them as module-level `const`s at the top of the file.
+- Naming: single values are `UPPER_SNAKE_CASE` (`JWT_TTL_MS`); enum-like `as const` objects are `PascalCase` with UPPER keys (`RecordStatus.ACTIVE`, `ResponseStatus.OK`, `Time.DAY_MS`).
 - A value used by more than one module goes in `src/constants/`.
-- Durations are written as expressions with units in the name: `const OTP_TTL_MS = 15 * 60 * 1000;`.
+- Durations use `Time` from `src/constants/Time.ts`, with the unit in the name: `const OTP_TTL_MS = 15 * Time.MINUTE_MS;`.
+- Shared constants (see `src/constants/README.md`): `RecordStatus` (never a raw `"A"`/`"D"`, in raw SQL pass it as a binding), `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
 - Env vars loaded by dotenv (secrets, URLs) must be read **lazily** inside a function (`getJwtSecret()`), never in a top-level `const`: ESM evaluates imports before `index.ts` runs `dotenv.config`. Required ones are checked once at boot in `index.ts`.
 - Environment checks use `APP_ENV` / `IS_PRD` / `IS_DEV` from `src/config/env.ts`. Never compare `process.env.NODE_ENV` inline or keep a local `isPrd` copy.
@@ -96,6 +98,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | `requireRole(req, ...roles)` guard added to `requestUtils`. |
 | 2026-11-25 | Stateless services are exported functions; shared settings have one owning module. |
 | 2026-11-25 | dotenv-loaded env vars are read lazily; required ones checked at boot. |
+| 2026-11-25 | `RecordStatus` constant replaces raw `'A'`/`'D'`; `Time` units; `APP_TIMEZONE` / `DEFAULT_CURRENCY`. |
+| 2026-11-25 | Enum-like objects PascalCase (`RESPONSE_STATUS` → `ResponseStatus`), single values UPPER_SNAKE. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions

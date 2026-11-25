@@ -93,7 +93,7 @@ MySQL · Nominatim · LTA DataMall · `ws` (camera relay WebSockets) · Telegram
 - **Style guide: `docs/CODING_STYLE.md`** (source of truth; refactor progress in `docs/REFACTOR_CHECKLIST.md`). Prettier (`npm run format`).
 - Response interfaces `XyzDto` + request bodies `XyzBody` → co-located `src/<module>/<Module>.types.ts` (legacy ones still in `models/dtos/`, `models/requests/` until migrated); DB rows `ITB_*`/`ITb*` → `models/databases/`.
 - URLs use hyphens. Envelope `{ code, status: "Ok"|"Ko", data }`.
-- Env flags: `APP_ENV`/`IS_PRD`/`IS_DEV` from `src/config/env.ts`. Role guard: `requireRole(req, ...roles)` throws ForbiddenAccess.
+- Env flags: `APP_ENV`/`IS_PRD`/`IS_DEV` from `src/config/env.ts`. Shared constants in `src/constants/` (`RecordStatus`, `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`). Role guard: `requireRole(req, ...roles)` throws ForbiddenAccess.
 - Controller factory `createXyzController(db)` → Router; handlers wrapped in `route(label, fallback, handler)` (`requestUtils`), which builds `cr` and calls `handleException` (migrating folder by folder). Role guard `hasRole(req, ...roles)` (`requestUtils`).
 - Exceptions: always throw typed `BaseExceptions` (never return error strings); controllers catch with `handleException(err, cr, label, fallback)`: BaseExceptions → `cr.result(status, name, clientMessage)`, else log + `cr.ko(fallback)` (real cause kept in request tree).
 - Logging: services take `logContext?: IRequestLogContext`, emit events via `LoggingUtilities.request.branch()` (pending-event pattern: set `.detail` after the async result); controllers pass `req.logContext`.

@@ -3,7 +3,7 @@ import { LoggingUtilities } from "../../utils/logging/LoggingUtilities.js";
 
 const isPrd = process.env.NODE_ENV === "prd";
 
-export const RESPONSE_STATUS = {
+export const ResponseStatus = {
   OK: "Ok",
   KO: "Ko",
 } as const;
@@ -30,7 +30,7 @@ export class ControllerResponse {
    */
   ok<T>(data: T): Response {
     LoggingUtilities.request.response(this.req.logContext, 200, LoggingUtilities.redact(data));
-    return this.res.status(200).json({ code: 200, status: RESPONSE_STATUS.OK, data });
+    return this.res.status(200).json({ code: 200, status: ResponseStatus.OK, data });
   }
 
   /**
@@ -49,19 +49,19 @@ export class ControllerResponse {
         LoggingUtilities.sanitise(serverError),
       );
     }
-    return this.send(500, RESPONSE_STATUS.KO, isPrd ? PRD_INTERNAL_ERROR_MESSAGE : data);
+    return this.send(500, ResponseStatus.KO, isPrd ? PRD_INTERNAL_ERROR_MESSAGE : data);
   }
 
   /** 400 Ko. */
   badRequest(data: unknown): Response {
     LoggingUtilities.request.branch(this.req.logContext, "WARN", "Bad request returned");
-    return this.send(400, RESPONSE_STATUS.KO, data);
+    return this.send(400, ResponseStatus.KO, data);
   }
 
   /** 401 Ko. */
   badAuthorization(data: unknown): Response {
     LoggingUtilities.request.branch(this.req.logContext, "ERROR", "Bad authorization returned");
-    return this.send(401, RESPONSE_STATUS.KO, data);
+    return this.send(401, ResponseStatus.KO, data);
   }
 
   /** Any status. `status` is the envelope's status text (e.g. the exception name). */
