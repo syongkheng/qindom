@@ -1,10 +1,17 @@
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ITB_GEOCODE_CACHE } from "../models/databases/tb_geocode_cache.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { toMessage } from "../utils/errorUtils.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
+import { NominatimPlaceDto } from "./Geocode.types.js";
 
-const NOMINATIM_BASE = "https://nominatim.openstreetmap.org";
+const CACHE_TABLE = "tb_geocode_cache";
+
+const NOMINATIM_SERVICE_NAME = "Nominatim";
+const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_RESULT_LIMIT = 10;
+// Nominatim's usage policy requires an identifying User-Agent with a contact.
 const NOMINATIM_HEADERS = {
   "User-Agent": "Awense/1.0 (contact@awense.com)",
   "Accept-Language": "en",
@@ -13,88 +20,81 @@ const NOMINATIM_HEADERS = {
 // Nominatim's usage policy allows at most 1 req/s. /geocode is public, so cache
 // misses from every caller are serialised through this one module-level queue;
 // once too many are waiting, new misses fail fast instead of piling up.
+// (In-memory: correct only because qindom runs as a single PM2 process.)
 const NOMINATIM_MIN_GAP_MS = 1100;
 const NOMINATIM_MAX_QUEUED = 5;
 let nominatimQueue: Promise<void> = Promise.resolve();
 let nominatimQueued = 0;
 
+const waitPolicyGap = () => new Promise<void>((resolve) => setTimeout(resolve, NOMINATIM_MIN_GAP_MS));
+
 export class GeocodeService {
   constructor(private db: KnexSqlUtilities) {}
 
   /**
-   * Search for places by query string.
-   * Returns cached Nominatim results from DB, or fetches from Nominatim and caches.
+   * Search for places. Served from the DB cache when possible, otherwise fetched
+   * from Nominatim (throttled) and cached, including empty results, so repeated
+   * misses don't hammer Nominatim. Failed fetches are never cached (there's no TTL).
    */
-  async search(query: string): Promise<Record<string, unknown>[]> {
+  async search(query: string, logContext?: IRequestLogContext): Promise<NominatimPlaceDto[]> {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return [];
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Geocode search");
 
-    // 1️⃣ DB cache
-    const cached = await this.getCached(normalized);
-    if (cached !== null) return cached;
+    const cached = await this.getCached(normalized, event);
+    if (cached !== null) {
+      if (event) event.detail = "cache hit";
+      return cached;
+    }
 
-    // 2️⃣ Fetch from Nominatim (throttled — see NOMINATIM_MIN_GAP_MS)
     const results = await this.throttled(() => this.fetchNominatim(normalized));
-    // Failed fetch — don't cache, or a transient error would stick forever (no TTL)
-    if (results === null) throw new Exceptions.ExternalRequest("Nominatim");
+    if (results === null) throw new Exceptions.ExternalRequest(NOMINATIM_SERVICE_NAME);
 
-    // 3️⃣ Store in cache (even empty results, to prevent hammering)
-    await this.storeCache(normalized, results);
-
+    await this.storeCache(normalized, results, event);
+    if (event) event.detail = `cache miss, ${results.length} result(s) from ${NOMINATIM_SERVICE_NAME}`;
     return results;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Cache
-  // ─────────────────────────────────────────────────────────────
+  // ── Cache (best-effort: a DB failure falls through to Nominatim) ──
 
-  private async getCached(query: string): Promise<Record<string, unknown>[] | null> {
+  private async getCached(query: string, event?: IRequestLogEvent): Promise<NominatimPlaceDto[] | null> {
     try {
       const records = await this.db.find<ITB_GEOCODE_CACHE>(
-        "tb_geocode_cache",
+        CACHE_TABLE,
         { query },
         { limit: 1, orderBy: "created_dt", orderDirection: "desc" },
+        event,
       );
-
       if (!records.length) return null;
-
-      LoggingUtilities.service.info("GeocodeService.getCached", `Cache hit for: ${query}`);
-      return JSON.parse(records[0].results_json) as Record<string, unknown>[];
+      return JSON.parse(records[0].results_json) as NominatimPlaceDto[];
     } catch (error) {
       LoggingUtilities.service.warn("GeocodeService.getCached", `Cache read failed: ${toMessage(error)}`);
       return null;
     }
   }
 
-  private async storeCache(query: string, results: Record<string, unknown>[]): Promise<void> {
+  private async storeCache(query: string, results: NominatimPlaceDto[], event?: IRequestLogEvent): Promise<void> {
     try {
-      await this.db.insert<ITB_GEOCODE_CACHE>("tb_geocode_cache", {
-        query,
-        results_json: JSON.stringify(results),
-        created_dt: Date.now(),
-      });
-      LoggingUtilities.service.info("GeocodeService.storeCache", `Cached ${results.length} result(s) for: ${query}`);
+      await this.db.insert<ITB_GEOCODE_CACHE>(
+        CACHE_TABLE,
+        { query, results_json: JSON.stringify(results), created_dt: Date.now() },
+        event,
+      );
     } catch (error) {
       LoggingUtilities.service.error("GeocodeService.storeCache", `Cache write failed: ${toMessage(error)}`);
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Nominatim fetch
-  // ─────────────────────────────────────────────────────────────
+  // ── Nominatim ──
 
   private async throttled<T>(fn: () => Promise<T>): Promise<T> {
     if (nominatimQueued >= NOMINATIM_MAX_QUEUED) {
       LoggingUtilities.service.warn("GeocodeService.throttled", `Nominatim queue full (${nominatimQueued}), rejecting`);
-      throw new Exceptions.ExternalRequest("Nominatim");
+      throw new Exceptions.ExternalRequest(NOMINATIM_SERVICE_NAME);
     }
     nominatimQueued++;
     const run = nominatimQueue.then(fn);
-    // Next caller starts only after this one finishes plus the policy gap
-    nominatimQueue = run.then(
-      () => new Promise((r) => setTimeout(r, NOMINATIM_MIN_GAP_MS)),
-      () => new Promise((r) => setTimeout(r, NOMINATIM_MIN_GAP_MS)),
-    );
+    // The next caller starts only after this one finishes (or fails) plus the policy gap.
+    nominatimQueue = run.then(waitPolicyGap, waitPolicyGap);
     try {
       return await run;
     } finally {
@@ -102,10 +102,17 @@ export class GeocodeService {
     }
   }
 
-  private async fetchNominatim(query: string): Promise<Record<string, unknown>[] | null> {
-    // addressdetails=1 so callers can resolve a destination's country (e.g.
-    // the trip-creation flow needs it to look up per-country note suggestions).
-    const url = `${NOMINATIM_BASE}/search?q=${encodeURIComponent(query)}&format=json&limit=10&addressdetails=1`;
+  /** Returns null on any failure so the caller can refuse to cache it. */
+  private async fetchNominatim(query: string): Promise<NominatimPlaceDto[] | null> {
+    const params = new URLSearchParams({
+      q: query,
+      format: "json",
+      limit: String(NOMINATIM_RESULT_LIMIT),
+      // addressdetails=1 so callers can resolve a destination's country
+      // (the trip-creation flow uses it to look up per-country note suggestions).
+      addressdetails: "1",
+    });
+    const url = `${NOMINATIM_SEARCH_URL}?${params}`;
     LoggingUtilities.service.info("GeocodeService.fetchNominatim", `[EXT-GET] ${url}`);
 
     try {
@@ -117,7 +124,7 @@ export class GeocodeService {
         );
         return null;
       }
-      return (await response.json()) as Record<string, unknown>[];
+      return (await response.json()) as NominatimPlaceDto[];
     } catch (error) {
       LoggingUtilities.service.error("GeocodeService.fetchNominatim", `Fetch failed for ${query}: ${toMessage(error)}`);
       return null;

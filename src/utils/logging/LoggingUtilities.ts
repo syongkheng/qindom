@@ -174,6 +174,8 @@ export class LoggingUtilities {
     /**
      * Append an event into the request tree and return a reference so
      * the caller can update detail/durationMs once the result is known.
+     * With no context (service called outside a request) it records nothing
+     * and returns undefined, so callers never need a `logContext ? ... : undefined` guard.
      */
     static branch(
       context: IRequestLogContext,
@@ -181,7 +183,22 @@ export class LoggingUtilities {
       message: string,
       detail?: string,
       durationMs?: number,
-    ): IRequestLogEvent {
+    ): IRequestLogEvent;
+    static branch(
+      context: IRequestLogContext | undefined,
+      category: IRequestLogEvent["type"],
+      message: string,
+      detail?: string,
+      durationMs?: number,
+    ): IRequestLogEvent | undefined;
+    static branch(
+      context: IRequestLogContext | undefined,
+      category: IRequestLogEvent["type"],
+      message: string,
+      detail?: string,
+      durationMs?: number,
+    ): IRequestLogEvent | undefined {
+      if (!context) return undefined;
       const event: IRequestLogEvent = {
         type: category,
         message,

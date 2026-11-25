@@ -10,8 +10,8 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 2 | `debug` | [x] | 17842c7 | `route()`, `requireRole()` (new), `IS_PRD` from `config/env.ts` (new), named status constants, `Debug.types.ts`, README created, factory takes no `db` |
 | 3 | `token` | [x] | 9c9a280 | `signToken`/`verifyToken`/`getJwtSecret` functions; `JWT_ALGORITHM` + `JWT_TTL_MS` single source (cookie maxAge uses it); callers in auth, profile, TokenFilter switched; boot fail-fast in index.ts; tests + README |
 | 4 | `constants` | [x] | 6a96864 | added `RecordStatus`, `Time`, `Locale` + README; `RESPONSE_STATUS` → `ResponseStatus`; `JWT_TTL_MS` uses `Time`; raw emoji in LoggingUtilities → `LogEmoji` |
-| 5 | `exceptions` | [~] in review | | 21 files → `AppExceptions.ts` (registry only); deleted EntityRetrieval/ParseJson/TokenExpired/TokenFormat; statuses fixed (502/500/429/400); `invalid_request_generic`; NotFound/Unauthorized take a message; `BaseExceptions` → `BaseException`; tests + README |
-| 6 | `geocode` | [ ] | | |
+| 5 | `exceptions` | [x] | 511bae4 | 21 files → `AppExceptions.ts` (registry only); deleted EntityRetrieval/ParseJson/TokenExpired/TokenFormat; statuses fixed (502/500/429/400); `invalid_request_generic`; NotFound/Unauthorized take a message; `BaseExceptions` → `BaseException`; tests + README |
+| 6 | `geocode` | [~] in review | | `route()` + `cr.ok<NominatimPlaceDto[]>`; `Geocode.types.ts`; logContext → request tree (SQL timings, cache hit/miss); `URLSearchParams` + named limit; dup gap lambda; tests (cache hit/miss/failure) + README; `LoggingUtilities.request.branch` accepts undefined context |
 | 7 | `mcp-api-key` | [x] removed | | deleted with MCP (see 21) |
 | 8 | `ss-api-key` | [ ] | | |
 | 9 | `file` | [ ] | | |
@@ -33,7 +33,7 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 25 | `camera` | [ ] | | |
 | 26 | `analytics` | [ ] | | replace zod (3 files); then `npm uninstall zod` |
 | 27 | `middlewares` | [ ] | | `ApiKeyFilter` passes a sentence to `InvalidRequest` (code `invalid_request_Invalid API key`); `TokenOrApiKeyFilter.ts` unused (delete needs OK) |
-| 28 | `utils` + `utils/logging` | [ ] | | `LoggingUtilities` imports dotenv (why?); rename `requestUtils.ts`, `errorUtils.ts`, typo `StructualValidationUtilities.ts`; move LTA SQL out of `KnexSqlUtilities` |
+| 28 | `utils` + `utils/logging` | [ ] | | `KnexSqlUtilities.findOne` names its param `logContext` but it's an `IRequestLogEvent`;  `LoggingUtilities` imports dotenv (why?); rename `requestUtils.ts`, `errorUtils.ts`, typo `StructualValidationUtilities.ts`; move LTA SQL out of `KnexSqlUtilities` |
 | 29 | `models` | [ ] | | move `IDecodedTokenUser` → `token/Token.types.ts`; move DTO/Body types into modules; `BaseEntity.throwIfInvalid` throws plain `Error` |
 | 30 | `config/db`, `index.ts`, `migrate.ts` | [ ] | | index.ts still compares `NODE_ENV` inline → `config/env.ts` | |
 | 31 | `migrations` | [ ] | | format only, never change logic |

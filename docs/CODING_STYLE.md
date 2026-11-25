@@ -40,11 +40,19 @@ Each feature folder `src/<module>/` holds:
 
 ## 4. Services
 - Class `XyzService` built with `db: KnexSqlUtilities` (plus any other collaborators).
-- Public methods return named `XyzDto` types from `<Module>.types.ts`, never anonymous inline object types.
+- Public methods return named `XyzDto` types from `<Module>.types.ts`, never anonymous inline object types. For third-party payloads we pass through (e.g. Nominatim), type the fields we or fndom read and add `[field: string]: unknown`.
 - `logContext?: IRequestLogContext` is the **last** parameter; pass it to `KnexSqlUtilities` calls.
 
 ## 4b. Logging
 - `req.logContext` is always set (every route preset starts with `RestRequestLogger`). Don't guard it: write `LoggingUtilities.request.branch(req.logContext, ...)`, not `if (req.logContext)` or `logContext ? ... : undefined`.
+- Services: public methods take `logContext?: IRequestLogContext` as the last parameter (optional, because some run outside a request). Open one event per method and pass it to every `KnexSqlUtilities` call so SQL timings land in the request tree:
+  ```ts
+  const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Geocode search"); // undefined when no context
+  await this.db.find(TABLE, where, options, event);
+  if (event) event.detail = "cache hit";
+  ```
+  `branch()` accepts an undefined context and returns undefined, so no guard is needed to create it. Private helpers take `event?: IRequestLogEvent`.
+- Request-scoped outcomes (cache hit/miss, counts) go in the event's `detail`, not in extra `LoggingUtilities.service.info` lines. Keep `service.*` for things worth seeing in PM2 logs (external calls, failures).
 - Don't mark a method `async` unless it awaits something.
 - A service with no state or dependencies is a set of exported functions (e.g. `signToken`, `verifyToken`), not a class you have to `new` up.
 - One concern = one owner: a setting used by several modules (e.g. JWT algorithm/TTL) is exported from the module that owns it and imported everywhere else, never duplicated with a "keep in sync" comment.
@@ -71,6 +79,7 @@ Each feature folder `src/<module>/` holds:
 - A value used by more than one module goes in `src/constants/`.
 - Durations use `Time` from `src/constants/Time.ts`, with the unit in the name: `const OTP_TTL_MS = 15 * Time.MINUTE_MS;`.
 - Shared constants (see `src/constants/README.md`): `RecordStatus` (never a raw `"A"`/`"D"`, in raw SQL pass it as a binding), `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`.
+- Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
 - Env vars loaded by dotenv (secrets, URLs) must be read **lazily** inside a function (`getJwtSecret()`), never in a top-level `const`: ESM evaluates imports before `index.ts` runs `dotenv.config`. Required ones are checked once at boot in `index.ts`.
 - Environment checks use `APP_ENV` / `IS_PRD` / `IS_DEV` from `src/config/env.ts`. Never compare `process.env.NODE_ENV` inline or keep a local `isPrd` copy.
@@ -114,6 +123,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Exceptions consolidated into `AppExceptions.ts`, used only via `Exceptions.X`; 4 unused deleted; `BaseExceptions` → `BaseException`. |
 | 2026-11-25 | Status fixes: ExternalRequest 502, EntityCreation/Update 500, MaxVerifyAttempts 429, VerifyCodeExpired 400. |
 | 2026-11-25 | All exceptions must be registered in `Exceptions`; no exception classes outside `AppExceptions.ts` (enforced by test). |
+| 2026-11-25 | Service log pattern: `logContext?` last → one `branch()` event per method → passed to DB calls; `branch()` accepts undefined context. |
+| 2026-11-25 | Pass-through external payloads get a DTO typing only the fields we/fndom read, plus an index signature. |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions
