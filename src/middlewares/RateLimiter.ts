@@ -105,16 +105,6 @@ export const houseViewLimiter = rateLimit({
   message: rateLimitResponse("Too many requests. Please slow down."),
 });
 
-/** /mcp — public, unauthenticated MCP endpoint */
-export const mcpLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  limit: 30,
-  keyGenerator: clientIpKey,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: rateLimitResponse("Too many requests. Please slow down."),
-});
-
 /** POST /analytics/collect — public ingest; page views + a few interaction events per visitor */
 export const analyticsLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute

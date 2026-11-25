@@ -29,11 +29,13 @@ Each feature folder `src/<module>/` holds:
 - Factory: `export default function createXyzController(db: KnexSqlUtilities): Router`.
 - Every handler is wrapped in `route(label, fallback, handler)` from `utils/requestUtils.ts`. Never write `new ControllerResponse` + try/catch + `handleException` by hand.
   ```ts
-  router.get("/", route("XyzController.GET /", "Failed to load xyz", async (req, cr) => cr.ok(await svc.list(req.logContext))));
+  router.get("/", route("XyzController.GET /", "Failed to load xyz", async (req, cr) => cr.ok<XyzDto[]>(await svc.list(req.logContext))));
   ```
 - `label` = `"<Module>Controller.<METHOD> <path>"`. `fallback` = the short client-facing 500 message.
-- Success is always `cr.ok(data)`.
-- Errors: throw a typed `BaseExceptions` subclass (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(403, "Forbidden", ...)` / `cr.badRequest(...)` inline. *(Being confirmed folder by folder.)*
+- Success is always `cr.ok<XyzDto>(data)`: **always pass the type argument** so the route shows what it returns (the compiler checks the value against it). Use `cr.ok<void>` / a small inline DTO such as `{ deleted: true }` → `DeletedDto` for acknowledgements.
+- Errors: throw a typed `BaseExceptions` subclass (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline.
+- Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
+- Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
 - Controllers hold no business logic and no SQL.
 
 ## 4. Services
@@ -42,6 +44,10 @@ Each feature folder `src/<module>/` holds:
 - `logContext?: IRequestLogContext` is the **last** parameter; pass it to `KnexSqlUtilities` calls.
 - Don't mark a method `async` unless it awaits something.
 - Throw typed exceptions; never return error strings or `""` as failure.
+
+## 4a. Validation
+- Request validation uses our own hand-written `<Module>.validator.ts` (no zod or other schema libraries).
+- Validators throw `InvalidRequestException(field, "mandatory" | "format")` and return the typed `XyzBody`.
 
 ## 5. Constants and magic values
 - No magic strings or numbers inside logic. Name them as `UPPER_SNAKE_CASE` module-level `const`s at the top of the file.
@@ -60,7 +66,7 @@ Each feature folder `src/<module>/` holds:
 - Never edit the logic of an already-applied migration; add a new one.
 
 ## 8. Documentation
-- Module `README.md`: *(open question, see log)*.
+- Every module has a `README.md` (endpoints, auth, request + response shapes). Update it in the same change as the code; create one when a module has none.
 - Keep `MINDMAP.md` in step with structural changes.
 
 ---
@@ -71,8 +77,11 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `route()` wrapper replaces per-handler try/catch boilerplate. |
 | 2026-11-25 | `/connectivity` health check pings the DB (`SELECT 1`); `data.status: "ok"` is kept because `deploy.sh` greps it. |
 | 2026-11-25 | `XyzDto` / `XyzBody` types are co-located per module in `<Module>.types.ts` (replaces central `models/dtos`, `models/requests`). |
+| 2026-11-25 | Module READMEs are kept and updated as each folder is refactored. |
+| 2026-11-25 | No zod: validation is our own `<Module>.validator.ts`; zod is removed as a dependency. |
+| 2026-11-25 | Controller errors are typed exceptions + `requireRole()`; one error shape everywhere. |
+| 2026-11-25 | MCP feature to be removed (not needed), which lets zod go. |
+| 2026-11-25 | Controllers show their response type with `cr.ok<XyzDto>(...)` (explicit type argument, every route). |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions
-- Module READMEs: keep and maintain them, or drop them in favour of MINDMAP + types?
-- Request validation: hand-written validators vs zod (analytics/pdca/mcp already use zod)?

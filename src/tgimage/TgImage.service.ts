@@ -175,9 +175,7 @@ export class TgImageService {
     );
   }
 
-  async listRecent(
-    limit: number,
-  ): Promise<
+  async listRecent(limit: number): Promise<
     {
       short_code: string;
       file_name: string | null;

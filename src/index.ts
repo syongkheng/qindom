@@ -38,8 +38,6 @@ import { createTgImageGetController, createTgImageController } from "./tgimage/T
 import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
-import createMcpApiKeyController from "./mcp-api-key/McpApiKey.controller.js";
-import createHouseMcpController from "./mcp/HouseMcp.controller.js";
 import { setupTelegramLogSender } from "./tgimage/TgLog.logSender.js";
 import { initTgLogBot } from "./tgimage/TgLog.bot.js";
 
@@ -137,8 +135,6 @@ async function startServer() {
     ["/v1/ss", mw.ssKey, createSsTodoControllerV1(db)],
     ["/v2/ss", mw.ssKey, createSsApplePayControllerV2(db)],
     ["/ss-key", mw.auth, createSsApiKeyController(db)],
-    ["/mcp-key", mw.auth, createMcpApiKeyController(db)],
-    ["/mcp", mw.mcpPublic, createHouseMcpController()],
     ["/wedding", mw.std, createWeddingController(db)],
     ["/suggestion", mw.std, createSuggestionController(db)],
     ["/camera", mw.std, createCameraController(cameraService)], // auth per route
