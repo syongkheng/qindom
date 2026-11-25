@@ -24,7 +24,7 @@ import createAnalyticsController from "./analytics/Analytics.controller.js";
 import createHdbController from "./hdb/Hdb.controller.js";
 import createLtaController from "./lta/Lta.controller.js";
 import createAuthController from "./auth/Auth.controller.js";
-import createPfpController from "./profile/Pfp.controller.js";
+import createProfileController from "./profile/Profile.controller.js";
 import createItineraryController from "./itinerary/Itinerary.controller.js";
 import createBudgetController from "./budget/Budget.controller.js";
 import createTodoController from "./todo/Todo.controller.js";
@@ -121,7 +121,7 @@ async function startServer() {
     ["/hdb", mw.std, createHdbController(db)],
     ["/lta", mw.std, createLtaController(db)],
     ["/auth", mw.std, createAuthController(db)],
-    ["/pfp", mw.std, createPfpController(db)],
+    ["/pfp", mw.auth, createProfileController(db)],
     ["/itinerary", mw.std, createItineraryController(db)],
     ["/budget", mw.auth, createBudgetController(db)],
     ["/todo", mw.auth, createTodoController(db)],

@@ -9,6 +9,22 @@ const OTP_REGEX = /^\d{6}$/;
 // rows created before the allowlist existed keep working.
 const REGISTER_SYSTEMS = ["fnd"];
 
+// tb_aa_user.username is VARCHAR(64).
+export const USERNAME_MIN_LENGTH = 3;
+export const USERNAME_MAX_LENGTH = 64;
+
+/** Shared by register and profile username change. Returns the trimmed username. */
+export function validateUsername(value: unknown, fieldName: string, event?: IRequestLogEvent): string {
+  V.requiredString(value, fieldName, event);
+  const username = (value as string).trim();
+  const isValid = username.length >= USERNAME_MIN_LENGTH && username.length <= USERNAME_MAX_LENGTH;
+  event?.children?.push(
+    `'${fieldName}' length ${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} ${isValid ? LogEmoji.success : LogEmoji.error} `,
+  );
+  if (!isValid) throw new Exceptions.InvalidRequest(fieldName, "format");
+  return username;
+}
+
 export class AuthValidator {
   static validatePreflightRequest(
     body: Record<string, unknown>,
@@ -36,18 +52,7 @@ export class AuthValidator {
     loggingEvent?: IRequestLogEvent,
   ): { username: string; email: string; password: string; system: string } {
     const { username, email, password, system } = body;
-    V.requiredString(username, "username", loggingEvent);
-    if ((username as string).trim().length < 3) {
-      loggingEvent?.children?.push(`'username' minLength ${LogEmoji.error} `);
-      throw new Exceptions.InvalidRequest("username", "format");
-    }
-    loggingEvent?.children?.push(`'username' minLength ${LogEmoji.success} `);
-    // tb_aa_user.username is VARCHAR(64)
-    if ((username as string).trim().length > 64) {
-      loggingEvent?.children?.push(`'username' maxLength ${LogEmoji.error} `);
-      throw new Exceptions.InvalidRequest("username", "format");
-    }
-    loggingEvent?.children?.push(`'username' maxLength ${LogEmoji.success} `);
+    validateUsername(username, "username", loggingEvent);
     V.requiredEmail(email, "email", loggingEvent);
     V.requiredString(password, "password", loggingEvent);
     if (!this._isStrongPassword(password as string)) {

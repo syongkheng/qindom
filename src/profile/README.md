@@ -1,96 +1,26 @@
 ## Profile Controller
 
-- Controller related to user profile data (country and profile photo)
-- All endpoints require a valid JWT token
-------------------------------------------------------------------------------------------
+- The logged-in user's profile: country, avatar photo, username.
+- **Auth:** JWT cookie on every route (mounted under `mw.auth`). Every route acts on the caller's own `tb_aa_user` row (by id).
+- URL prefix stays `/pfp` (fndom contract); files/classes are `Profile.*`.
 
-#### Get user's country
+---
 
-<details>
- <summary><code>GET</code> <code>/pfp/user/country</code></summary>
+| Method | Path | Body | Response (`data`) |
+|---|---|---|---|
+| `GET` | `/pfp/user/country` | | `ProfileCountryDto` `{ country: string \| null }` |
+| `POST` | `/pfp/user/country` | `{ country: string }` (≤ 256 chars; `""` clears it) | `ProfileCountryDto` |
+| `GET` | `/pfp/user/photo` | | `ProfilePhotoDto` `{ blobString: "data:image/...;base64,..." \| null }` |
+| `POST` | `/pfp/user/photo` | `{ blobString: "data:image/<type>;base64,<data>" }` (≤ 5 MB request) | `ProfilePhotoUpdatedDto` `{ updated: true }` |
+| `POST` | `/pfp/user/username` | `{ newUsername }` (trimmed, 3–64 chars) | `ProfileUsernameDto` `{ username }` + new `jwt_token` / `csrf_token` cookies |
 
-Header: Authorization: Bearer <Token>
+fndom also sends `system`, `mimeType`, `sizeInBytes`, `fileName`; they're ignored.
 
-##### Response Format
-```
-{
-    "code": 200 | 401 | 500,
-    "status": "Ok" | "Ko",
-    "data": { "country": string } | string
-}
-```
-</details>
+Changing the username re-signs the JWT (the username is inside it and in the DB revocation key `username_system`), so the old cookie stops working and the response sets fresh ones.
 
-------------------------------------------------------------------------------------------
-
-#### Update user's country
-
-<details>
- <summary><code>POST</code> <code>/pfp/user/country</code></summary>
-
-Header: Authorization: Bearer <Token>
-
-##### Payload Format
-```
-{
-    "country": string,
-    "system": string
-}
-```
-
-##### Response Format
-```
-{
-    "code": 200 | 401 | 500,
-    "status": "Ok" | "Ko",
-    "data": { "country": string } | string
-}
-```
-</details>
-
-------------------------------------------------------------------------------------------
-
-#### Get user's profile photo
-
-<details>
- <summary><code>GET</code> <code>/pfp/user/photo</code></summary>
-
-Header: Authorization: Bearer <Token>
-
-##### Response Format
-```
-{
-    "code": 200 | 401 | 500,
-    "status": "Ok" | "Ko",
-    "data": { "pfpPictureBlob": string | null } | string
-}
-```
-</details>
-
-------------------------------------------------------------------------------------------
-
-#### Upload / replace profile photo
-
-<details>
- <summary><code>POST</code> <code>/pfp/user/photo</code></summary>
-
-Header: Authorization: Bearer <Token>
-
-##### Payload Format
-```
-{
-    "blobString": string   // base64-encoded image
-}
-```
-
-##### Response Format
-```
-{
-    "code": 200 | 401 | 500,
-    "status": "Ok" | "Ko",
-    "data": { "pfpPictureBlob": string } | string
-}
-```
-</details>
-
-------------------------------------------------------------------------------------------
+##### Errors
+| Status | When | `data.code` |
+|---|---|---|
+| 400 | bad `country` / `blobString` / `newUsername` | `invalid_request_<field>` |
+| 401 | not logged in | (TokenFilter `token_invalid`) |
+| 409 | username taken by another active user | `username_already_taken` |

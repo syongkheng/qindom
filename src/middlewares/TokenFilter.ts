@@ -10,6 +10,7 @@ import db from "../config/db/mysql.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { JWT_COOKIE, CSRF_COOKIE } from "../utils/AuthCookieUtilities.js";
 import { verifyToken } from "../token/Token.service.js";
+import { parseRoles } from "../auth/Permission.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -23,17 +24,6 @@ function isCsrfValid(req: RequestWithUserInfo): boolean {
   }
 
   return crypto.timingSafeEqual(Buffer.from(header), Buffer.from(cookie));
-}
-
-// Roles come from the DB row, not the JWT — the token's roles are a snapshot from
-// login, so a demoted admin would otherwise keep their access until it expires.
-function parseRoles(raw: string | undefined): string[] {
-  try {
-    const parsed = JSON.parse(raw ?? "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 /**

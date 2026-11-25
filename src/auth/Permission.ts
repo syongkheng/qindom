@@ -26,6 +26,20 @@ export const Roles = {
  * Guards role writes so a typo such as 'SYSTEM_r5' can't be saved silently.
  */
 const ROLE_PATTERN = /^(?:[A-Z][A-Z0-9]*_R[1-5]|admin)$/;
+/**
+ * Parses `tb_aa_user.roles` (a JSON array string). Bad or missing JSON → no roles.
+ * Always read roles from the DB row, not the JWT: the token's roles are a login-time
+ * snapshot, so a demoted admin would otherwise keep access until it expires.
+ */
+export function parseRoles(raw: string | null | undefined): string[] {
+  try {
+    const parsed = JSON.parse(raw ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function isValidRole(role: unknown): role is string {
   return typeof role === "string" && ROLE_PATTERN.test(role);
 }

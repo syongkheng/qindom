@@ -8,7 +8,7 @@ export interface ITB_AA_USER {
   verify_attempts?: number; // brute-force guard
   password: string;
   system: string;
-  country?: string;
+  country?: string | null; // VARCHAR(256) DEFAULT NULL
   roles: string; // JSON-encoded string[] e.g. '["PPHS_R5","KS_R3"]'
   username_system?: string;
   state: string;

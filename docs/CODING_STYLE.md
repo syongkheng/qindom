@@ -22,7 +22,7 @@ Each feature folder `src/<module>/` holds:
 | `<Module>.constants.ts` | Module constants, only when there are too many to keep at the top of the file using them |
 | `<Module>.test.ts` | `node:test` unit tests |
 
-- File names: `PascalCase.<role>.ts`. Shared helpers: `XyzUtilities.ts`.
+- File names: `PascalCase.<role>.ts`, named after the **folder** (`src/profile/Profile.service.ts` → `ProfileService`, `createProfileController`), even when the URL prefix differs (`/pfp`). Shared helpers: `XyzUtilities.ts`.
 - DB row types stay in `src/models/databases/` (`ITB_*`), because migrations and several modules share them.
 
 ## 3. Controllers
@@ -36,6 +36,7 @@ Each feature folder `src/<module>/` holds:
 - Errors: throw a typed exception via the registry (`throw new Exceptions.NotFound("...")`) (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exception: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`.)
 - Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
 - Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
+- Auth goes on the mount in `index.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
 - Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
 - Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
 
@@ -58,6 +59,9 @@ Each feature folder `src/<module>/` holds:
 - A service with no state or dependencies is a set of exported functions (e.g. `signToken`, `verifyToken`), not a class you have to `new` up.
 - One concern = one owner: a setting used by several modules (e.g. JWT algorithm/TTL) is exported from the module that owns it and imported everywhere else, never duplicated with a "keep in sync" comment.
 - Throw typed exceptions; never return error strings or `""` as failure.
+- Don't wrap a method body in `try { ... } catch { throw new Exceptions.Unknown() }`: it hides the real cause from the request tree. Let errors propagate; `route()` turns them into a 500 and logs them.
+- Never return DB rows to the client (not even "redacted"). Return a DTO with just the fields the client needs; for writes, the new value or `{ updated: true }`.
+- Look up the current user by `getUser(req).id`, not by rebuilding `username_system` strings.
 
 ## 4c. Exceptions
 - **Every exception must be in the `Exceptions` registry.** No exception class may exist outside it:
@@ -135,6 +139,9 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Table constants are descriptive (`SS_API_KEY_TABLE`), never a bare `TABLE`. |
 | 2026-11-25 | Dead routes are deleted after confirming no frontend caller (`POST /file/tg` removed). |
 | 2026-11-25 | Keep `_fileIdsToDelete` as the `/file/delete` body field (fndom contract). |
+| 2026-11-25 | Files/classes named after their folder (`Pfp.*` → `Profile.*`). |
+| 2026-11-25 | Never return DB rows; no try/catch→Unknown wrappers; user lookups by id; auth on the mount. |
+| 2026-11-25 | Shared `parseRoles()` (auth/Permission) and `validateUsername()` (auth validator). |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions
