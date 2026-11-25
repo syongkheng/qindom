@@ -13,8 +13,8 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 5 | `exceptions` | [x] | 511bae4 | 21 files → `AppExceptions.ts` (registry only); deleted EntityRetrieval/ParseJson/TokenExpired/TokenFormat; statuses fixed (502/500/429/400); `invalid_request_generic`; NotFound/Unauthorized take a message; `BaseExceptions` → `BaseException`; tests + README |
 | 6 | `geocode` | [x] | f91e15e | `route()` + `cr.ok<NominatimPlaceDto[]>`; `Geocode.types.ts`; logContext → request tree (SQL timings, cache hit/miss); `URLSearchParams` + named limit; dup gap lambda; tests (cache hit/miss/failure) + README; `LoggingUtilities.request.branch` accepts undefined context |
 | 7 | `mcp-api-key` | [x] removed | | deleted with MCP (see 21) |
-| 8 | `ss-api-key` | [~] in review | | `route()` + typed `cr.ok`; `SsApiKey.types.ts`; validator → function; `RecordStatus`; named constants; consistent `logContext?`; `sha256Hex` shared with ApiKeyFilter; DELETE → `POST /api-key/delete` (fndom); tests + README |
-| 9 | `file` | [ ] | | |
+| 8 | `ss-api-key` | [x] | 29974cb | `route()` + typed `cr.ok`; `SsApiKey.types.ts`; validator → function; `RecordStatus`; named constants; consistent `logContext?`; `sha256Hex` shared with ApiKeyFilter; DELETE → `POST /api-key/delete` (fndom); tests + README |
+| 9 | `file` | [~] in review | | dead `POST /file/tg` deleted (+ fndom `CREATE_TG`); `route()` + `cr.ok<FileDeletedDto>`; `File.types.ts`; validator → function (uuid strings, ≤100); `RecordStatus` bindings; real `affectedRows` count; logContext; tests + README rewritten |
 | 10 | `profile` | [ ] | | |
 | 11 | `todo` | [ ] | | |
 | 12 | `applepay` | [ ] | | |
@@ -28,19 +28,19 @@ Branch: `refactor/codebase-cleanup`. One commit per folder, made after the user 
 | 20 | `hdb` | [ ] | | |
 | 21 | `mcp` | [x] removed | | `/mcp`, `/mcp-key`, `mcpLimiter`, `mw.mcpPublic`, `mcp` key prefix, `@modelcontextprotocol/sdk` removed; migration 20261126000000 drops `tb_mcp_api_key` |
 | 22 | `wedding` | [ ] | | uses raw `res.status` |
-| 23 | `itinerary` | [ ] | | |
+| 23 | `itinerary` | [ ] | | file inserts (`_filesToInsert`) don't validate `tgShortCode` ownership or `mimeType` (moved here from `file`) |
 | 24 | `auth` | [ ] | | inline `cr.result(403, ...)` |
 | 25 | `camera` | [ ] | | |
 | 26 | `analytics` | [ ] | | replace zod (3 files); then `npm uninstall zod` |
 | 27 | `middlewares` | [ ] | | `ApiKeyFilter` passes a sentence to `InvalidRequest` (code `invalid_request_Invalid API key`); `TokenOrApiKeyFilter.ts` unused (delete needs OK) |
-| 28 | `utils` + `utils/logging` | [ ] | | `KnexSqlUtilities.findOne` names its param `logContext` but it's an `IRequestLogEvent`;  `LoggingUtilities` imports dotenv (why?); rename `requestUtils.ts`, `errorUtils.ts`, typo `StructualValidationUtilities.ts`; move LTA SQL out of `KnexSqlUtilities` |
+| 28 | `utils` + `utils/logging` | [ ] | | `KnexSqlUtilities.raw` takes no log event (raw SQL never appears in the request tree);  `KnexSqlUtilities.findOne` names its param `logContext` but it's an `IRequestLogEvent`;  `LoggingUtilities` imports dotenv (why?); rename `requestUtils.ts`, `errorUtils.ts`, typo `StructualValidationUtilities.ts`; move LTA SQL out of `KnexSqlUtilities` |
 | 29 | `models` | [ ] | | move `IDecodedTokenUser` → `token/Token.types.ts`; move DTO/Body types into modules; `BaseEntity.throwIfInvalid` throws plain `Error` |
 | 30 | `config/db`, `index.ts`, `migrate.ts` | [ ] | | index.ts still compares `NODE_ENV` inline → `config/env.ts` | |
 | 31 | `migrations` | [ ] | | format only, never change logic |
 | 32 | empty folders `src/log`, `src/places` | [ ] | | delete only on explicit OK |
 
 ## fndom companion branch
-`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`. **Deploy fndom together with qindom.**
+`refactor/qindom-alignment` (unpushed): MCP key UI removed; ss-key revoke → `POST /ss-key/api-key/delete`; unused `ApiRoute.FILE.CREATE_TG` removed. **Deploy fndom together with qindom.**
 
 ## Cross-cutting smells (initial scan)
 - 5 inline `crypto.createHash("sha256")` → `sha256Hex()` (ss-api-key + ApiKeyFilter done; auth, camera, analytics left).

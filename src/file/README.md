@@ -1,61 +1,36 @@
 ## File Controller
 
-- Controller for uploading and deleting image file blobs associated with itinerary agenda items
-- Accepted types: JPEG, PNG, GIF, WebP, SVG — max 5 MB per file
-------------------------------------------------------------------------------------------
+- Soft-deletes agenda-item file records (`tb_travel_agenda_file`). Files are **created by the itinerary save** (`_filesToInsert` in `POST /itinerary/edit/:sessionId`), after the image itself is uploaded to `/img/upload`.
+- **Auth:** JWT (`mw.auth`). Only files on itineraries the caller created are affected.
 
-#### Upload a file blob
-
-<details>
- <summary><code>POST</code> <code>/file</code></summary>
-
-##### Payload Format
-```
-{
-    "uuid": string,         // client-generated UUID for the file
-    "agendaId": number,     // ID of the agenda item this file belongs to
-    "name": string,         // optional, original filename
-    "mimeType": string,     // required — one of: image/jpeg, image/png, image/gif, image/webp, image/svg+xml
-    "sizeInBytes": number,  // optional
-    "blob": string          // required, base64-encoded image data (max 5 MB)
-}
-```
-
-##### Response Format
-```
-{
-    "code": 200 | 400 | 500,
-    "status": "Ok" | "Ko",
-    "data": {
-        "id": number,
-        "uuid": string
-    } | string
-}
-```
-</details>
-
-------------------------------------------------------------------------------------------
+---
 
 #### Soft-delete files by UUID
 
 <details>
  <summary><code>POST</code> <code>/file/delete</code></summary>
 
-##### Payload Format
+##### Body: `FileDeleteBody`
+
 ```
-{
-    "_fileIdsToDelete": string[]   // array of file UUIDs to soft-delete
-}
+{ "_fileIdsToDelete": string[] }   // 1–100 file UUIDs (field name kept as fndom sends it)
 ```
 
-##### Response Format
+##### Response: `FileDeletedDto`
+
 ```
-{
-    "code": 200 | 400 | 500,
-    "status": "Ok" | "Ko",
-    "data": { "deleted": number } | string   // count of deleted files
-}
+{ "code": 200, "status": "Ok", "data": { "deleted": number } }
 ```
+
+`deleted` counts rows actually soft-deleted. Unknown, already-deleted or other users' UUIDs are skipped silently, not counted, and don't cause an error.
+
+##### Errors
+
+| Status | When                                             | `data.code`                        |
+| ------ | ------------------------------------------------ | ---------------------------------- |
+| 400    | missing, empty, > 100 items, or non-string items | `invalid_request__fileIdsToDelete` |
+| 401    | not logged in                                    | (TokenFilter `token_invalid`)      |
+
 </details>
 
-------------------------------------------------------------------------------------------
+> `POST /file/tg` was removed in Nov 2026: nothing called it (linking happens in the itinerary save).

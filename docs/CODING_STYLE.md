@@ -36,7 +36,8 @@ Each feature folder `src/<module>/` holds:
 - Errors: throw a typed exception via the registry (`throw new Exceptions.NotFound("...")`) (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exception: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`.)
 - Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
 - Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
-- Controllers hold no business logic and no SQL.
+- Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
+- Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
 
 ## 4. Services
 - Class `XyzService` built with `db: KnexSqlUtilities` (plus any other collaborators).
@@ -94,7 +95,8 @@ Each feature folder `src/<module>/` holds:
 
 ## 7. Database
 - Soft delete via `record_status` `'A'`/`'D'`; timestamps are ms epoch (`Date.now()`).
-- All raw SQL uses bindings.
+- All raw SQL uses bindings, including status values (`SET record_status = ?` with `RecordStatus.DELETED`, never `'D'` inline).
+- Responses that report a count (`deleted`, `updated`) return what the DB actually affected, not the input length.
 - Never edit the logic of an already-applied migration; add a new one.
 
 ## 8. Documentation
@@ -131,6 +133,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Mutations are always POST; `DELETE /ss-key/api-key` → `POST /ss-key/api-key/delete` (fndom updated). |
 | 2026-11-25 | Shared `sha256Hex()` helper for all hashing. |
 | 2026-11-25 | Table constants are descriptive (`SS_API_KEY_TABLE`), never a bare `TABLE`. |
+| 2026-11-25 | Dead routes are deleted after confirming no frontend caller (`POST /file/tg` removed). |
+| 2026-11-25 | Keep `_fileIdsToDelete` as the `/file/delete` body field (fndom contract). |
 | 2026-11-25 | Prettier only (no ESLint); 120 cols, trailing commas `all` (smallest diff vs existing code). |
 
 ## Open questions
