@@ -1,3 +1,5 @@
+import type { UserState } from "../../auth/Auth.types.js";
+
 export interface ITB_AA_USER {
   id?: number;
   username: string;
@@ -11,7 +13,7 @@ export interface ITB_AA_USER {
   country?: string | null; // VARCHAR(256) DEFAULT NULL
   roles: string; // JSON-encoded string[] e.g. '["PPHS_R5","KS_R3"]'
   username_system?: string;
-  state: string;
+  state: UserState;
   last_logged_in_dt: number;
   token?: string;
   pfp_picture_blob?: string;

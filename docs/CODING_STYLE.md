@@ -106,7 +106,10 @@ Each feature folder `src/<module>/` holds:
 - Callbacks the framework doesn't await (bot `onText`, emitters) must catch and log their promise.
 - User text inserted into HTML (emails, Telegram `parse_mode: "HTML"`) is always escaped. HTML template helpers take plain text and escape it themselves; callers never pass pre-escaped strings (except an explicit `bodyHtml`).
 - Email content comes from pure `xyzMail(...) → MailOptions` builders, so tests can check escaping/recipients without SMTP.
-- Services that use randomness take the source as an injectable constructor argument with the real default.
+- Services that use randomness take the source as an injectable constructor argument with the real default. Env-dependent security switches (dev OTP bypass) are injectable options defaulting to `IS_DEV`, tested in both states.
+- Session-creating services return `{ token, session }`; the controller sets the cookie and sends only `session`.
+- Constant-answer anti-enumeration endpoints catch inside `route()` and log to the request tree; never swallow silently.
+- Test fakes honour `columns`, so a missing SELECT column fails the test.
 - Don't mount a token filter on routes that never read `req.user` (it costs a DB lookup and can 403 on CSRF).
 - Regexes on untrusted text: no two adjacent sub-patterns may match the same characters (e.g. `([\s\S]+?)\s+` backtracks catastrophically); anchor captures on `\S`. Cap the text length in the validator even if it isn't stored.
 - Free-form input parsing (SMS, scraped text) lives in a pure `<Feature>.parser.ts` returning null for missing parts; the validator decides which gaps are 400s.
@@ -124,6 +127,7 @@ Each feature folder `src/<module>/` holds:
 ## 6. HTTP conventions
 - Envelope: `{ code, status: "Ok" | "Ko", data }`, produced only by `ControllerResponse`.
 - URL segments use hyphens (`/card-label`, not `/card_label`).
+- Exception to "reads are GET": a read that checks a secret or session state, or triggers outbound calls, may stay `POST` so the CSRF check applies (`/auth/verification`, `/hdb/pphs/geocode-options`). Note why in the README.
 - Mutations are always `POST` (`/:id/delete`, `/:id/update`); no `DELETE`/`PUT`/`PATCH` routes. Bodyless POSTs from clients send `{}`. Changing a verb is a frontend change: update fndom (`ApiRoute` + store) on the fndom branch `refactor/qindom-alignment`.
 
 ## 7. Database
@@ -183,6 +187,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | auth: split into AuthRegistration/AuthSession/AuthAdmin services + AuthAdmin.controller; 31 pinning tests before refactor; no security semantics changed; dev OTP bypass via IS_DEV; fndom profile password-change error now toasts. Questions A1–A11. |
 | 2026-11-26 | itinerary: paths → `/:id/update|delete`, dead `/add-collaborator` removed (fndom); service split (read/share vs save); foreign child ids of every type → 403 before the transaction (fixed a 500); file mimeType image/* + column caps; turning off the access code now persists (fndom); `challenge` redacted from logs. Questions I1–I4. |
 | 2026-11-26 | wedding: house style; escaping centralised in templates; unused OptionalTokenFilter removed from all /wedding routes; jessikheng contract unchanged. Questions W1–W3. |
 | 2026-11-26 | hdb: pphs list/busstops/mrt → GET + camelCase (fndom); scraping only for the current batch (latest even month, same rule as fndom); admin update upserts and builds formedUrl server-side; Nominatim via the shared queue. Questions H1–H3. |
