@@ -1,198 +1,298 @@
-import crypto from "crypto";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ITB_ITINERARY } from "../models/databases/tb_itinerary.js";
 import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item.js";
+import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file.js";
 import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view.js";
 import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking.js";
 import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item.js";
 import { ITB_TRAVEL_NOTE_ITEM } from "../models/databases/tb_travel_note_item.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
+import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { toMessage } from "../utils/errorUtils.js";
+import {
+  ItineraryAgendaFileDto,
+  ItineraryAgendaItemDto,
+  ItineraryBookingDto,
+  ItineraryChallengeRequiredDto,
+  ItineraryDeletedDto,
+  ItineraryDto,
+  ItineraryListDto,
+  ItineraryNoteItemDto,
+  ItineraryPackingItemDto,
+  ItinerarySummaryDto,
+} from "./Itinerary.types.js";
 
-const TB_TRAVEL_ITINERARY = "tb_travel_itinerary";
-const TB_TRAVEL_AGENDA_ITEM = "tb_travel_agenda_item";
-const TB_TRAVEL_AGENDA_FILE = "tb_travel_agenda_file";
-const TB_TRAVEL_ITINERARY_BOOKING = "tb_travel_itinerary_booking";
-const TB_TRAVEL_ITINERARY_VIEW = "tb_travel_itinerary_view";
-const TB_TRAVEL_PACKING_ITEM = "tb_travel_packing_item";
-const TB_TRAVEL_NOTE_ITEM = "tb_travel_note_item";
+export const ITINERARY_TABLE = "tb_travel_itinerary";
+export const AGENDA_ITEM_TABLE = "tb_travel_agenda_item";
+export const AGENDA_FILE_TABLE = "tb_travel_agenda_file";
+export const BOOKING_TABLE = "tb_travel_itinerary_booking";
+export const PACKING_ITEM_TABLE = "tb_travel_packing_item";
+export const NOTE_ITEM_TABLE = "tb_travel_note_item";
+const ITINERARY_VIEW_TABLE = "tb_travel_itinerary_view";
+
+const SUMMARY_COLUMNS = [
+  "id",
+  "session_id",
+  "short_code",
+  "session_title",
+  "destination",
+  "start_date",
+  "end_date",
+  "number_of_pax",
+] as const;
+/** Metadata only: blobs never leave the server (images are served by `/img/:shortCode`). */
+const FILE_COLUMNS = ["id", "uuid", "agenda_item_id", "name", "mime_type", "size_in_bytes", "tg_short_code"] as const;
+/** Shown when a packing item has no category (also the stored default). */
+export const DEFAULT_PACKING_CATEGORY = "misc";
+const MINUTES_PER_HOUR = 60;
+// tb_travel_itinerary_view.ip_address VARCHAR(64); user_agent is TEXT but capped so a client can't bloat it.
+const VIEW_IP_MAX_LENGTH = 64;
+const VIEW_USER_AGENT_MAX_LENGTH = 512;
+
+type SummaryRow = Pick<ITB_ITINERARY, (typeof SUMMARY_COLUMNS)[number]>;
+type FileRow = Pick<ITB_AGENDA_FILE, (typeof FILE_COLUMNS)[number]>;
+/** Agenda columns as mysql2 returns them (DECIMAL → string). */
+type AgendaRow = Omit<ITB_AGENDA_ITEM, "budget" | "duration_in_hours" | "coordinates_lat" | "coordinates_lng"> & {
+  budget?: string | number | null;
+  duration_in_hours?: string | number | null;
+  coordinates_lat?: string | number | null;
+  coordinates_lng?: string | number | null;
+};
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
-export function generateSessionId(): string {
-  return crypto.randomUUID();
-}
-export function generateShortCode(): string {
-  return crypto.randomBytes(4).toString("hex");
-}
-
-export function timeToMinutes(time: string | undefined): number | undefined {
+/** "HH:MM" → minutes since midnight (stored in `start_time` / `end_time`). */
+export function timeToMinutes(time: string | null): number | undefined {
   if (!time) return undefined;
   const [h, m] = time.split(":").map(Number);
-  if (isNaN(h) || isNaN(m)) return undefined;
-  return h * 60 + m;
+  if (Number.isNaN(h) || Number.isNaN(m)) return undefined;
+  return h * MINUTES_PER_HOUR + m;
 }
 
-export function minutesToTime(minutes: number | undefined | null): string | undefined {
+export function minutesToTime(minutes: number | null | undefined): string | undefined {
   if (minutes == null) return undefined;
-  const h = Math.floor(minutes / 60)
+  const h = Math.floor(minutes / MINUTES_PER_HOUR)
     .toString()
     .padStart(2, "0");
-  const m = (minutes % 60).toString().padStart(2, "0");
+  const m = (minutes % MINUTES_PER_HOUR).toString().padStart(2, "0");
   return `${h}:${m}`;
 }
 
-export function normaliseCityRaw(value: string[] | string | undefined | null): string[] | null {
-  if (!value) return null;
-  if (Array.isArray(value)) return value.length ? value : null;
+/** JSON columns written by this module; a corrupt value reads as `fallback` instead of failing the whole trip. */
+function parseJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.length ? parsed : null;
+    return JSON.parse(value) as T;
   } catch {
-    return null;
+    return fallback;
   }
 }
 
-export function buildItineraryResponse(
-  itinerary: ITB_ITINERARY,
-  agendaItems: any[],
-  viewCount?: number,
-  bookings: any[] = [],
-  packingItems: any[] = [],
-  noteItems: any[] = [],
-) {
+// ── Mappers ───────────────────────────────────────────────────────────────────
+
+export function toItinerarySummaryDto(row: SummaryRow): ItinerarySummaryDto {
   return {
-    id: itinerary.id,
-    sessionId: itinerary.session_id,
-    sessionTitle: itinerary.session_title,
-    shortCode: itinerary.short_code,
-    destination: itinerary.destination,
-    destinationRaw: itinerary.destination_raw,
-    country: itinerary.country,
-    numberOfPax: itinerary.number_of_pax,
-    itineraryDateRaw: itinerary.itinerary_date_raw,
-    startDate: itinerary.start_date,
-    endDate: itinerary.end_date,
-    unknownDate: !!itinerary.unknown_date,
-    durationInDays: itinerary.duration_in_days,
-    challenge: itinerary.challenge,
-    paxNames: itinerary.pax_names ? JSON.parse(itinerary.pax_names) : [],
-    ...(viewCount !== undefined ? { viewCount } : {}),
-    bookings,
-    packingItems,
-    noteItems,
-    agendaItems: agendaItems.map(({ record_status, created_dt, coordinates_lat, coordinates_lng, ...item }: any) => ({
-      ...item,
-      start_time: minutesToTime(item.start_time),
-      end_time: minutesToTime(item.end_time),
-      coordinates:
-        coordinates_lat != null && coordinates_lng != null
-          ? { lat: Number(coordinates_lat), lng: Number(coordinates_lng) }
-          : undefined,
-      files:
-        item.files?.map(({ record_status: _rs, created_dt: _cd, agenda_item_id: _aid, ...file }: any) => file) ?? [],
-    })),
+    id: Number(row.id),
+    sessionId: row.session_id,
+    sessionTitle: row.session_title,
+    destination: row.destination ?? null,
+    startDate: row.start_date ?? null,
+    endDate: row.end_date ?? null,
+    numberOfPax: row.number_of_pax ?? null,
+    shortCode: row.short_code,
   };
 }
 
+export function toAgendaFileDto(row: FileRow): ItineraryAgendaFileDto {
+  return {
+    id: Number(row.id),
+    uuid: row.uuid,
+    name: row.name ?? null,
+    mime_type: row.mime_type ?? null,
+    size_in_bytes: row.size_in_bytes ?? null,
+    tg_short_code: row.tg_short_code,
+  };
+}
+
+export function toAgendaItemDto(row: AgendaRow, files: ItineraryAgendaFileDto[]): ItineraryAgendaItemDto {
+  const hasCoordinates = row.coordinates_lat != null && row.coordinates_lng != null;
+  return {
+    id: Number(row.id),
+    itinerary_id: Number(row.itinerary_id),
+    category: row.category ?? null,
+    list_type: row.list_type ?? null,
+    title: row.title,
+    desc: row.desc ?? null,
+    city: row.city ?? null,
+    city_raw: row.city_raw ?? null,
+    start_time: minutesToTime(row.start_time),
+    end_time: minutesToTime(row.end_time),
+    duration_in_hours: row.duration_in_hours ?? null,
+    unknown_time: row.unknown_time ?? null,
+    budget: row.budget ?? null,
+    day: row.day ?? null,
+    date: row.date ?? null,
+    coordinates: hasCoordinates ? { lat: Number(row.coordinates_lat), lng: Number(row.coordinates_lng) } : undefined,
+    files,
+  };
+}
+
+export function toBookingDto(row: ITB_TRAVEL_ITINERARY_BOOKING): ItineraryBookingDto {
+  return {
+    id: Number(row.id),
+    itineraryId: Number(row.itinerary_id),
+    category: row.category ?? null,
+    item: row.item,
+    remarks: row.location ?? null,
+    link: row.link ?? null,
+    payment: row.payment ?? null,
+    startDate: row.start_date ?? null,
+    endDate: row.end_date ?? null,
+    nights: row.nights ?? null,
+    price: row.price != null ? Number(row.price) : undefined,
+    booked: !!row.booked,
+    freeCancellation: row.free_cancellation ?? null,
+    breakfast: !!row.breakfast,
+    deposit: row.deposit ?? null,
+    paxBreakdown: parseJson<Record<string, number> | undefined>(row.pax_breakdown, undefined),
+    sortOrder: row.sort_order ?? null,
+  };
+}
+
+export function toPackingItemDto(row: ITB_TRAVEL_PACKING_ITEM): ItineraryPackingItemDto {
+  return {
+    id: Number(row.id),
+    label: row.label,
+    category: row.category ?? DEFAULT_PACKING_CATEGORY,
+    packed: !!row.packed,
+    quantity: row.quantity ?? undefined,
+  };
+}
+
+export function toNoteItemDto(row: ITB_TRAVEL_NOTE_ITEM): ItineraryNoteItemDto {
+  return {
+    id: Number(row.id),
+    label: row.label,
+    category: row.category ?? undefined,
+    url: row.url ?? undefined,
+    done: !!row.done,
+  };
+}
+
+export function toItineraryDto(
+  row: ITB_ITINERARY,
+  children: Pick<ItineraryDto, "agendaItems" | "bookings" | "packingItems" | "noteItems">,
+  viewCount?: number,
+): ItineraryDto {
+  return {
+    id: Number(row.id),
+    sessionId: row.session_id,
+    sessionTitle: row.session_title,
+    shortCode: row.short_code,
+    destination: row.destination ?? null,
+    destinationRaw: row.destination_raw ?? null,
+    country: row.country ?? null,
+    numberOfPax: row.number_of_pax ?? null,
+    itineraryDateRaw: row.itinerary_date_raw ?? null,
+    startDate: row.start_date ?? null,
+    endDate: row.end_date ?? null,
+    unknownDate: !!row.unknown_date,
+    durationInDays: row.duration_in_days ?? null,
+    challenge: row.challenge ?? null,
+    paxNames: parseJson<string[]>(row.pax_names, []),
+    ...(viewCount !== undefined ? { viewCount } : {}),
+    ...children,
+  };
+}
+
+// ── Shared lookups ────────────────────────────────────────────────────────────
+
+/** The active trip with this sessionId, owned by `userId`: 404 if missing/deleted, 403 if someone else's. */
+export async function findOwnedItinerary(
+  db: KnexSqlUtilities,
+  userId: number,
+  sessionId: string,
+  event?: IRequestLogEvent,
+): Promise<ITB_ITINERARY> {
+  const itinerary = await db.findOne<ITB_ITINERARY>(
+    ITINERARY_TABLE,
+    { session_id: sessionId, record_status: RecordStatus.ACTIVE },
+    ["*"],
+    event,
+  );
+  if (!itinerary) throw new Exceptions.NotFound("Itinerary not found");
+  if (Number(itinerary.created_by_id) !== userId) throw new Exceptions.ForbiddenAccess();
+  return itinerary;
+}
+
+/**
+ * Trip reads (owner) and the public share flow (`short_code` + optional 6-char access code).
+ * Writes (create / update) are in `ItinerarySaveService`.
+ */
 export class ItineraryService {
   constructor(private db: KnexSqlUtilities) {}
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-  async attachFilesToAgendaItems(
-    agendaItems: ITB_AGENDA_ITEM[],
-    columns?: readonly string[],
-  ): Promise<(ITB_AGENDA_ITEM & { files: any[] })[]> {
-    const ids = agendaItems.map((i) => i.id!).filter(Boolean);
-    if (!ids.length) return agendaItems.map((item) => ({ ...item, files: [] }));
-
-    const files = await this.db.find(
-      TB_TRAVEL_AGENDA_FILE,
-      { record_status: "A" },
-      {
-        extraWhere: (qb) => qb.whereIn("agenda_item_id", ids),
-        ...(columns ? { columns } : {}),
-      },
+  async listTrips(userId: number, logContext?: IRequestLogContext): Promise<ItineraryListDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List itineraries");
+    const rows: SummaryRow[] = await this.db.find<ITB_ITINERARY>(
+      ITINERARY_TABLE,
+      { record_status: RecordStatus.ACTIVE, created_by_id: userId },
+      { orderBy: "created_dt", orderDirection: "desc", columns: SUMMARY_COLUMNS },
+      event,
     );
-
-    const filesByItemId = files.reduce<Record<number, any[]>>((acc, file: any) => {
-      const key = file.agenda_item_id as number;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(file);
-      return acc;
-    }, {});
-
-    return agendaItems.map((item) => ({ ...item, files: filesByItemId[item.id!] ?? [] }));
+    if (event) event.detail = `${rows.length} trip(s)`;
+    return { myTrips: rows.map(toItinerarySummaryDto), sharedTrips: [] };
   }
 
-  async fetchPackingItemsForItinerary(itineraryId: number): Promise<any[]> {
-    const rows = (await this.db.find<ITB_TRAVEL_PACKING_ITEM>(
-      TB_TRAVEL_PACKING_ITEM,
-      { itinerary_id: itineraryId, record_status: "A" },
-      { orderBy: "sort_order", orderDirection: "asc" },
-    )) as ITB_TRAVEL_PACKING_ITEM[];
-
-    return rows.map((p) => ({
-      id: p.id,
-      label: p.label,
-      category: p.category ?? "misc",
-      packed: !!p.packed,
-      quantity: p.quantity ?? undefined,
-    }));
+  async getBySessionId(userId: number, sessionId: string, logContext?: IRequestLogContext): Promise<ItineraryDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Load own itinerary");
+    const itinerary = await findOwnedItinerary(this.db, userId, sessionId, event);
+    return toItineraryDto(itinerary, await this.loadChildren(itinerary, event));
   }
 
-  async fetchNoteItemsForItinerary(itineraryId: number): Promise<any[]> {
-    const rows = (await this.db.find<ITB_TRAVEL_NOTE_ITEM>(
-      TB_TRAVEL_NOTE_ITEM,
-      { itinerary_id: itineraryId, record_status: "A" },
-      { orderBy: "sort_order", orderDirection: "asc" },
-    )) as ITB_TRAVEL_NOTE_ITEM[];
-
-    return rows.map((n) => ({
-      id: n.id,
-      label: n.label,
-      category: n.category ?? undefined,
-      url: n.url ?? undefined,
-      done: !!n.done,
-    }));
+  async deleteTrip(userId: number, sessionId: string, logContext?: IRequestLogContext): Promise<ItineraryDeletedDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Delete itinerary");
+    const itinerary = await findOwnedItinerary(this.db, userId, sessionId, event);
+    await this.db.update<ITB_ITINERARY>(
+      ITINERARY_TABLE,
+      { id: itinerary.id },
+      { record_status: RecordStatus.DELETED },
+      event,
+    );
+    return { deleted: true };
   }
 
-  async fetchBookingsForItinerary(itineraryId: number): Promise<any[]> {
-    const rows = (await this.db.find<ITB_TRAVEL_ITINERARY_BOOKING>(
-      TB_TRAVEL_ITINERARY_BOOKING,
-      { itinerary_id: itineraryId, record_status: "A" },
-      { orderBy: "sort_order", orderDirection: "asc" },
-    )) as ITB_TRAVEL_ITINERARY_BOOKING[];
-
-    return rows.map((b) => ({
-      id: b.id,
-      itineraryId: b.itinerary_id,
-      category: b.category,
-      item: b.item,
-      remarks: b.location,
-      link: b.link,
-      payment: b.payment,
-      startDate: b.start_date,
-      endDate: b.end_date,
-      nights: b.nights,
-      price: b.price != null ? Number(b.price) : undefined,
-      booked: !!b.booked,
-      freeCancellation: b.free_cancellation,
-      breakfast: !!b.breakfast,
-      deposit: b.deposit,
-      paxBreakdown: b.pax_breakdown ? JSON.parse(b.pax_breakdown) : undefined,
-      sortOrder: b.sort_order,
-    }));
+  /** Public viewer: the full trip, or only `{ hasChallenge: true }` when it has an access code. */
+  async getByShortCode(
+    shortCode: string,
+    logContext?: IRequestLogContext,
+  ): Promise<ItineraryDto | ItineraryChallengeRequiredDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Load shared itinerary");
+    const itinerary = await this.findByShortCode(shortCode, event);
+    if (itinerary.challenge) {
+      if (event) event.detail = "access code required";
+      return { hasChallenge: true };
+    }
+    return this.loadPublic(itinerary, event);
   }
 
+  /** Unlocks a protected trip. A wrong code is a 400 so it counts towards `itineraryChallengeLimiter`. */
+  async verifyChallenge(shortCode: string, challenge: string, logContext?: IRequestLogContext): Promise<ItineraryDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Verify access code");
+    const itinerary = await this.findByShortCode(shortCode, event);
+    if (itinerary.challenge !== challenge) throw new Exceptions.InvalidRequest("challenge");
+    return this.loadPublic(itinerary, event);
+  }
+
+  /** Fire-and-forget view counter: never throws (callers don't await it). */
   async recordView(shortCode: string, ipAddress: string, userAgent: string): Promise<void> {
     try {
-      await this.db.insert<ITB_TRAVEL_ITINERARY_VIEW>(TB_TRAVEL_ITINERARY_VIEW, {
+      await this.db.insert<ITB_TRAVEL_ITINERARY_VIEW>(ITINERARY_VIEW_TABLE, {
         short_code: shortCode,
-        ip_address: ipAddress,
-        user_agent: userAgent.slice(0, 512),
+        ip_address: ipAddress.slice(0, VIEW_IP_MAX_LENGTH),
+        user_agent: userAgent.slice(0, VIEW_USER_AGENT_MAX_LENGTH),
         viewed_at: Date.now(),
       });
     } catch (err) {
@@ -203,580 +303,65 @@ export class ItineraryService {
     }
   }
 
-  async getViewCount(shortCode: string): Promise<number> {
-    return this.db.count(TB_TRAVEL_ITINERARY_VIEW, { short_code: shortCode });
-  }
-
-  // ─── Queries ─────────────────────────────────────────────────────────────────
-
-  async listTrips(userId: number): Promise<any[]> {
-    const trips = await this.db.find<ITB_ITINERARY>(
-      TB_TRAVEL_ITINERARY,
-      { record_status: "A", created_by_id: userId },
-      {
-        orderBy: "created_dt",
-        orderDirection: "desc",
-        columns: [
-          "id",
-          "session_id",
-          "short_code",
-          "session_title",
-          "destination",
-          "start_date",
-          "end_date",
-          "number_of_pax",
-          "created_dt",
-        ],
-      },
-    );
-    return trips.map((t) => ({
-      id: t.id,
-      sessionId: t.session_id,
-      sessionTitle: t.session_title,
-      destination: t.destination,
-      startDate: t.start_date,
-      endDate: t.end_date,
-      numberOfPax: t.number_of_pax,
-      shortCode: t.short_code,
-    }));
-  }
-
-  async deleteTrip(userId: number, sessionId: string): Promise<void> {
-    const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
-      session_id: sessionId,
-      record_status: "A",
-    })) as ITB_ITINERARY | undefined;
-    if (!itinerary) throw new Exceptions.NotFound();
-    if (itinerary.created_by_id !== userId) throw new Exceptions.ForbiddenAccess();
-    await this.db.update<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, { session_id: sessionId }, { record_status: "D" });
-  }
-
-  async getBySessionId(userId: number, sessionId: string): Promise<ReturnType<typeof buildItineraryResponse>> {
-    const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
-      session_id: sessionId,
-      record_status: "A",
-    })) as ITB_ITINERARY | undefined;
-    if (!itinerary) throw new Exceptions.NotFound();
-    if (itinerary.created_by_id !== userId) throw new Exceptions.ForbiddenAccess();
-
-    const agendaItems = (await this.db.find<ITB_AGENDA_ITEM>(
-      TB_TRAVEL_AGENDA_ITEM,
-      { itinerary_id: itinerary.id!, record_status: "A" },
-      { orderBy: "id", orderDirection: "asc" },
-    )) as ITB_AGENDA_ITEM[];
-
-    const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
-      "id",
-      "uuid",
-      "agenda_item_id",
-      "name",
-      "mime_type",
-      "size_in_bytes",
-      "created_dt",
-      "tg_short_code",
-    ]);
-    const [bookings, packingItems, noteItems] = await Promise.all([
-      this.fetchBookingsForItinerary(itinerary.id!),
-      this.fetchPackingItemsForItinerary(itinerary.id!),
-      this.fetchNoteItemsForItinerary(itinerary.id!),
-    ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, undefined, bookings, packingItems, noteItems);
-  }
-
-  async getByShortCode(
-    shortCode: string,
-  ): Promise<{ hasChallenge: boolean } | ReturnType<typeof buildItineraryResponse>> {
-    const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
-      short_code: shortCode,
-      record_status: "A",
-    })) as ITB_ITINERARY | undefined;
-    if (!itinerary) throw new Exceptions.NotFound();
-
-    if (itinerary.challenge) return { hasChallenge: true };
-
-    const agendaItems = (await this.db.find<ITB_AGENDA_ITEM>(
-      TB_TRAVEL_AGENDA_ITEM,
-      { itinerary_id: itinerary.id!, record_status: "A" },
-      { orderBy: "id", orderDirection: "asc" },
-    )) as ITB_AGENDA_ITEM[];
-
-    const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
-      "id",
-      "uuid",
-      "agenda_item_id",
-      "name",
-      "mime_type",
-      "size_in_bytes",
-      "created_dt",
-      "tg_short_code",
-    ]);
-    const [viewCount, bookings, packingItems, noteItems] = await Promise.all([
-      this.getViewCount(shortCode),
-      this.fetchBookingsForItinerary(itinerary.id!),
-      this.fetchPackingItemsForItinerary(itinerary.id!),
-      this.fetchNoteItemsForItinerary(itinerary.id!),
-    ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems, noteItems);
-  }
-
-  async verifyChallenge(shortCode: string, challenge: string): Promise<ReturnType<typeof buildItineraryResponse>> {
-    const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
-      short_code: shortCode,
-      record_status: "A",
-    })) as ITB_ITINERARY | undefined;
-    if (!itinerary) throw new Exceptions.NotFound();
-    if (itinerary.challenge !== challenge) throw new Exceptions.InvalidRequest("challenge");
-
-    const agendaItems = (await this.db.find<ITB_AGENDA_ITEM>(
-      TB_TRAVEL_AGENDA_ITEM,
-      { itinerary_id: itinerary.id!, record_status: "A" },
-      { orderBy: "id", orderDirection: "asc" },
-    )) as ITB_AGENDA_ITEM[];
-
-    const itemsWithFiles = await this.attachFilesToAgendaItems(agendaItems, [
-      "id",
-      "uuid",
-      "agenda_item_id",
-      "name",
-      "mime_type",
-      "size_in_bytes",
-      "created_dt",
-      "tg_short_code",
-    ]);
-    const [viewCount, bookings, packingItems, noteItems] = await Promise.all([
-      this.getViewCount(shortCode),
-      this.fetchBookingsForItinerary(itinerary.id!),
-      this.fetchPackingItemsForItinerary(itinerary.id!),
-      this.fetchNoteItemsForItinerary(itinerary.id!),
-    ]);
-    return buildItineraryResponse(itinerary, itemsWithFiles, viewCount, bookings, packingItems, noteItems);
-  }
-
-  async create(userId: number, body: any): Promise<{ shortCode: string; sessionId: string; agendaToFileMap: any[] }> {
-    const {
-      idempotencyKey,
-      sessionTitle,
-      destination,
-      destinationRaw,
-      country,
-      numberOfPax,
-      itineraryDateRaw,
-      startDate,
-      endDate,
-      unknownDate,
-      durationInDays,
-      challenge,
-      agendaItems,
-      paxNames,
-      bookings,
-      packingItems = [],
-      noteItems = [],
-    } = body;
-
-    if (idempotencyKey) {
-      // Scoped to the caller — the replay returns the itinerary's shortCode and
-      // sessionId, so another user's key must never resolve to their trip.
-      const existing = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
-        idempotency_key: idempotencyKey,
-        created_by_id: userId,
-      })) as ITB_ITINERARY | undefined;
-      if (existing) {
-        const existingAgenda = (await this.db.find<ITB_AGENDA_ITEM>(TB_TRAVEL_AGENDA_ITEM, {
-          itinerary_id: existing.id!,
-          record_status: "A",
-        })) as ITB_AGENDA_ITEM[];
-        return {
-          shortCode: existing.short_code,
-          sessionId: existing.session_id,
-          agendaToFileMap: existingAgenda.map((a) => ({ agendaId: a.id, fileUuids: [] })),
-        };
-      }
-    }
-
-    const sessionId = generateSessionId();
-    const shortCode = generateShortCode();
-    const now = Date.now();
-
-    const agendaToFileMap = await this.db.transaction(async (trx) => {
-      const [itineraryId] = await trx(TB_TRAVEL_ITINERARY).insert({
-        session_id: sessionId,
-        short_code: shortCode,
-        idempotency_key: idempotencyKey || undefined,
-        session_title: sessionTitle,
-        destination: destination || undefined,
-        destination_raw: destinationRaw?.length ? JSON.stringify(destinationRaw) : undefined,
-        country: country || undefined,
-        number_of_pax: numberOfPax || 1,
-        itinerary_date_raw: itineraryDateRaw?.length ? JSON.stringify(itineraryDateRaw) : undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        unknown_date: unknownDate ? 1 : 0,
-        duration_in_days: durationInDays || 1,
-        challenge: challenge || undefined,
-        pax_names: paxNames?.length ? JSON.stringify(paxNames) : undefined,
-        created_dt: now,
-        created_by_id: userId,
-        record_status: "A",
-      });
-
-      const map: { agendaId: number; fileUuids: { uuid: string; tgShortCode?: string }[] }[] = [];
-
-      for (const item of agendaItems) {
-        const [agendaItemId] = await trx(TB_TRAVEL_AGENDA_ITEM).insert({
-          itinerary_id: itineraryId,
-          category: item.category || undefined,
-          list_type: item.listType ?? item.list_type ?? undefined,
-          title: item.title,
-          desc: item.desc || undefined,
-          city: item.city || undefined,
-          city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
-          coordinates_lat: item.coordinates?.lat ?? undefined,
-          coordinates_lng: item.coordinates?.lng ?? undefined,
-          start_time: timeToMinutes(item.startTime),
-          end_time: timeToMinutes(item.endTime),
-          duration_in_hours: item.durationInHours || undefined,
-          unknown_time: item.unknownTime ? 1 : 0,
-          budget: item.budget || undefined,
-          day: item.day || undefined,
-          date: item.date || undefined,
-          created_dt: now,
-          record_status: "A",
-        });
-        map.push({
-          agendaId: agendaItemId,
-          fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
-        });
-
-        for (const file of Array.isArray(item._filesToInsert) ? item._filesToInsert : []) {
-          if (!file.uuid || !file.tgShortCode || !file.mimeType) continue;
-          const existing = await trx(TB_TRAVEL_AGENDA_FILE).where({ uuid: file.uuid, record_status: "A" }).first();
-          if (!existing) {
-            await trx(TB_TRAVEL_AGENDA_FILE).insert({
-              uuid: file.uuid,
-              tg_short_code: file.tgShortCode,
-              agenda_item_id: agendaItemId,
-              name: file.name ?? null,
-              mime_type: file.mimeType,
-              size_in_bytes: file.sizeInBytes ?? null,
-              created_dt: now,
-              record_status: "A",
-            });
-          }
-        }
-      }
-
-      if (bookings.length > 0) {
-        await trx(TB_TRAVEL_ITINERARY_BOOKING).insert(
-          bookings.map((b: any) => this._bookingInsertRow(itineraryId, b, now)),
-        );
-      }
-
-      if (packingItems.length > 0) {
-        await trx(TB_TRAVEL_PACKING_ITEM).insert(
-          packingItems.map((p: any, i: number) => this._packingInsertRow(itineraryId, p, i, now)),
-        );
-      }
-
-      if (noteItems.length > 0) {
-        await trx(TB_TRAVEL_NOTE_ITEM).insert(
-          noteItems.map((n: any, i: number) => this._noteInsertRow(itineraryId, n, i, now)),
-        );
-      }
-
-      return map;
-    });
-
-    return { shortCode, sessionId, agendaToFileMap };
-  }
-
-  async edit(
-    userId: number,
-    sessionId: string,
-    body: any,
-  ): Promise<{ shortCode: string; sessionId: string; agendaToFileMap: any[] }> {
-    const {
-      sessionTitle,
-      destination,
-      destinationRaw,
-      country,
-      numberOfPax,
-      itineraryDateRaw,
-      startDate,
-      endDate,
-      unknownDate,
-      durationInDays,
-      challenge,
-      agendaItems,
-      _agendaIdsToDelete,
-      paxNames,
-      bookings,
-      _bookingIdsToDelete,
-      packingItems = [],
-      _packingIdsToDelete = [],
-      noteItems = [],
-      _noteIdsToDelete = [],
-    } = body;
-
-    const itinerary = (await this.db.findOne<ITB_ITINERARY>(TB_TRAVEL_ITINERARY, {
-      session_id: sessionId,
-      record_status: "A",
-    })) as ITB_ITINERARY | undefined;
-    if (!itinerary) throw new Exceptions.NotFound();
-    if (itinerary.created_by_id !== userId) throw new Exceptions.ForbiddenAccess();
-
-    const now = Date.now();
-
-    const agendaToFileMap = await this.db.transaction(async (trx) => {
-      await trx(TB_TRAVEL_ITINERARY)
-        .where({ session_id: sessionId })
-        .update({
-          session_title: sessionTitle || itinerary.session_title,
-          destination: destination || undefined,
-          destination_raw: destinationRaw?.length ? JSON.stringify(destinationRaw) : undefined,
-          country: country || undefined,
-          number_of_pax: numberOfPax || 1,
-          itinerary_date_raw: itineraryDateRaw?.length ? JSON.stringify(itineraryDateRaw) : undefined,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-          unknown_date: unknownDate ? 1 : 0,
-          duration_in_days: durationInDays || 1,
-          challenge: challenge !== undefined ? challenge || null : itinerary.challenge,
-          pax_names: paxNames !== undefined ? (paxNames?.length ? JSON.stringify(paxNames) : null) : undefined,
-        });
-
-      // Child rows are addressed by client-supplied ids — every update/delete
-      // below is scoped to this itinerary so ids belonging to another user's
-      // itinerary can't be touched.
-      const ownedAgendaIds = new Set(
-        (await trx(TB_TRAVEL_AGENDA_ITEM).where({ itinerary_id: itinerary.id! }).pluck("id")).map(Number),
-      );
-
-      if (_agendaIdsToDelete.length > 0) {
-        await trx(TB_TRAVEL_AGENDA_ITEM)
-          .where({ itinerary_id: itinerary.id! })
-          .whereIn("id", _agendaIdsToDelete.map(Number))
-          .update({ record_status: "D" });
-      }
-
-      const map: { agendaId: number; fileUuids: { uuid: string; tgShortCode?: string }[] }[] = [];
-
-      for (const item of agendaItems) {
-        if (item.id) {
-          if (!ownedAgendaIds.has(Number(item.id))) throw new Exceptions.ForbiddenAccess();
-          const cityRaw = normaliseCityRaw(item.cityRaw ?? item.city_raw);
-          const startTime = item.startTime ?? item.start_time;
-          const endTime = item.endTime ?? item.end_time;
-          const unknownTime = item.unknownTime ?? item.unknown_time;
-          const durationInHours = item.durationInHours ?? item.duration_in_hours;
-          await trx(TB_TRAVEL_AGENDA_ITEM)
-            .where({ id: Number(item.id), itinerary_id: itinerary.id! })
-            .update({
-              category: item.category || undefined,
-              list_type: item.listType ?? item.list_type ?? undefined,
-              title: item.title,
-              desc: item.desc || undefined,
-              city: item.city || undefined,
-              city_raw: cityRaw?.length ? JSON.stringify(cityRaw) : undefined,
-              coordinates_lat: item.coordinates?.lat ?? undefined,
-              coordinates_lng: item.coordinates?.lng ?? undefined,
-              start_time: timeToMinutes(startTime),
-              end_time: timeToMinutes(endTime),
-              duration_in_hours: durationInHours || undefined,
-              unknown_time: unknownTime ? 1 : 0,
-              budget: item.budget || undefined,
-              day: item.day || undefined,
-              date: item.date || undefined,
-            });
-          map.push({
-            agendaId: Number(item.id),
-            fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
-          });
-          for (const file of Array.isArray(item._filesToInsert) ? item._filesToInsert : []) {
-            if (!file.uuid || !file.tgShortCode || !file.mimeType) continue;
-            const existing = await trx(TB_TRAVEL_AGENDA_FILE).where({ uuid: file.uuid, record_status: "A" }).first();
-            if (!existing) {
-              await trx(TB_TRAVEL_AGENDA_FILE).insert({
-                uuid: file.uuid,
-                tg_short_code: file.tgShortCode,
-                agenda_item_id: Number(item.id),
-                name: file.name ?? null,
-                mime_type: file.mimeType,
-                size_in_bytes: file.sizeInBytes ?? null,
-                created_dt: now,
-                record_status: "A",
-              });
-            }
-          }
-        } else {
-          const [newItemId] = await trx(TB_TRAVEL_AGENDA_ITEM).insert({
-            itinerary_id: itinerary.id!,
-            category: item.category || undefined,
-            list_type: item.listType ?? item.list_type ?? undefined,
-            title: item.title,
-            desc: item.desc || undefined,
-            city: item.city || undefined,
-            city_raw: item.cityRaw?.length ? JSON.stringify(item.cityRaw) : undefined,
-            coordinates_lat: item.coordinates?.lat ?? undefined,
-            coordinates_lng: item.coordinates?.lng ?? undefined,
-            start_time: timeToMinutes(item.startTime),
-            end_time: timeToMinutes(item.endTime),
-            duration_in_hours: item.durationInHours || undefined,
-            unknown_time: item.unknownTime ? 1 : 0,
-            budget: item.budget || undefined,
-            day: item.day || undefined,
-            date: item.date || undefined,
-            created_dt: now,
-            record_status: "A",
-          });
-          map.push({
-            agendaId: newItemId,
-            fileUuids: Array.isArray(item._agendaToFileMapping) ? item._agendaToFileMapping : [],
-          });
-
-          for (const file of Array.isArray(item._filesToInsert) ? item._filesToInsert : []) {
-            if (!file.uuid || !file.tgShortCode || !file.mimeType) continue;
-            const existing = await trx(TB_TRAVEL_AGENDA_FILE).where({ uuid: file.uuid, record_status: "A" }).first();
-            if (!existing) {
-              await trx(TB_TRAVEL_AGENDA_FILE).insert({
-                uuid: file.uuid,
-                tg_short_code: file.tgShortCode,
-                agenda_item_id: newItemId,
-                name: file.name ?? null,
-                mime_type: file.mimeType,
-                size_in_bytes: file.sizeInBytes ?? null,
-                created_dt: now,
-                record_status: "A",
-              });
-            }
-          }
-        }
-      }
-
-      if (_bookingIdsToDelete.length > 0) {
-        await trx(TB_TRAVEL_ITINERARY_BOOKING)
-          .where({ itinerary_id: itinerary.id! })
-          .whereIn("id", _bookingIdsToDelete.map(Number))
-          .update({ record_status: "D" });
-      }
-
-      for (const b of bookings) {
-        if (b.id) {
-          await trx(TB_TRAVEL_ITINERARY_BOOKING)
-            .where({ id: Number(b.id), itinerary_id: itinerary.id! })
-            .update(this._bookingUpdateRow(b));
-        } else {
-          await trx(TB_TRAVEL_ITINERARY_BOOKING).insert(this._bookingInsertRow(itinerary.id!, b, now));
-        }
-      }
-
-      if (_packingIdsToDelete.length > 0) {
-        await trx(TB_TRAVEL_PACKING_ITEM)
-          .where({ itinerary_id: itinerary.id! })
-          .whereIn("id", _packingIdsToDelete.map(Number))
-          .update({ record_status: "D" });
-      }
-
-      for (let i = 0; i < packingItems.length; i++) {
-        const p = packingItems[i];
-        if (p.id) {
-          await trx(TB_TRAVEL_PACKING_ITEM)
-            .where({ id: Number(p.id), itinerary_id: itinerary.id! })
-            .update({
-              label: p.label,
-              category: p.category || "misc",
-              packed: p.packed ? 1 : 0,
-              quantity: p.quantity ?? null,
-              sort_order: i,
-            });
-        } else {
-          await trx(TB_TRAVEL_PACKING_ITEM).insert(this._packingInsertRow(itinerary.id!, p, i, now));
-        }
-      }
-
-      if (_noteIdsToDelete.length > 0) {
-        await trx(TB_TRAVEL_NOTE_ITEM)
-          .where({ itinerary_id: itinerary.id! })
-          .whereIn("id", _noteIdsToDelete.map(Number))
-          .update({ record_status: "D" });
-      }
-
-      for (let i = 0; i < noteItems.length; i++) {
-        const n = noteItems[i];
-        if (n.id) {
-          await trx(TB_TRAVEL_NOTE_ITEM)
-            .where({ id: Number(n.id), itinerary_id: itinerary.id! })
-            .update({
-              label: n.label,
-              category: n.category || undefined,
-              url: n.url || undefined,
-              done: n.done ? 1 : 0,
-              sort_order: i,
-            });
-        } else {
-          await trx(TB_TRAVEL_NOTE_ITEM).insert(this._noteInsertRow(itinerary.id!, n, i, now));
-        }
-      }
-
-      return map;
-    });
-
-    return { shortCode: itinerary.short_code, sessionId, agendaToFileMap };
-  }
-
   // ─── Private helpers ─────────────────────────────────────────────────────────
 
-  private _packingInsertRow(itineraryId: number, p: any, sortOrder: number, now: number) {
-    return {
-      itinerary_id: itineraryId,
-      label: p.label,
-      category: p.category || "misc",
-      packed: p.packed ? 1 : 0,
-      quantity: p.quantity ?? null,
-      sort_order: sortOrder,
-      created_dt: now,
-      record_status: "A",
-    };
+  private async findByShortCode(shortCode: string, event?: IRequestLogEvent): Promise<ITB_ITINERARY> {
+    const itinerary = await this.db.findOne<ITB_ITINERARY>(
+      ITINERARY_TABLE,
+      { short_code: shortCode, record_status: RecordStatus.ACTIVE },
+      ["*"],
+      event,
+    );
+    if (!itinerary) throw new Exceptions.NotFound("Itinerary not found");
+    return itinerary;
   }
 
-  private _noteInsertRow(itineraryId: number, n: any, sortOrder: number, now: number) {
-    return {
-      itinerary_id: itineraryId,
-      label: n.label,
-      category: n.category || undefined,
-      url: n.url || undefined,
-      done: n.done ? 1 : 0,
-      sort_order: sortOrder,
-      created_dt: now,
-      record_status: "A",
-    };
+  private async loadPublic(itinerary: ITB_ITINERARY, event?: IRequestLogEvent): Promise<ItineraryDto> {
+    const [children, viewCount] = await Promise.all([
+      this.loadChildren(itinerary, event),
+      this.db.count<ITB_TRAVEL_ITINERARY_VIEW>(ITINERARY_VIEW_TABLE, { short_code: itinerary.short_code }, event),
+    ]);
+    return toItineraryDto(itinerary, children, viewCount);
   }
 
-  private _bookingInsertRow(itineraryId: number, b: any, now: number) {
-    return {
-      itinerary_id: itineraryId,
-      ...this._bookingUpdateRow(b),
-      created_dt: now,
-      record_status: "A",
-    };
-  }
+  /** Active agenda items (with file metadata), bookings, packing and notes, each in its stored order. */
+  private async loadChildren(
+    itinerary: ITB_ITINERARY,
+    event?: IRequestLogEvent,
+  ): Promise<Pick<ItineraryDto, "agendaItems" | "bookings" | "packingItems" | "noteItems">> {
+    const byItinerary = { itinerary_id: itinerary.id, record_status: RecordStatus.ACTIVE };
+    const bySortOrder = { orderBy: "sort_order", orderDirection: "asc" } as const;
+    const agendaRows = await this.db.find<AgendaRow>(
+      AGENDA_ITEM_TABLE,
+      byItinerary,
+      { orderBy: "id", orderDirection: "asc" },
+      event,
+    );
+    const agendaIds = agendaRows.map((a) => Number(a.id));
+    const [fileRows, bookings, packingItems, noteItems] = await Promise.all([
+      agendaIds.length
+        ? this.db.find<ITB_AGENDA_FILE>(
+            AGENDA_FILE_TABLE,
+            { record_status: RecordStatus.ACTIVE },
+            { columns: FILE_COLUMNS, extraWhere: (qb) => qb.whereIn("agenda_item_id", agendaIds) },
+            event,
+          )
+        : Promise.resolve<FileRow[]>([]),
+      this.db.find<ITB_TRAVEL_ITINERARY_BOOKING>(BOOKING_TABLE, byItinerary, bySortOrder, event),
+      this.db.find<ITB_TRAVEL_PACKING_ITEM>(PACKING_ITEM_TABLE, byItinerary, bySortOrder, event),
+      this.db.find<ITB_TRAVEL_NOTE_ITEM>(NOTE_ITEM_TABLE, byItinerary, bySortOrder, event),
+    ]);
 
-  private _bookingUpdateRow(b: any) {
+    const filesByAgendaId = new Map<number, ItineraryAgendaFileDto[]>();
+    for (const file of fileRows) {
+      const key = Number(file.agenda_item_id);
+      filesByAgendaId.set(key, [...(filesByAgendaId.get(key) ?? []), toAgendaFileDto(file)]);
+    }
     return {
-      category: b.category || undefined,
-      item: b.item,
-      location: b.remarks || undefined,
-      link: b.link || undefined,
-      payment: b.payment || undefined,
-      start_date: b.startDate || undefined,
-      end_date: b.endDate || undefined,
-      nights: b.nights != null ? b.nights : undefined,
-      price: b.price != null ? b.price : undefined,
-      booked: b.booked ? 1 : 0,
-      free_cancellation: b.freeCancellation || undefined,
-      breakfast: b.breakfast ? 1 : 0,
-      deposit: b.deposit || undefined,
-      pax_breakdown: b.paxBreakdown ? JSON.stringify(b.paxBreakdown) : undefined,
-      sort_order: b.sortOrder ?? 0,
+      agendaItems: agendaRows.map((a) => toAgendaItemDto(a, filesByAgendaId.get(Number(a.id)) ?? [])),
+      bookings: bookings.map(toBookingDto),
+      packingItems: packingItems.map(toPackingItemDto),
+      noteItems: noteItems.map(toNoteItemDto),
     };
   }
 }

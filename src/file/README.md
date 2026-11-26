@@ -1,6 +1,6 @@
 ## File Controller
 
-- Soft-deletes agenda-item file records (`tb_travel_agenda_file`). Files are **created by the itinerary save** (`_filesToInsert` in `POST /itinerary/edit/:sessionId`), after the image itself is uploaded to `/img/upload`.
+- Soft-deletes agenda-item file records (`tb_travel_agenda_file`). Files are **created by the itinerary save** (`_filesToInsert` in `POST /itinerary` / `POST /itinerary/:sessionId/update`), after the image itself is uploaded to `/img/upload`.
 - **Auth:** JWT (`mw.auth`). Only files on itineraries the caller created are affected.
 
 ---

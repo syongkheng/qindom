@@ -130,6 +130,9 @@ Each feature folder `src/<module>/` holds:
 - Soft delete via `record_status` `'A'`/`'D'`; timestamps are ms epoch (`Date.now()`).
 - Module SQL never lives in `KnexSqlUtilities`; it goes in the service that owns the table, and other modules call that service (e.g. hdb → `LtaService`).
 - Raw SQL goes through `this.db.raw(sql, bindings, event)` so it's timed in the request tree.
+- Never throw a typed exception inside `db.transaction(...)` (the wrapper turns it into a 500 until utils #28 fixes it). Validate and check ownership **before** opening the transaction.
+- Client-addressed child rows: check every id (updates and delete lists) belongs to the parent before writing (→ 403), and still scope each child UPDATE/DELETE by the parent id.
+- Validators for round-trip payloads (client posts back what the GET returned) accept the GET's own shapes (DECIMAL strings, 0/1 flags, digit-string ids).
 - All raw SQL uses bindings, including status values (`SET record_status = ?` with `RecordStatus.DELETED`, never `'D'` inline).
 - Responses that report a count (`deleted`, `updated`) return what the DB actually affected, not the input length.
 - Never edit the logic of an already-applied migration; add a new one.
@@ -180,6 +183,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | itinerary: paths → `/:id/update|delete`, dead `/add-collaborator` removed (fndom); service split (read/share vs save); foreign child ids of every type → 403 before the transaction (fixed a 500); file mimeType image/* + column caps; turning off the access code now persists (fndom); `challenge` redacted from logs. Questions I1–I4. |
 | 2026-11-26 | wedding: house style; escaping centralised in templates; unused OptionalTokenFilter removed from all /wedding routes; jessikheng contract unchanged. Questions W1–W3. |
 | 2026-11-26 | hdb: pphs list/busstops/mrt → GET + camelCase (fndom); scraping only for the current batch (latest even month, same rule as fndom); admin update upserts and builds formedUrl server-side; Nominatim via the shared queue. Questions H1–H3. |
 | 2026-11-26 | siri-shortcut: Citi SMS regex ReDoS fixed (2 KB of spaces blocked the event loop ~4 s); smsBody ≤ 2000; contract unchanged. Questions S1–S4 collected. |

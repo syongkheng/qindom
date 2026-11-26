@@ -31,6 +31,8 @@ const ALWAYS_REDACT = new Set([
   "verifycode",
   "otp",
   "pin",
+  // Itinerary share access code (POST /itinerary/challenge, update bodies, owner GET responses).
+  "challenge",
   "captchacode",
   "smsbody",
   "authorization",
@@ -114,7 +116,7 @@ export function redactUrlForLog(url: string): string {
 export function redactTextForLog(text: string): string {
   return text
     .replace(
-      /"(password|token|secret|api_?key|apiKey|blob|blobString|smsBody|verify_code|pin|authorization|cookie)"\s*:\s*"[^"]*"/gi,
+      /"(password|token|secret|api_?key|apiKey|blob|blobString|smsBody|verify_code|pin|challenge|authorization|cookie)"\s*:\s*"[^"]*"/gi,
       '"$1":"[REDACTED]"',
     )
     .replace(/"code"\s*:\s*"(\d{4,8})"/gi, '"code":"[REDACTED]"')

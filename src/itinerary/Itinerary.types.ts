@@ -1,0 +1,276 @@
+/** `tb_travel_agenda_item.list_type`: "Things to do" vs "Places to visit". Null on old/manual rows (fndom treats it as todo). */
+export const AgendaListType = {
+  TODO: "todo",
+  PLACE: "place",
+} as const;
+
+export type AgendaListType = (typeof AgendaListType)[keyof typeof AgendaListType];
+
+export interface CoordinatesDto {
+  lat: number;
+  lng: number;
+}
+
+// ── Responses ──
+
+/** One trip card of `GET /itinerary`. */
+export interface ItinerarySummaryDto {
+  id: number;
+  sessionId: string;
+  sessionTitle: string;
+  destination: string | null;
+  startDate: number | null;
+  endDate: number | null;
+  numberOfPax: number | null;
+  shortCode: string;
+}
+
+export interface ItineraryListDto {
+  /** The caller's trips, newest first. */
+  myTrips: ItinerarySummaryDto[];
+  /** Always empty: sharing with other accounts isn't built. fndom still reads the field. */
+  sharedTrips: ItinerarySummaryDto[];
+}
+
+/**
+ * File metadata only (images are served by `GET /img/:shortCode`, never inline).
+ * snake_case on purpose: fndom's planner/viewer read these names (`tg_short_code`, `mime_type`).
+ */
+export interface ItineraryAgendaFileDto {
+  id: number;
+  uuid: string;
+  name: string | null;
+  mime_type: string | null;
+  size_in_bytes: number | null;
+  tg_short_code: string;
+}
+
+/**
+ * An agenda item. Kept snake_case (the column names) because many fndom components read
+ * `start_time`, `unknown_time`, `city_raw`, `list_type` directly; see README "Contract notes".
+ */
+export interface ItineraryAgendaItemDto {
+  id: number;
+  itinerary_id: number;
+  category: string | null;
+  list_type: AgendaListType | null;
+  title: string;
+  desc: string | null;
+  city: string | null;
+  /** JSON-encoded string[] as stored. */
+  city_raw: string | null;
+  /** "HH:MM"; omitted when unset. */
+  start_time?: string;
+  end_time?: string;
+  /** DECIMAL(6,2): mysql2 returns it as a string. */
+  duration_in_hours: string | number | null;
+  /** TINYINT 0/1. */
+  unknown_time: number | null;
+  /** DECIMAL(12,2): mysql2 returns it as a string. */
+  budget: string | number | null;
+  day: number | null;
+  date: string | null;
+  /** Omitted when the item has no coordinates. */
+  coordinates?: CoordinatesDto;
+  files: ItineraryAgendaFileDto[];
+}
+
+export interface ItineraryBookingDto {
+  id: number;
+  itineraryId: number;
+  category: string | null;
+  item: string;
+  /** Stored in the `location` column. */
+  remarks: string | null;
+  link: string | null;
+  payment: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  nights: number | null;
+  price?: number;
+  booked: boolean;
+  freeCancellation: string | null;
+  breakfast: boolean;
+  deposit: string | null;
+  paxBreakdown?: Record<string, number>;
+  sortOrder: number | null;
+}
+
+export interface ItineraryPackingItemDto {
+  id: number;
+  label: string;
+  category: string;
+  packed: boolean;
+  quantity?: number;
+}
+
+export interface ItineraryNoteItemDto {
+  id: number;
+  label: string;
+  category?: string;
+  url?: string;
+  done: boolean;
+}
+
+/** A full trip: `GET /:sessionId` (owner), `GET /v/:shortCode` and `POST /challenge` (public, with `viewCount`). */
+export interface ItineraryDto {
+  id: number;
+  sessionId: string;
+  sessionTitle: string;
+  shortCode: string;
+  destination: string | null;
+  /** JSON-encoded string[] as stored (fndom parses it). */
+  destinationRaw: string | null;
+  country: string | null;
+  numberOfPax: number | null;
+  /** JSON-encoded string[] as stored (fndom parses it). */
+  itineraryDateRaw: string | null;
+  startDate: number | null;
+  endDate: number | null;
+  unknownDate: boolean;
+  durationInDays: number | null;
+  /** The 6-char access code; null when the trip is public. */
+  challenge: string | null;
+  paxNames: string[];
+  /** Public views only. */
+  viewCount?: number;
+  bookings: ItineraryBookingDto[];
+  packingItems: ItineraryPackingItemDto[];
+  noteItems: ItineraryNoteItemDto[];
+  agendaItems: ItineraryAgendaItemDto[];
+}
+
+/** `GET /v/:shortCode` on a protected trip: unlock it with `POST /challenge`. */
+export interface ItineraryChallengeRequiredDto {
+  hasChallenge: true;
+}
+
+export interface AgendaFileMapEntryDto {
+  agendaId: number;
+  /** uuids of the files listed in that item's `_filesToInsert` (attached now or already attached). */
+  fileUuids: string[];
+}
+
+/** `POST /itinerary` and `POST /:sessionId/update`. */
+export interface ItinerarySavedDto {
+  shortCode: string;
+  sessionId: string;
+  /** One entry per request agenda item, in request order (fndom matches them by index). */
+  agendaToFileMap: AgendaFileMapEntryDto[];
+}
+
+export interface ItineraryDeletedDto {
+  deleted: true;
+}
+
+// ── Request bodies ──
+// Text fields are trimmed; `null` means "absent or blank". Each column keeps the old
+// "blank means unchanged" update semantics (see ItinerarySave.service.ts).
+
+/** One entry of an agenda item's `_filesToInsert`: an image already uploaded through `POST /img/upload`. */
+export interface AgendaFileBody {
+  uuid: string;
+  tgShortCode: string;
+  mimeType: string;
+  name: string | null;
+  sizeInBytes: number | null;
+}
+
+export interface AgendaItemBody {
+  /** Existing item id (update) or null (insert). */
+  id: number | null;
+  category: string | null;
+  listType: AgendaListType | null;
+  title: string;
+  desc: string | null;
+  city: string | null;
+  cityRaw: string[] | null;
+  coordinates: CoordinatesDto | null;
+  /** "HH:MM" */
+  startTime: string | null;
+  endTime: string | null;
+  durationInHours: number | null;
+  unknownTime: boolean;
+  budget: number | null;
+  day: number | null;
+  date: string | null;
+  filesToInsert: AgendaFileBody[];
+}
+
+export interface BookingBody {
+  id: number | null;
+  category: string | null;
+  item: string;
+  remarks: string | null;
+  link: string | null;
+  payment: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  nights: number | null;
+  price: number | null;
+  booked: boolean;
+  freeCancellation: string | null;
+  breakfast: boolean;
+  deposit: string | null;
+  paxBreakdown: Record<string, unknown> | null;
+  sortOrder: number | null;
+}
+
+export interface PackingItemBody {
+  id: number | null;
+  label: string;
+  category: string | null;
+  packed: boolean;
+  quantity: number | null;
+}
+
+export interface NoteItemBody {
+  id: number | null;
+  label: string;
+  category: string | null;
+  url: string | null;
+  done: boolean;
+}
+
+/** Trip-level fields shared by create and update. */
+export interface ItineraryFieldsBody {
+  destination: string | null;
+  destinationRaw: string[] | null;
+  country: string | null;
+  numberOfPax: number | null;
+  itineraryDateRaw: string[] | null;
+  startDate: number | null;
+  endDate: number | null;
+  unknownDate: boolean;
+  durationInDays: number | null;
+  agendaItems: AgendaItemBody[];
+  bookings: BookingBody[];
+  packingItems: PackingItemBody[];
+  noteItems: NoteItemBody[];
+}
+
+export interface ItineraryCreateBody extends ItineraryFieldsBody {
+  idempotencyKey: string | null;
+  sessionTitle: string;
+  /** null = no access code. */
+  challenge: string | null;
+  paxNames: string[] | null;
+}
+
+export interface ItineraryUpdateBody extends ItineraryFieldsBody {
+  /** null keeps the current title. */
+  sessionTitle: string | null;
+  /** undefined keeps the current code, null (or "") removes it. */
+  challenge: string | null | undefined;
+  /** undefined keeps the current names, an empty list clears them. */
+  paxNames: string[] | undefined;
+  agendaIdsToDelete: number[];
+  bookingIdsToDelete: number[];
+  packingIdsToDelete: number[];
+  noteIdsToDelete: number[];
+}
+
+export interface ItineraryChallengeBody {
+  shortCode: string;
+  challenge: string;
+}

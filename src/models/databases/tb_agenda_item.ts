@@ -1,8 +1,10 @@
+import type { AgendaListType } from "../../itinerary/Itinerary.types.js";
+
 export interface ITB_AGENDA_ITEM {
   id?: number;
   itinerary_id: number;
   category?: string;
-  list_type?: string | null; // 'todo' | 'place' — discriminates Things-to-do vs Places-to-visit
+  list_type?: AgendaListType | null; // discriminates Things-to-do vs Places-to-visit
   title: string;
   desc?: string;
   city?: string;
