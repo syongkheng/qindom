@@ -1,90 +1,68 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { OptionalTokenFilter } from "../middlewares/TokenFilter.js";
 import { weddingRsvpLimiter } from "../middlewares/RateLimiter.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { WeddingValidator } from "./Wedding.validator.js";
-import { WeddingService, WEDDING_PDPA_NOTICE } from "./Wedding.service.js";
-import { WeddingVisitNotifier } from "./Wedding.visitNotifier.js";
-import { handleException } from "../utils/requestUtils.js";
+import { route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { WeddingService } from "./Wedding.service.js";
+import { WeddingVisitNotifier } from "./Wedding.visitNotifier.js";
+import {
+  sanitiseVisitBody,
+  validatePreflightBody,
+  validateRsvpBody,
+  validateStatusQuery,
+} from "./Wedding.validator.js";
+import { WeddingRsvpPreflightDto, WeddingRsvpStatusDto, WeddingRsvpSubmittedDto } from "./Wedding.types.js";
 
-export default function createWeddingController(db: KnexSqlUtilities) {
+const UNKNOWN_IP = "Unknown";
+/** The visit beacon has nothing to return; 204 keeps it body-less (jessikheng ignores the response). */
+const NO_CONTENT = 204;
+
+/** Wedding site (jessikheng), mounted at /wedding with `mw.std` (public). See README.md. */
+export default function createWeddingController(db: KnexSqlUtilities): Router {
   const router = Router();
-  const weddingValidator = new WeddingValidator(db);
-  const weddingService = new WeddingService(db);
+  const svc = new WeddingService(db);
   const visitNotifier = new WeddingVisitNotifier(db);
 
-  // Page-view ping: relays a Telegram alert only — nothing is stored. Always
-  // answers 204 immediately; the send happens after the response.
-  router.post("/visit", [OptionalTokenFilter], (req: RequestWithUserInfo, res: Response) => {
-    const rawIp = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
-    void visitNotifier.notify({
-      ...WeddingVisitNotifier.sanitise(req.body),
-      ip: Array.isArray(rawIp) ? rawIp[0] : rawIp,
-      userAgent: req.headers["user-agent"] || "",
-    });
-    res.status(204).end();
-  });
+  // Page-view ping: relays a Telegram alert only (nothing stored). Answers 204 at once; the send runs after.
+  router.post(
+    "/visit",
+    route("WeddingController.POST /visit", "Failed to record the visit", (req, _cr, res) => {
+      void visitNotifier.notify({
+        ...sanitiseVisitBody(req.body),
+        ip: String(req.headers["x-real-ip"] || req.socket.remoteAddress || UNKNOWN_IP),
+        userAgent: req.headers["user-agent"] ?? "",
+      });
+      res.status(NO_CONTENT).end();
+    }),
+  );
 
-  router.post("/rsvp", [weddingRsvpLimiter, OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    const logContext: IRequestLogContext = req.logContext;
+  router.post(
+    "/rsvp",
+    weddingRsvpLimiter,
+    route("WeddingController.POST /rsvp", "Failed to submit RSVP", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const rsvp = validateRsvpBody(req.body, event);
+      return cr.ok<WeddingRsvpSubmittedDto>(await svc.submitRsvp(rsvp, req.logContext));
+    }),
+  );
 
-    const validationEvent = logContext
-      ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-      : undefined;
+  router.post(
+    "/rsvp/preflight",
+    route("WeddingController.POST /rsvp/preflight", "Failed to check RSVP", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { email } = validatePreflightBody(req.body, event);
+      return cr.ok<WeddingRsvpPreflightDto>(await svc.checkRsvpExistsByEmail(email, req.logContext));
+    }),
+  );
 
-    try {
-      const payload = await weddingValidator.validateRsvpPayload(req, validationEvent);
-      // `rsvpId` (the underlying auto-increment id) is intentionally not
-      // sent to the client — `pin` is the identifier guests are meant to
-      // share/use, and a sequential id would make every other guest's
-      // record trivially enumerable.
-      const { pin } = await weddingService.submitRsvp(payload, logContext);
-      return cr.ok({ pin, notice: WEDDING_PDPA_NOTICE });
-    } catch (err) {
-      return handleException(err, cr, "WeddingController.POST /rsvp", "Failed to submit RSVP");
-    }
-  });
-
-  // Step-1 existence check for the RSVP form: email → { exists, hasEmail }.
-  // Booleans only, no personal data.
-  router.post("/rsvp/preflight", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    const logContext: IRequestLogContext = req.logContext;
-    const validationEvent = logContext
-      ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-      : undefined;
-    try {
-      const { email } = weddingValidator.validateEmailBody(req, validationEvent);
-      return cr.ok(await weddingService.checkRsvpExistsByEmail(email));
-    } catch (err) {
-      return handleException(err, cr, "WeddingController.POST /rsvp/preflight", "Failed to check RSVP");
-    }
-  });
-
-  // Public status check — a guest can look up whether their RSVP (or one
-  // they were added to as a guest) has been recorded, using either the
-  // 4-digit pin from their confirmation screen or their name.
-  router.get("/rsvp/status", [OptionalTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    const logContext: IRequestLogContext = req.logContext;
-
-    const validationEvent = logContext
-      ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Query params")
-      : undefined;
-
-    try {
-      const { name, pin } = await weddingValidator.validateRsvpStatusQuery(req, validationEvent);
-      const match = await weddingService.findRsvpStatusByNameAndPin(name, pin);
-      return cr.ok({ matches: match ? [match] : [] });
-    } catch (err) {
-      return handleException(err, cr, "WeddingController.GET /rsvp/status", "Failed to look up RSVP status");
-    }
-  });
+  router.get(
+    "/rsvp/status",
+    route("WeddingController.GET /rsvp/status", "Failed to look up RSVP status", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Query params");
+      const match = await svc.findRsvpStatus(validateStatusQuery(req.query, event), req.logContext);
+      return cr.ok<WeddingRsvpStatusDto>({ matches: match ? [match] : [] });
+    }),
+  );
 
   return router;
 }

@@ -104,7 +104,10 @@ Each feature folder `src/<module>/` holds:
 - Hash secrets with `sha256Hex()` from `src/utils/HashUtilities.ts`; never inline `crypto.createHash("sha256")…`.
 - Never pipe untrusted data through a transform stream without error handling. Prefer buffering (`sharp(buf).toBuffer()`), so a bad input can't crash the process.
 - Callbacks the framework doesn't await (bot `onText`, emitters) must catch and log their promise.
-- User text inserted into HTML (emails, Telegram `parse_mode: "HTML"`) is always escaped.
+- User text inserted into HTML (emails, Telegram `parse_mode: "HTML"`) is always escaped. HTML template helpers take plain text and escape it themselves; callers never pass pre-escaped strings (except an explicit `bodyHtml`).
+- Email content comes from pure `xyzMail(...) → MailOptions` builders, so tests can check escaping/recipients without SMTP.
+- Services that use randomness take the source as an injectable constructor argument with the real default.
+- Don't mount a token filter on routes that never read `req.user` (it costs a DB lookup and can 403 on CSRF).
 - Regexes on untrusted text: no two adjacent sub-patterns may match the same characters (e.g. `([\s\S]+?)\s+` backtracks catastrophically); anchor captures on `\S`. Cap the text length in the validator even if it isn't stored.
 - Free-form input parsing (SMS, scraped text) lives in a pure `<Feature>.parser.ts` returning null for missing parts; the validator decides which gaps are 400s.
 - When two modules check the same column, the owning module exports the limit (`MAX_AMOUNT`, `MERCHANT_MAX_LENGTH`).
@@ -177,6 +180,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | wedding: house style; escaping centralised in templates; unused OptionalTokenFilter removed from all /wedding routes; jessikheng contract unchanged. Questions W1–W3. |
 | 2026-11-26 | hdb: pphs list/busstops/mrt → GET + camelCase (fndom); scraping only for the current batch (latest even month, same rule as fndom); admin update upserts and builds formedUrl server-side; Nominatim via the shared queue. Questions H1–H3. |
 | 2026-11-26 | siri-shortcut: Citi SMS regex ReDoS fixed (2 KB of spaces blocked the event loop ~4 s); smsBody ≤ 2000; contract unchanged. Questions S1–S4 collected. |
 | 2026-11-26 | budget: paths → `/:id/update|delete`, `/:id/item/:itemId/update` (fndom); create accepts null amounts; fndom category clear fixed. Design questions B1–B5 collected for the user. |

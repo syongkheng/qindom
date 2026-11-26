@@ -1,149 +1,129 @@
-import { Request } from "express";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { RsvpGuestPayload, RsvpPayload } from "./Wedding.service.js";
-import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
+import {
+  WeddingRsvpBody,
+  WeddingRsvpGuestBody,
+  WeddingRsvpPreflightBody,
+  WeddingRsvpStatusQuery,
+  WeddingVisitBody,
+} from "./Wedding.types.js";
 
 // Each guest email gets its own confirmation, so the cap also bounds how many
 // emails one submission can send (submitter + guests).
 export const MAX_ADDITIONAL_GUESTS = 10;
 
-// Mirror the tb_wedding_rsvp / tb_wedding_rsvp_guest column widths, so an
-// oversized value is a 400 here instead of a MySQL error (500).
-const MAX_LEN = {
-  name: 255,
-  email: 255,
-  dietaryRestrictions: 100,
-  mealPreference: 100,
-  message: 1000,
-} as const;
+// tb_wedding_rsvp / tb_wedding_rsvp_guest column widths, so an oversized value is a 400, not a DB error.
+const NAME_MAX_LENGTH = 255; // name VARCHAR(255)
+const EMAIL_MAX_LENGTH = 255; // email VARCHAR(255)
+const CONTACT_NUMBER_MAX_LENGTH = 30; // contact_number VARCHAR(30) (CONTACT_NUMBER_REGEX caps it at 20 anyway)
+const DIETARY_MAX_LENGTH = 100; // dietary_restrictions VARCHAR(100)
+const MEAL_MAX_LENGTH = 100; // meal_preference VARCHAR(100)
+const MESSAGE_MAX_LENGTH = 1000; // message VARCHAR(1000)
 
-function maxLength(value: unknown, max: number, fieldName: string, loggingEvent?: IRequestLogEvent): void {
-  if (typeof value === "string" && value.trim().length > max) {
-    loggingEvent?.children?.push(`'${fieldName}' maxLength ${max} ${LogEmoji.error}`);
-    throw new Exceptions.InvalidRequest(fieldName, "format");
-  }
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CONTACT_NUMBER_REGEX = /^\+?[\d\s\-().]{7,20}$/;
+const PIN_REGEX = /^\d{4}$/;
+
+// POST /visit is a beacon: values are clipped to these lengths, never rejected.
+const VISIT_LANGUAGE_MAX_LENGTH = 20;
+const VISIT_TIMEZONE_MAX_LENGTH = 60;
+const VISIT_SCREEN_MAX_LENGTH = 20;
+const VISIT_REFERRER_MAX_LENGTH = 200;
+const VISIT_PATH_MAX_LENGTH = 100;
+
+const GUESTS_FIELD = "additionalGuestContact";
+
+type Body = Record<string, unknown> | undefined;
+
+function requiredEmail(value: unknown, field: string, event?: IRequestLogEvent): string {
+  const email = V.requiredText(value, field, EMAIL_MAX_LENGTH, event);
+  V.email(email, field, event);
+  return email;
 }
 
-export class WeddingValidator {
-  constructor(private readonly db: KnexSqlUtilities) {}
+function optionalEmail(value: unknown, field: string, event?: IRequestLogEvent): string | null {
+  const email = V.optionalText(value, field, EMAIL_MAX_LENGTH, event);
+  if (email !== null) V.email(email, field, event, "(O)");
+  return email;
+}
 
-  async validateRsvpPayload(req: Request, loggingEvent?: IRequestLogEvent): Promise<RsvpPayload> {
-    const {
-      name,
-      email,
-      attending,
-      contactNumber,
-      dietaryRestrictions,
-      mealPreference,
-      message,
-      additionalGuestContact,
-    } = req.body;
+function optionalContactNumber(value: unknown, field: string, event?: IRequestLogEvent): string | null {
+  const contact = V.optionalText(value, field, CONTACT_NUMBER_MAX_LENGTH, event);
+  if (contact !== null) V.regex(contact, CONTACT_NUMBER_REGEX, field, event, "(O)");
+  return contact;
+}
 
-    V.requiredString(name, "name", loggingEvent);
-    V.requiredEmail(email, "email", loggingEvent);
-    V.requiredBoolean(attending, "attending", loggingEvent);
-    V.optionalContactNumber(contactNumber, "contactNumber", loggingEvent);
-    V.optionalString(dietaryRestrictions, "dietaryRestrictions", loggingEvent);
-    V.optionalString(mealPreference, "mealPreference", loggingEvent);
-    V.optionalString(message, "message", loggingEvent);
-
-    maxLength(name, MAX_LEN.name, "name", loggingEvent);
-    maxLength(email, MAX_LEN.email, "email", loggingEvent);
-    maxLength(dietaryRestrictions, MAX_LEN.dietaryRestrictions, "dietaryRestrictions", loggingEvent);
-    maxLength(mealPreference, MAX_LEN.mealPreference, "mealPreference", loggingEvent);
-    maxLength(message, MAX_LEN.message, "message", loggingEvent);
-
-    const trimmedName = (name as string).trim();
-    const trimmedEmail = (email as string).trim();
-
-    const guests: RsvpGuestPayload[] = [];
-    if (additionalGuestContact !== undefined && additionalGuestContact !== null) {
-      this.validateAdditionalGuestContact(additionalGuestContact, loggingEvent, guests);
-    }
-
-    loggingEvent?.children?.push(`RSVP payload validated successfully ${LogEmoji.success}`);
-
-    return {
-      name: trimmedName,
-      email: trimmedEmail,
-      contactNumber: contactNumber ?? null,
-      attending,
-      dietaryRestrictions: dietaryRestrictions ?? null,
-      mealPreference: mealPreference ?? null,
-      message: message ?? null,
-      additionalGuestContact: guests,
-    };
+function validateGuest(contact: unknown, index: number, event?: IRequestLogEvent): WeddingRsvpGuestBody {
+  const prefix = `${GUESTS_FIELD}[${index}]`;
+  if (typeof contact !== "object" || contact === null || Array.isArray(contact)) {
+    event?.children?.push(`${prefix} object ${LogEmoji.error}`);
+    throw new Exceptions.InvalidRequest(prefix, "format");
   }
+  const guest = contact as Record<string, unknown>;
+  return {
+    name: V.requiredText(guest.name, `${prefix}.name`, NAME_MAX_LENGTH, event),
+    email: optionalEmail(guest.email, `${prefix}.email`, event),
+    contactNumber: optionalContactNumber(guest.contactNumber, `${prefix}.contactNumber`, event),
+    dietaryRestrictions: V.optionalText(
+      guest.dietaryRestrictions,
+      `${prefix}.dietaryRestrictions`,
+      DIETARY_MAX_LENGTH,
+      event,
+    ),
+    mealPreference: V.optionalText(guest.mealPreference, `${prefix}.mealPreference`, MEAL_MAX_LENGTH, event),
+  };
+}
 
-  // Email-only body — used by the existence check, which returns no personal data.
-  validateEmailBody(req: Request, loggingEvent?: IRequestLogEvent): { email: string } {
-    const { email } = req.body;
-    V.requiredEmail(email, "email", loggingEvent);
-    return { email: (email as string).trim() };
+function validateGuests(value: unknown, event?: IRequestLogEvent): WeddingRsvpGuestBody[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > MAX_ADDITIONAL_GUESTS) {
+    event?.children?.push(`${GUESTS_FIELD} array of ≤${MAX_ADDITIONAL_GUESTS} ${LogEmoji.error}`);
+    throw new Exceptions.InvalidRequest(GUESTS_FIELD, "format");
   }
+  return value.map((contact, index) => validateGuest(contact, index, event));
+}
 
-  // Status check requires BOTH the guest's name and the 4-digit pin — a pin
-  // alone no longer reveals whether/how someone RSVP'd.
-  async validateRsvpStatusQuery(req: Request, loggingEvent?: IRequestLogEvent): Promise<{ name: string; pin: string }> {
-    const { pin, name } = req.query;
+/** POST /rsvp: name + email + attending required; strings trimmed and capped at their column width. */
+export function validateRsvpBody(body: Body, event?: IRequestLogEvent): WeddingRsvpBody {
+  const b = body ?? {};
+  const name = V.requiredText(b.name, "name", NAME_MAX_LENGTH, event);
+  const email = requiredEmail(b.email, "email", event);
+  V.requiredBoolean(b.attending, "attending", event);
+  return {
+    name,
+    email,
+    contactNumber: optionalContactNumber(b.contactNumber, "contactNumber", event),
+    attending: b.attending as boolean,
+    dietaryRestrictions: V.optionalText(b.dietaryRestrictions, "dietaryRestrictions", DIETARY_MAX_LENGTH, event),
+    mealPreference: V.optionalText(b.mealPreference, "mealPreference", MEAL_MAX_LENGTH, event),
+    message: V.optionalText(b.message, "message", MESSAGE_MAX_LENGTH, event),
+    additionalGuestContact: validateGuests(b.additionalGuestContact, event),
+  };
+}
 
-    V.requiredString(name, "name", loggingEvent);
+/** POST /rsvp/preflight: `{ email }` only. */
+export function validatePreflightBody(body: Body, event?: IRequestLogEvent): WeddingRsvpPreflightBody {
+  return { email: requiredEmail(body?.email, "email", event) };
+}
 
-    if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
-      loggingEvent?.children?.push(`'pin' must be exactly 4 digits ${LogEmoji.error}`);
-      throw new Exceptions.InvalidRequest("pin", "format");
-    }
+/** GET /rsvp/status: BOTH the name and the 4-digit pin are required, so a pin alone reveals nothing. */
+export function validateStatusQuery(query: Body, event?: IRequestLogEvent): WeddingRsvpStatusQuery {
+  const name = V.requiredText(query?.name, "name", NAME_MAX_LENGTH, event);
+  V.regex(query?.pin, PIN_REGEX, "pin", event);
+  return { name, pin: query?.pin as string };
+}
 
-    loggingEvent?.children?.push(`'name' + 'pin' validated ${LogEmoji.success}`);
-    return { name: (name as string).trim(), pin };
-  }
+const clip = (value: unknown, max: number): string => (typeof value === "string" ? value.trim().slice(0, max) : "");
 
-  private validateAdditionalGuestContact(
-    contacts: unknown,
-    loggingEvent: IRequestLogEvent | undefined,
-    out: RsvpGuestPayload[],
-  ): void {
-    if (!Array.isArray(contacts)) {
-      loggingEvent?.children?.push(`additionalGuestContact must be an array ${LogEmoji.error}`);
-      throw new Exceptions.InvalidRequest("additionalGuestContact", "format");
-    }
-    if (contacts.length > MAX_ADDITIONAL_GUESTS) {
-      loggingEvent?.children?.push(`additionalGuestContact max ${MAX_ADDITIONAL_GUESTS} ${LogEmoji.error}`);
-      throw new Exceptions.InvalidRequest("additionalGuestContact", "format");
-    }
-
-    contacts.forEach((contact, index) => {
-      if (typeof contact !== "object" || contact === null || Array.isArray(contact)) {
-        loggingEvent?.children?.push(`additionalGuestContact[${index}] format ${LogEmoji.error}`);
-        throw new Exceptions.InvalidRequest(`additionalGuestContact[${index}]`, "format");
-      }
-
-      const { name, email, contactNumber, dietaryRestrictions, mealPreference } = contact as Record<string, unknown>;
-      const prefix = `additionalGuestContact[${index}]`;
-
-      V.requiredString(name, `${prefix}.name`, loggingEvent);
-      V.optionalEmail(email, `${prefix}.email`, loggingEvent);
-      V.optionalContactNumber(contactNumber, `${prefix}.contactNumber`, loggingEvent);
-      V.optionalString(dietaryRestrictions, `${prefix}.dietaryRestrictions`, loggingEvent);
-      V.optionalString(mealPreference, `${prefix}.mealPreference`, loggingEvent);
-      maxLength(name, MAX_LEN.name, `${prefix}.name`, loggingEvent);
-      maxLength(email, MAX_LEN.email, `${prefix}.email`, loggingEvent);
-      maxLength(dietaryRestrictions, MAX_LEN.dietaryRestrictions, `${prefix}.dietaryRestrictions`, loggingEvent);
-      maxLength(mealPreference, MAX_LEN.mealPreference, `${prefix}.mealPreference`, loggingEvent);
-
-      loggingEvent?.children?.push(`${prefix} validated ${LogEmoji.success}`);
-
-      out.push({
-        name: (name as string).trim(),
-        email: (email as string | undefined) ?? null,
-        contactNumber: (contactNumber as string | undefined) ?? null,
-        dietaryRestrictions: (dietaryRestrictions as string | undefined) ?? null,
-        mealPreference: (mealPreference as string | undefined) ?? null,
-      });
-    });
-  }
+/** POST /visit: every field optional and clipped; anything that isn't a string becomes "". */
+export function sanitiseVisitBody(body: Body): WeddingVisitBody {
+  return {
+    language: clip(body?.language, VISIT_LANGUAGE_MAX_LENGTH),
+    timezone: clip(body?.timezone, VISIT_TIMEZONE_MAX_LENGTH),
+    screen: clip(body?.screen, VISIT_SCREEN_MAX_LENGTH),
+    referrer: clip(body?.referrer, VISIT_REFERRER_MAX_LENGTH),
+    path: clip(body?.path, VISIT_PATH_MAX_LENGTH),
+  };
 }

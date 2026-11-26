@@ -1,5 +1,5 @@
-// Event details and the three action links (Add to Calendar, Get Directions,
-// Open Website) embedded in the RSVP confirmation emails.
+// Event details and the action links (Add to Calendar, Get Directions, Open Website)
+// embedded in the RSVP confirmation emails. Rendered by Wedding.emailTemplate.ts.
 
 const EVENT = {
   title: "Jessica & Yong Kheng's Wedding",
@@ -10,33 +10,44 @@ const EVENT = {
   endUtc: "20270328T083000Z",
 };
 
-// Set WEDDING_WEBSITE_URL in the environment (e.g. https://yoursite.com). Any
-// `q` already on it is overridden. When unset, the website links are left out
-// rather than pointing nowhere.
-const websiteUrl = () => process.env.WEDDING_WEBSITE_URL?.trim() || null;
+const GOOGLE_CALENDAR_URL = "https://calendar.google.com/calendar/render";
+const GOOGLE_MAPS_DIRECTIONS_URL = "https://www.google.com/maps/dir/";
+const WEBSITE_URL_ENV = "WEDDING_WEBSITE_URL";
 
-// The site's `q` param: 0 or absent = RSVP footer shown, 1 = footer hidden,
-// 2 = RSVP modal opens straight away. Null when WEDDING_WEBSITE_URL isn't set
-// or isn't a valid URL.
-function websiteLink(q: "1" | "2"): string | null {
-  const base = websiteUrl();
+/** The site's `q` param: 0 or absent = RSVP footer shown, 1 = footer hidden, 2 = RSVP modal opens straight away. */
+const WebsiteMode = {
+  FOOTER_HIDDEN: "1",
+  OPEN_RSVP: "2",
+} as const;
+type WebsiteMode = (typeof WebsiteMode)[keyof typeof WebsiteMode];
+
+export interface EventLinks {
+  calendar: string;
+  directions: string;
+  /** Null when WEDDING_WEBSITE_URL isn't set or isn't a valid URL. */
+  website: string | null;
+}
+
+// WEDDING_WEBSITE_URL (e.g. https://yoursite.com), read lazily (dotenv loads after imports).
+// Any `q` already on it is overridden. Unset or invalid → the website links are left out.
+function websiteLink(mode: WebsiteMode): string | null {
+  const base = process.env[WEBSITE_URL_ENV]?.trim();
   if (!base) return null;
   try {
     const url = new URL(base);
-    url.searchParams.set("q", q);
+    url.searchParams.set("q", mode);
     return url.toString();
   } catch {
     return null;
   }
 }
 
-// "Open Website": just visiting the site, so the RSVP footer is hidden (q=1).
-// "Submit the RSVP form again": opens the form to edit the response (q=2).
-export const buildRsvpUpdateLink = () => websiteLink("2");
+/** "Submit the RSVP form again": opens the form to edit the response. */
+export const buildRsvpUpdateLink = () => websiteLink(WebsiteMode.OPEN_RSVP);
 
-export function buildEventLinks(): { calendar: string; directions: string; website: string | null } {
+export function buildEventLinks(): EventLinks {
   const calendar =
-    "https://calendar.google.com/calendar/render?" +
+    `${GOOGLE_CALENDAR_URL}?` +
     new URLSearchParams({
       action: "TEMPLATE",
       text: EVENT.title,
@@ -46,34 +57,8 @@ export function buildEventLinks(): { calendar: string; directions: string; websi
     }).toString();
 
   const directions =
-    "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", destination: EVENT.address }).toString();
+    `${GOOGLE_MAPS_DIRECTIONS_URL}?` + new URLSearchParams({ api: "1", destination: EVENT.address }).toString();
 
-  return { calendar, directions, website: websiteLink("1") };
-}
-
-// Bulletproof email buttons: table-based with inline styles, since email
-// clients ignore most CSS. Stacked in a column, each full width.
-export function renderEventActionButtons(): string {
-  const links = buildEventLinks();
-  const buttons: Array<[string, string]> = [
-    ["Add to Calendar", links.calendar],
-    ["Get Directions", links.directions],
-  ];
-  if (links.website) buttons.push(["Open Website", links.website]);
-
-  const rows = buttons
-    .map(
-      ([label, href]) => `
-        <tr><td style="padding:0 0 10px;">
-          <a href="${href.replace(/&/g, "&amp;")}" target="_blank"
-             style="display:block;padding:12px 18px;background:#A52A2A;color:#ffffff;text-align:center;
-                    text-decoration:none;border-radius:4px;font-weight:600;font-size:15px;
-                    font-family:'Cormorant Garamond',Georgia,serif;letter-spacing:0.05em;">
-            ${label}
-          </a>
-        </td></tr>`,
-    )
-    .join("");
-
-  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:20px 0 8px;">${rows}</table>`;
+  // "Open Website": just visiting the site, so the RSVP footer is hidden.
+  return { calendar, directions, website: websiteLink(WebsiteMode.FOOTER_HIDDEN) };
 }

@@ -1,3 +1,5 @@
+import type { RecordStatus } from "../../constants/RecordStatus.js";
+
 export interface ITb_wedding_rsvp {
   id: number;
   pin: string;
@@ -8,7 +10,7 @@ export interface ITb_wedding_rsvp {
   dietary_restrictions: string | null;
   meal_preference: string | null;
   message: string | null;
-  record_status: "A" | "D";
+  record_status: RecordStatus;
   created_dt: number;
   updated_dt: number;
 }
