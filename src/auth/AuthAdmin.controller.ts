@@ -2,8 +2,7 @@ import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { adminLimiter } from "../middlewares/RateLimiter.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { RecentRequestLogDto, RequestLogMatchDto } from "../models/dtos/RequestLogDto.js";
+import { RecentRequestLogDto, RequestLogMatchDto } from "../utils/logging/RequestLog.types.js";
 import { requireRole, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { TelegramLogMatrix, TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
@@ -35,7 +34,7 @@ export default function createAuthAdminController(db: KnexSqlUtilities): Router 
   router.get(
     "/users",
     ADMIN_MIDDLEWARE,
-    route<RequestWithUserInfo>("AuthAdminController.GET /admin/users", "Failed to load users", async (req, cr) => {
+    route("AuthAdminController.GET /admin/users", "Failed to load users", async (req, cr) => {
       requireRole(req, Roles.OWNER);
       return cr.ok<AuthAdminUserDto[]>(await svc.listUsers(req.logContext));
     }),
@@ -44,17 +43,13 @@ export default function createAuthAdminController(db: KnexSqlUtilities): Router 
   router.post(
     "/users/:id/roles",
     ADMIN_MIDDLEWARE,
-    route<RequestWithUserInfo>(
-      "AuthAdminController.POST /admin/users/:id/roles",
-      "Failed to update roles",
-      async (req, cr) => {
-        requireRole(req, Roles.OWNER);
-        const userId = validateUserIdParam(req.params.id);
-        const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
-        const { roles } = validateUserRolesBody(req.body, event);
-        return cr.ok<AuthUpdatedDto>(await svc.updateUserRoles(userId, roles, req.logContext));
-      },
-    ),
+    route("AuthAdminController.POST /admin/users/:id/roles", "Failed to update roles", async (req, cr) => {
+      requireRole(req, Roles.OWNER);
+      const userId = validateUserIdParam(req.params.id);
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { roles } = validateUserRolesBody(req.body, event);
+      return cr.ok<AuthUpdatedDto>(await svc.updateUserRoles(userId, roles, req.logContext));
+    }),
   );
 
   // Newest N requests overall, for the dashboard's compact log widget. A distinct path
@@ -62,35 +57,27 @@ export default function createAuthAdminController(db: KnexSqlUtilities): Router 
   router.get(
     "/recent-request-logs",
     ADMIN_MIDDLEWARE,
-    route<RequestWithUserInfo>(
-      "AuthAdminController.GET /admin/recent-request-logs",
-      "Failed to load recent logs",
-      async (req, cr) => {
-        requireRole(req, Roles.OWNER);
-        return cr.ok<RecentRequestLogDto[]>(svc.recentRequestLogs(parseRecentLogsLimit(req.query.limit)));
-      },
-    ),
+    route("AuthAdminController.GET /admin/recent-request-logs", "Failed to load recent logs", async (req, cr) => {
+      requireRole(req, Roles.OWNER);
+      return cr.ok<RecentRequestLogDto[]>(svc.recentRequestLogs(parseRecentLogsLimit(req.query.limit)));
+    }),
   );
 
   // Searches the request-log files for one request's rendered tree.
   router.get(
     "/request-logs/:requestId",
     ADMIN_MIDDLEWARE,
-    route<RequestWithUserInfo>(
-      "AuthAdminController.GET /admin/request-logs/:requestId",
-      "Failed to search logs",
-      async (req, cr) => {
-        requireRole(req, Roles.OWNER);
-        return cr.ok<RequestLogMatchDto[]>(svc.findRequestLogs(validateRequestIdParam(req.params.requestId)));
-      },
-    ),
+    route("AuthAdminController.GET /admin/request-logs/:requestId", "Failed to search logs", async (req, cr) => {
+      requireRole(req, Roles.OWNER);
+      return cr.ok<RequestLogMatchDto[]>(svc.findRequestLogs(validateRequestIdParam(req.params.requestId)));
+    }),
   );
 
   // Full chat × module matrix (every whitelisted chat with an active telegram_chat_id).
   router.get(
     "/telegram-log-subscriptions",
     ADMIN_MIDDLEWARE,
-    route<RequestWithUserInfo>(
+    route(
       "AuthAdminController.GET /admin/telegram-log-subscriptions",
       "Failed to load Telegram log subscriptions",
       async (req, cr) => {
@@ -104,7 +91,7 @@ export default function createAuthAdminController(db: KnexSqlUtilities): Router 
   router.post(
     "/telegram-log-subscriptions/:chatId/:moduleKey",
     ADMIN_MIDDLEWARE,
-    route<RequestWithUserInfo>(
+    route(
       "AuthAdminController.POST /admin/telegram-log-subscriptions/:chatId/:moduleKey",
       "Failed to update Telegram log subscription",
       async (req, cr) => {

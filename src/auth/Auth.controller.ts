@@ -2,7 +2,6 @@ import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { loginLimiter, registerLimiter, verifyEmailLimiter, resendVerifyLimiter } from "../middlewares/RateLimiter.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { getUser, route } from "../utils/RequestUtilities.js";
 import { toMessage } from "../utils/ErrorUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
@@ -111,7 +110,7 @@ export default function createAuthController(db: KnexSqlUtilities): Router {
   router.post(
     "/verification",
     MandatoryTokenFilter,
-    route<RequestWithUserInfo>("AuthController.POST /verification", "Failed to verify token", async (req, cr) => {
+    route("AuthController.POST /verification", "Failed to verify token", async (req, cr) => {
       const { username, roles } = getUser(req);
       return cr.ok<AuthVerificationDto>({ username, roles, exist: true });
     }),
@@ -134,35 +133,25 @@ export default function createAuthController(db: KnexSqlUtilities): Router {
   router.post(
     "/password/validate",
     MandatoryTokenFilter,
-    route<RequestWithUserInfo>(
-      "AuthController.POST /password/validate",
-      "Failed to validate password",
-      async (req, cr) => {
-        const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
-        const { password } = validatePasswordValidateBody(req.body, event);
-        return cr.ok<AuthPasswordValidityDto>(
-          await sessions.validatePassword(getUser(req).id, password, req.logContext),
-        );
-      },
-    ),
+    route("AuthController.POST /password/validate", "Failed to validate password", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { password } = validatePasswordValidateBody(req.body, event);
+      return cr.ok<AuthPasswordValidityDto>(await sessions.validatePassword(getUser(req).id, password, req.logContext));
+    }),
   );
 
   router.post(
     "/password/update",
     MandatoryTokenFilter,
-    route<RequestWithUserInfo>(
-      "AuthController.POST /password/update",
-      "Failed to update password",
-      async (req, cr, res) => {
-        const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
-        const body = validatePasswordUpdateBody(req.body, event);
-        const { token } = await sessions.updatePassword(getUser(req).id, body, req.logContext);
-        // The change rotated the token: refresh this session's cookie so the user who just changed
-        // it stays logged in while every other session drops.
-        setAuthCookies(res, token);
-        return cr.ok<AuthUpdatedDto>({ updated: true });
-      },
-    ),
+    route("AuthController.POST /password/update", "Failed to update password", async (req, cr, res) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const body = validatePasswordUpdateBody(req.body, event);
+      const { token } = await sessions.updatePassword(getUser(req).id, body, req.logContext);
+      // The change rotated the token: refresh this session's cookie so the user who just changed
+      // it stays logged in while every other session drops.
+      setAuthCookies(res, token);
+      return cr.ok<AuthUpdatedDto>({ updated: true });
+    }),
   );
 
   return router;

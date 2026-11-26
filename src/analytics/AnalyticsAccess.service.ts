@@ -2,7 +2,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
+import { IDecodedTokenUser } from "../token/Token.types.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { PermissionService, ResourceType, userIsOwner } from "../auth/Permission.js";

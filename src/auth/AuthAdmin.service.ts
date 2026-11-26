@@ -1,7 +1,7 @@
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { RecentRequestLogDto, RequestLogMatchDto } from "../models/dtos/RequestLogDto.js";
+import { RecentRequestLogDto, RequestLogMatchDto } from "../utils/logging/RequestLog.types.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";

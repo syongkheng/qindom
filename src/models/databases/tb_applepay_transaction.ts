@@ -1,6 +1,8 @@
+import type { RecordStatus } from "../../constants/RecordStatus.js";
+
 export interface ITB_APPLEPAY_TRANSACTION {
   id?: number;
-  uuid: string;
+  uuid: string; // column is NULL-able, but every insert sets it
   amount: number;
   // ISO 4217 code as reported by the bank alert (e.g. 'SGD', 'CNY'); rows
   // recorded before this column existed default to 'SGD'.
@@ -15,7 +17,7 @@ export interface ITB_APPLEPAY_TRANSACTION {
   source?: string;
   card_last4?: string | null;
   occurred_dt: number;
-  record_status?: string;
+  record_status?: RecordStatus;
   created_dt?: number;
   created_by_id?: number;
   updated_dt?: number | null;

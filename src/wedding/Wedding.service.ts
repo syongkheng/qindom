@@ -1,8 +1,8 @@
 import type { Knex } from "knex";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
-import { ITb_wedding_rsvp_guest } from "../models/databases/tb_wedding_rsvp_guest.js";
+import { ITB_WEDDING_RSVP } from "../models/databases/tb_wedding_rsvp.js";
+import { ITB_WEDDING_RSVP_GUEST } from "../models/databases/tb_wedding_rsvp_guest.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { maskName } from "../utils/MaskingUtilities.js";
@@ -53,7 +53,7 @@ export const randomPin = (random: () => number = Math.random): string =>
  * guest entry; `at` is when that RSVP was last saved (0 if unknown).
  */
 export function replacedRsvp(
-  previous: Pick<ITb_wedding_rsvp, "created_dt" | "updated_dt">[],
+  previous: Pick<ITB_WEDDING_RSVP, "created_dt" | "updated_dt">[],
   guestEntryCount: number,
 ): ReplacedRsvp | null {
   if (previous.length > 0) {
@@ -64,7 +64,7 @@ export function replacedRsvp(
 
 /** Public status view: names masked (PDPA), no contact details, the pin instead of the auto-increment id. */
 export function toStatusMatchDto(
-  rsvp: Pick<ITb_wedding_rsvp, "pin" | "name" | "attending" | "created_dt" | "updated_dt">,
+  rsvp: Pick<ITB_WEDDING_RSVP, "pin" | "name" | "attending" | "created_dt" | "updated_dt">,
   guestNames: string[],
   matchedGuestName?: string,
 ): WeddingRsvpStatusMatchDto {
@@ -109,7 +109,7 @@ export class WeddingService {
    */
   async checkRsvpExistsByEmail(email: string, logContext?: IRequestLogContext): Promise<WeddingRsvpPreflightDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "RSVP preflight");
-    const [rsvp] = await this.db.find<ITb_wedding_rsvp>(
+    const [rsvp] = await this.db.find<ITB_WEDDING_RSVP>(
       WEDDING_RSVP_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { limit: 1, columns: ["id"], extraWhere: emailEquals(email) },
@@ -117,7 +117,7 @@ export class WeddingService {
     );
     const [guest] = rsvp
       ? []
-      : await this.db.find<ITb_wedding_rsvp_guest>(
+      : await this.db.find<ITB_WEDDING_RSVP_GUEST>(
           WEDDING_RSVP_GUEST_TABLE,
           { record_status: RecordStatus.ACTIVE },
           { limit: 1, columns: ["id"], extraWhere: emailEquals(email) },
@@ -137,7 +137,7 @@ export class WeddingService {
     logContext?: IRequestLogContext,
   ): Promise<WeddingRsvpStatusMatchDto | null> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "RSVP status lookup");
-    const rsvp = await this.db.findOne<ITb_wedding_rsvp>(
+    const rsvp = await this.db.findOne<ITB_WEDDING_RSVP>(
       WEDDING_RSVP_TABLE,
       { pin: query.pin, record_status: RecordStatus.ACTIVE },
       STATUS_COLUMNS,
@@ -148,7 +148,7 @@ export class WeddingService {
       return null;
     }
     const guestNames = (
-      await this.db.find<ITb_wedding_rsvp_guest>(
+      await this.db.find<ITB_WEDDING_RSVP_GUEST>(
         WEDDING_RSVP_GUEST_TABLE,
         { rsvp_id: rsvp.id, record_status: RecordStatus.ACTIVE },
         { columns: ["name"] },
@@ -174,20 +174,20 @@ export class WeddingService {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Submit RSVP");
     const now = Date.now();
 
-    const previous = await this.db.find<ITb_wedding_rsvp>(
+    const previous = await this.db.find<ITB_WEDDING_RSVP>(
       WEDDING_RSVP_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { columns: ["id", "created_dt", "updated_dt"], extraWhere: emailEquals(rsvp.email) },
       event,
     );
     for (const { id } of previous) {
-      await this.db.update<Partial<ITb_wedding_rsvp>>(
+      await this.db.update<Partial<ITB_WEDDING_RSVP>>(
         WEDDING_RSVP_TABLE,
         { id },
         { record_status: RecordStatus.DELETED, updated_dt: now },
         event,
       );
-      await this.db.update<Partial<ITb_wedding_rsvp_guest>>(
+      await this.db.update<Partial<ITB_WEDDING_RSVP_GUEST>>(
         WEDDING_RSVP_GUEST_TABLE,
         { rsvp_id: id, record_status: RecordStatus.ACTIVE },
         { record_status: RecordStatus.DELETED },
@@ -196,14 +196,14 @@ export class WeddingService {
     }
 
     // They're now answering for themselves, so a guest entry for this email on someone else's RSVP goes too.
-    const guestEntries = await this.db.find<ITb_wedding_rsvp_guest>(
+    const guestEntries = await this.db.find<ITB_WEDDING_RSVP_GUEST>(
       WEDDING_RSVP_GUEST_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { columns: ["id"], extraWhere: emailEquals(rsvp.email) },
       event,
     );
     for (const { id } of guestEntries) {
-      await this.db.update<Partial<ITb_wedding_rsvp_guest>>(
+      await this.db.update<Partial<ITB_WEDDING_RSVP_GUEST>>(
         WEDDING_RSVP_GUEST_TABLE,
         { id },
         { record_status: RecordStatus.DELETED },
@@ -212,7 +212,7 @@ export class WeddingService {
     }
 
     const pin = await this.generateUniquePin(event);
-    const saved = await this.db.insert<Partial<ITb_wedding_rsvp>, ITb_wedding_rsvp>(
+    const saved = await this.db.insert<Partial<ITB_WEDDING_RSVP>, ITB_WEDDING_RSVP>(
       WEDDING_RSVP_TABLE,
       {
         pin,
@@ -230,7 +230,7 @@ export class WeddingService {
       event,
     );
     for (const guest of rsvp.additionalGuestContact) {
-      await this.db.insert<Partial<ITb_wedding_rsvp_guest>>(
+      await this.db.insert<Partial<ITB_WEDDING_RSVP_GUEST>>(
         WEDDING_RSVP_GUEST_TABLE,
         {
           rsvp_id: saved.id,
@@ -269,7 +269,7 @@ export class WeddingService {
   private async generateUniquePin(event?: IRequestLogEvent): Promise<string> {
     for (let attempt = 0; attempt < PIN_GENERATION_ATTEMPTS; attempt++) {
       const pin = this.nextPin();
-      const taken = await this.db.findOne<ITb_wedding_rsvp>(WEDDING_RSVP_TABLE, { pin }, ["id"], event);
+      const taken = await this.db.findOne<ITB_WEDDING_RSVP>(WEDDING_RSVP_TABLE, { pin }, ["id"], event);
       if (!taken) return pin;
     }
     throw new Exceptions.EntityCreation("RSVP pin");

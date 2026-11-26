@@ -1,7 +1,7 @@
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ITB_ITINERARY } from "../models/databases/tb_itinerary.js";
-import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item.js";
-import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file.js";
+import { ITB_TRAVEL_ITINERARY } from "../models/databases/tb_travel_itinerary.js";
+import { ITB_TRAVEL_AGENDA_ITEM } from "../models/databases/tb_travel_agenda_item.js";
+import { ITB_TRAVEL_AGENDA_FILE } from "../models/databases/tb_travel_agenda_file.js";
 import { ITB_TRAVEL_ITINERARY_VIEW } from "../models/databases/tb_travel_itinerary_view.js";
 import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking.js";
 import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item.js";
@@ -51,10 +51,13 @@ const MINUTES_PER_HOUR = 60;
 const VIEW_IP_MAX_LENGTH = 64;
 const VIEW_USER_AGENT_MAX_LENGTH = 512;
 
-type SummaryRow = Pick<ITB_ITINERARY, (typeof SUMMARY_COLUMNS)[number]>;
-type FileRow = Pick<ITB_AGENDA_FILE, (typeof FILE_COLUMNS)[number]>;
+type SummaryRow = Pick<ITB_TRAVEL_ITINERARY, (typeof SUMMARY_COLUMNS)[number]>;
+type FileRow = Pick<ITB_TRAVEL_AGENDA_FILE, (typeof FILE_COLUMNS)[number]>;
 /** Agenda columns as mysql2 returns them (DECIMAL → string). */
-type AgendaRow = Omit<ITB_AGENDA_ITEM, "budget" | "duration_in_hours" | "coordinates_lat" | "coordinates_lng"> & {
+type AgendaRow = Omit<
+  ITB_TRAVEL_AGENDA_ITEM,
+  "budget" | "duration_in_hours" | "coordinates_lat" | "coordinates_lng"
+> & {
   budget?: string | number | null;
   duration_in_hours?: string | number | null;
   coordinates_lat?: string | number | null;
@@ -182,7 +185,7 @@ export function toNoteItemDto(row: ITB_TRAVEL_NOTE_ITEM): ItineraryNoteItemDto {
 }
 
 export function toItineraryDto(
-  row: ITB_ITINERARY,
+  row: ITB_TRAVEL_ITINERARY,
   children: Pick<ItineraryDto, "agendaItems" | "bookings" | "packingItems" | "noteItems">,
   viewCount?: number,
 ): ItineraryDto {
@@ -215,8 +218,8 @@ export async function findOwnedItinerary(
   userId: number,
   sessionId: string,
   event?: IRequestLogEvent,
-): Promise<ITB_ITINERARY> {
-  const itinerary = await db.findOne<ITB_ITINERARY>(
+): Promise<ITB_TRAVEL_ITINERARY> {
+  const itinerary = await db.findOne<ITB_TRAVEL_ITINERARY>(
     ITINERARY_TABLE,
     { session_id: sessionId, record_status: RecordStatus.ACTIVE },
     ["*"],
@@ -236,7 +239,7 @@ export class ItineraryService {
 
   async listTrips(userId: number, logContext?: IRequestLogContext): Promise<ItineraryListDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List itineraries");
-    const rows: SummaryRow[] = await this.db.find<ITB_ITINERARY>(
+    const rows: SummaryRow[] = await this.db.find<ITB_TRAVEL_ITINERARY>(
       ITINERARY_TABLE,
       { record_status: RecordStatus.ACTIVE, created_by_id: userId },
       { orderBy: "created_dt", orderDirection: "desc", columns: SUMMARY_COLUMNS },
@@ -255,7 +258,7 @@ export class ItineraryService {
   async deleteTrip(userId: number, sessionId: string, logContext?: IRequestLogContext): Promise<ItineraryDeletedDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Delete itinerary");
     const itinerary = await findOwnedItinerary(this.db, userId, sessionId, event);
-    await this.db.update<ITB_ITINERARY>(
+    await this.db.update<ITB_TRAVEL_ITINERARY>(
       ITINERARY_TABLE,
       { id: itinerary.id },
       { record_status: RecordStatus.DELETED },
@@ -305,8 +308,8 @@ export class ItineraryService {
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
 
-  private async findByShortCode(shortCode: string, event?: IRequestLogEvent): Promise<ITB_ITINERARY> {
-    const itinerary = await this.db.findOne<ITB_ITINERARY>(
+  private async findByShortCode(shortCode: string, event?: IRequestLogEvent): Promise<ITB_TRAVEL_ITINERARY> {
+    const itinerary = await this.db.findOne<ITB_TRAVEL_ITINERARY>(
       ITINERARY_TABLE,
       { short_code: shortCode, record_status: RecordStatus.ACTIVE },
       ["*"],
@@ -316,7 +319,7 @@ export class ItineraryService {
     return itinerary;
   }
 
-  private async loadPublic(itinerary: ITB_ITINERARY, event?: IRequestLogEvent): Promise<ItineraryDto> {
+  private async loadPublic(itinerary: ITB_TRAVEL_ITINERARY, event?: IRequestLogEvent): Promise<ItineraryDto> {
     const [children, viewCount] = await Promise.all([
       this.loadChildren(itinerary, event),
       this.db.count<ITB_TRAVEL_ITINERARY_VIEW>(ITINERARY_VIEW_TABLE, { short_code: itinerary.short_code }, event),
@@ -326,7 +329,7 @@ export class ItineraryService {
 
   /** Active agenda items (with file metadata), bookings, packing and notes, each in its stored order. */
   private async loadChildren(
-    itinerary: ITB_ITINERARY,
+    itinerary: ITB_TRAVEL_ITINERARY,
     event?: IRequestLogEvent,
   ): Promise<Pick<ItineraryDto, "agendaItems" | "bookings" | "packingItems" | "noteItems">> {
     const byItinerary = { itinerary_id: itinerary.id, record_status: RecordStatus.ACTIVE };
@@ -340,7 +343,7 @@ export class ItineraryService {
     const agendaIds = agendaRows.map((a) => Number(a.id));
     const [fileRows, bookings, packingItems, noteItems] = await Promise.all([
       agendaIds.length
-        ? this.db.find<ITB_AGENDA_FILE>(
+        ? this.db.find<ITB_TRAVEL_AGENDA_FILE>(
             AGENDA_FILE_TABLE,
             { record_status: RecordStatus.ACTIVE },
             { columns: FILE_COLUMNS, extraWhere: (qb) => qb.whereIn("agenda_item_id", agendaIds) },

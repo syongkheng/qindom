@@ -68,10 +68,11 @@ export interface CoordinatesClearedDto {
 
 // ── Nearby transport (data owned by LtaService) ──
 
+/** Text fields come from nullable `tb_lta_busstop` VARCHARs. */
 export interface NearbyBusStopDto {
-  busStopCode: string;
-  roadName: string;
-  description: string;
+  busStopCode: string | null;
+  roadName: string | null;
+  description: string | null;
   /** Whole metres from the requested point. */
   distanceM: number;
 }
@@ -84,9 +85,9 @@ export interface NearbyBusStopsDto {
 }
 
 export interface NearestMrtStationDto {
-  station: string;
-  /** "MRT" | "LRT" */
-  type: string;
+  station: string | null;
+  /** "MRT" | "LRT" (nullable column) */
+  type: string | null;
   /** Whole metres from the requested point to the station's closest exit. */
   distanceM: number;
 }

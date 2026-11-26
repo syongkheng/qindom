@@ -50,7 +50,7 @@ export interface BudgetItemDto {
 export interface BudgetCollaboratorDto {
   userId: number;
   username?: string;
-  email?: string;
+  email?: string | null;
 }
 
 export interface BudgetTableDto {

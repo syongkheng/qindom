@@ -1,6 +1,6 @@
 import type { RecordStatus } from "../../constants/RecordStatus.js";
 
-export interface ITb_wedding_rsvp {
+export interface ITB_WEDDING_RSVP {
   id: number;
   pin: string;
   name: string;

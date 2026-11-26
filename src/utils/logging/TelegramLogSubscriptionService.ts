@@ -3,7 +3,7 @@ import { LoggingUtilities } from "./LoggingUtilities.js";
 import { RecordStatus } from "../../constants/RecordStatus.js";
 import { Time } from "../../constants/Time.js";
 import { IRequestLogContext, IRequestLogEvent } from "../../models/IRequestLogContext.js";
-import { ITbTelegramLogSubscription } from "../../models/databases/tb_telegram_log_subscription.js";
+import { ITB_TELEGRAM_LOG_SUBSCRIPTION } from "../../models/databases/tb_telegram_log_subscription.js";
 import { TELEGRAM_LOG_MODULE_KEYS, TelegramLogModuleKey } from "./TelegramLogModules.js";
 
 const TELEGRAM_LOG_SUBSCRIPTION_TABLE = "tb_telegram_log_subscription";
@@ -36,7 +36,7 @@ export interface TelegramLogMatrix {
   chats: TelegramLogMatrixRow[];
 }
 
-type OverrideRow = Pick<ITbTelegramLogSubscription, "chat_id" | "module_key" | "is_enabled">;
+type OverrideRow = Pick<ITB_TELEGRAM_LOG_SUBSCRIPTION, "chat_id" | "module_key" | "is_enabled">;
 
 // Short-lived in-memory caches so the per-request enforcement check
 // (RestRequestLogger's res.on("finish", ...)) doesn't hit the DB on every
@@ -118,14 +118,14 @@ export class TelegramLogSubscriptionService {
     const existing = await this.activeOverride(chatId, moduleKey, ["id"], event);
 
     if (existing) {
-      await this.db.update<ITbTelegramLogSubscription>(
+      await this.db.update<ITB_TELEGRAM_LOG_SUBSCRIPTION>(
         TELEGRAM_LOG_SUBSCRIPTION_TABLE,
         { id: existing.id },
         { is_enabled: flag, updated_dt: now },
         event,
       );
     } else {
-      await this.db.insert<ITbTelegramLogSubscription>(
+      await this.db.insert<ITB_TELEGRAM_LOG_SUBSCRIPTION>(
         TELEGRAM_LOG_SUBSCRIPTION_TABLE,
         { chat_id: chatId, module_key: moduleKey, is_enabled: flag, created_dt: now },
         event,
@@ -159,10 +159,10 @@ export class TelegramLogSubscriptionService {
   private activeOverride(
     chatId: number,
     moduleKey: string,
-    columns: readonly (keyof ITbTelegramLogSubscription)[],
+    columns: readonly (keyof ITB_TELEGRAM_LOG_SUBSCRIPTION)[],
     event?: IRequestLogEvent,
-  ): Promise<ITbTelegramLogSubscription | undefined> {
-    return this.db.findOne<ITbTelegramLogSubscription>(
+  ): Promise<ITB_TELEGRAM_LOG_SUBSCRIPTION | undefined> {
+    return this.db.findOne<ITB_TELEGRAM_LOG_SUBSCRIPTION>(
       TELEGRAM_LOG_SUBSCRIPTION_TABLE,
       { chat_id: chatId, module_key: moduleKey, record_status: RecordStatus.ACTIVE },
       columns,

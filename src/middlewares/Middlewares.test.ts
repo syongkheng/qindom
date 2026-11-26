@@ -12,7 +12,6 @@ import { clientIp, getApiKeyUserId } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { mw } from "./presets.js";
 import { RestRequestLogger } from "./RestRequestLogger.js";
@@ -142,7 +141,7 @@ function addSsKey(userId: number, rawValue: string, status = "A") {
 // ── App ──────────────────────────────────────────────────────────────────────
 
 const echoUser: RequestHandler = (req, res) => {
-  res.status(200).json({ user: (req as RequestWithUserInfo).user ?? null });
+  res.status(200).json({ user: req.user ?? null });
 };
 
 function buildApp() {
@@ -940,7 +939,7 @@ describe("Rate limiters", () => {
     app.use((req, _res, next) => {
       const id = req.headers["x-test-user"];
       if (id)
-        (req as RequestWithUserInfo).user = {
+        req.user = {
           id: Number(id),
           username: "u",
           system: "s",

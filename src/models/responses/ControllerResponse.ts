@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
+import { IS_PRD } from "../../config/env.js";
 import { LoggingUtilities } from "../../utils/logging/LoggingUtilities.js";
-
-const isPrd = process.env.NODE_ENV === "prd";
 
 export const ResponseStatus = {
   OK: "Ok",
@@ -38,27 +37,12 @@ export class ControllerResponse {
    * actually failed (and where), not just the client-facing fallback text.
    * In prd the client only ever sees a generic message.
    */
-  ko(data: unknown, cause?: { source: string; error: unknown }): Response {
-    if (cause) {
-      LoggingUtilities.request.exception(this.req.logContext, cause.source, cause.error);
-    } else {
-      const serverError = typeof data === "string" ? data : JSON.stringify(data);
-      LoggingUtilities.request.error(
-        this.req.logContext,
-        "Unhandled controller exception",
-        LoggingUtilities.sanitise(serverError),
-      );
-    }
-    return this.send(500, ResponseStatus.KO, isPrd ? PRD_INTERNAL_ERROR_MESSAGE : data);
+  ko(data: unknown, cause: { source: string; error: unknown }): Response {
+    LoggingUtilities.request.exception(this.req.logContext, cause.source, cause.error);
+    return this.send(500, ResponseStatus.KO, IS_PRD ? PRD_INTERNAL_ERROR_MESSAGE : data);
   }
 
-  /** 400 Ko. */
-  badRequest(data: unknown): Response {
-    LoggingUtilities.request.branch(this.req.logContext, "WARN", "Bad request returned");
-    return this.send(400, ResponseStatus.KO, data);
-  }
-
-  /** 401 Ko. */
+  /** 401 Ko (plain-string body; the x-api-key contract in `ApiKeyFilter`). */
   badAuthorization(data: unknown): Response {
     LoggingUtilities.request.branch(this.req.logContext, "ERROR", "Bad authorization returned");
     return this.send(401, ResponseStatus.KO, data);

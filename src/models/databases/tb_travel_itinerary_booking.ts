@@ -1,21 +1,23 @@
+import type { RecordStatus } from "../../constants/RecordStatus.js";
+
 export interface ITB_TRAVEL_ITINERARY_BOOKING {
   id?: number;
   itinerary_id: number;
-  category?: string;
+  category?: string | null;
   item: string;
-  location?: string;
-  link?: string;
-  payment?: string;
-  start_date?: string;
-  end_date?: string;
-  nights?: number;
-  price?: number;
-  booked?: number; // tinyint 0/1
-  free_cancellation?: string;
-  breakfast?: number; // tinyint 0/1
-  deposit?: string;
-  pax_breakdown?: string; // JSON string
-  sort_order?: number;
+  location?: string | null;
+  link?: string | null;
+  payment?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  nights?: number | null;
+  price?: number | null;
+  booked?: number | null; // tinyint 0/1
+  free_cancellation?: string | null;
+  breakfast?: number | null; // tinyint 0/1
+  deposit?: string | null;
+  pax_breakdown?: string | null; // JSON string
+  sort_order?: number | null;
   created_dt: number;
-  record_status: string;
+  record_status: RecordStatus;
 }

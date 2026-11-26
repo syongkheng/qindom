@@ -1,7 +1,6 @@
 import { Request } from "express";
 import rateLimit, { ipKeyGenerator, Options } from "express-rate-limit";
 import { Time } from "../constants/Time.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 
 /**
  * Key limiters by the real client IP. nginx sets X-Real-IP to $remote_addr, so
@@ -132,7 +131,7 @@ export const cameraClaimUserLimiter = limiter({
   windowMs: 15 * Time.MINUTE_MS,
   limit: 5,
   skipSuccessfulRequests: true,
-  keyGenerator: (req: Request) => `camera-claim-user:${(req as RequestWithUserInfo).user?.id ?? "none"}`,
+  keyGenerator: (req: Request) => `camera-claim-user:${req.user?.id ?? "none"}`,
   message: "Too many pairing attempts. Please try again in 15 minutes.",
 });
 

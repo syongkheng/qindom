@@ -1,8 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import { Request, RequestHandler, Response } from "express";
 import { BaseException, Exceptions } from "../exceptions/AppExceptions.js";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { IDecodedTokenUser } from "../token/Token.types.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { LoggingUtilities } from "./logging/LoggingUtilities.js";
 import { toMessage } from "./ErrorUtilities.js";
@@ -20,7 +19,7 @@ export function clientIp(req: IncomingMessage): string {
   return String(req.headers["x-real-ip"] || req.socket.remoteAddress || UNKNOWN_IP);
 }
 
-export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {
+export function getUser(req: Request): IDecodedTokenUser {
   if (!req.user) throw new Exceptions.UnauthorizedAccess();
   return req.user;
 }
@@ -35,12 +34,12 @@ export function getApiKeyUserId(req: Request): number {
   return userId;
 }
 
-export function hasRole(req: RequestWithUserInfo, ...roles: string[]): boolean {
+export function hasRole(req: Request, ...roles: string[]): boolean {
   return roles.some((r) => req.user?.roles?.includes(r) ?? false);
 }
 
 /** Throws `Exceptions.ForbiddenAccess` unless the user has at least one of `roles`. */
-export function requireRole(req: RequestWithUserInfo, ...roles: string[]): void {
+export function requireRole(req: Request, ...roles: string[]): void {
   if (!hasRole(req, ...roles)) throw new Exceptions.ForbiddenAccess("Insufficient permissions");
 }
 

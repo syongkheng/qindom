@@ -1,5 +1,4 @@
-import { NextFunction, Response } from "express";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
+import { NextFunction, Request, Response } from "express";
 import { MandatoryTokenFilter } from "./TokenFilter.js";
 import { RequestApiKeyFilter } from "./ApiKeyFilter.js";
 
@@ -9,7 +8,7 @@ import { RequestApiKeyFilter } from "./ApiKeyFilter.js";
  */
 const apiKeyFilter = RequestApiKeyFilter("ss");
 
-export const MandatoryTokenOrApiKeyFilter = (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
+export const MandatoryTokenOrApiKeyFilter = (req: Request, res: Response, next: NextFunction) => {
   if (req.headers["x-api-key"]) {
     return apiKeyFilter(req, res, next);
   }

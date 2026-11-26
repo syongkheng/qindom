@@ -8,8 +8,8 @@ import { toMessage } from "../utils/ErrorUtilities.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { getTelegramBotToken, TELEGRAM_API_URL, TELEGRAM_BOT_TOKEN_ENV } from "../utils/TelegramUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { ITbTgImage } from "../models/databases/tb_tg_image.js";
-import { ITbTgStatsWhitelist } from "../models/databases/tb_tg_stats_whitelist.js";
+import { ITB_TG_IMAGE } from "../models/databases/tb_tg_image.js";
+import { ITB_TG_STATS_WHITELIST } from "../models/databases/tb_tg_stats_whitelist.js";
 import {
   TgAdminDto,
   TgImageFile,
@@ -19,16 +19,11 @@ import {
   TgImageUploadBody,
   TgImageUploadDto,
   TgImageUploader,
+  WHITELIST_REMOVED_STATUS,
 } from "./TgImage.types.js";
 
 const TG_IMAGE_TABLE = "tb_tg_image";
 const TG_STATS_WHITELIST_TABLE = "tb_tg_stats_whitelist";
-
-/**
- * `removeFromWhitelist` has always stored "I" (not `RecordStatus.DELETED`); `addToWhitelist`
- * reactivates any non-active row, and every read filters on `RecordStatus.ACTIVE`.
- */
-const WHITELIST_REMOVED_STATUS = "I";
 
 const TELEGRAM_SERVICE_NAME = "Telegram";
 
@@ -66,8 +61,8 @@ const UPLOAD_CAPTION_TITLE = "📤 agenda_upload";
 const SUMMARY_COLUMNS = ["short_code", "file_name", "mime_type", "size_in_bytes", "created_dt"] as const;
 const ADMIN_COLUMNS = ["id", "telegram_user_id", "added_dt"] as const;
 
-type TgImageSummaryRow = Pick<ITbTgImage, (typeof SUMMARY_COLUMNS)[number]>;
-type TgAdminRow = Pick<ITbTgStatsWhitelist, (typeof ADMIN_COLUMNS)[number]>;
+type TgImageSummaryRow = Pick<ITB_TG_IMAGE, (typeof SUMMARY_COLUMNS)[number]>;
+type TgAdminRow = Pick<ITB_TG_STATS_WHITELIST, (typeof ADMIN_COLUMNS)[number]>;
 
 /** Missing token = our misconfiguration (500). */
 function getBotToken(): string {
@@ -163,7 +158,7 @@ export class TgImageService {
     }
 
     const shortCode = crypto.randomBytes(SHORT_CODE_BYTES).toString("hex");
-    await this.db.insert<ITbTgImage>(
+    await this.db.insert<ITB_TG_IMAGE>(
       TG_IMAGE_TABLE,
       {
         short_code: shortCode,
@@ -190,7 +185,7 @@ export class TgImageService {
    */
   async loadImage(shortCode: string, logContext?: IRequestLogContext): Promise<TgImageContent> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Load image from Telegram");
-    const record = await this.db.findOne<ITbTgImage>(
+    const record = await this.db.findOne<ITB_TG_IMAGE>(
       TG_IMAGE_TABLE,
       { short_code: shortCode, record_status: RecordStatus.ACTIVE },
       ["telegram_file_id", "mime_type"],
@@ -239,7 +234,7 @@ export class TgImageService {
   /** Newest first (bot `/list`). */
   async listRecent(limit: number, logContext?: IRequestLogContext): Promise<TgImageSummaryDto[]> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List recent images");
-    const rows = await this.db.find<ITbTgImage>(
+    const rows = await this.db.find<ITB_TG_IMAGE>(
       TG_IMAGE_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { orderBy: "id", orderDirection: "desc", limit, columns: SUMMARY_COLUMNS },
@@ -264,7 +259,7 @@ export class TgImageService {
   /** Active bot admins, most recently added first. */
   async listAdmins(logContext?: IRequestLogContext): Promise<TgAdminDto[]> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List bot admins");
-    const rows = await this.db.find<ITbTgStatsWhitelist>(
+    const rows = await this.db.find<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { orderBy: "added_dt", orderDirection: "desc", columns: ADMIN_COLUMNS },
@@ -275,7 +270,7 @@ export class TgImageService {
 
   async isWhitelisted(telegramUserId: number, logContext?: IRequestLogContext): Promise<boolean> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Check bot admin");
-    const row = await this.db.findOne<ITbTgStatsWhitelist>(
+    const row = await this.db.findOne<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { telegram_user_id: telegramUserId, record_status: RecordStatus.ACTIVE },
       ["id"],
@@ -287,7 +282,7 @@ export class TgImageService {
   /** Remembers the admin's private chat with the bot (set on /start); it becomes a storage/log chat. */
   async storeAdminChatId(telegramUserId: number, chatId: number, logContext?: IRequestLogContext): Promise<void> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Store bot admin chat id");
-    await this.db.update<ITbTgStatsWhitelist>(
+    await this.db.update<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { telegram_user_id: telegramUserId, record_status: RecordStatus.ACTIVE },
       { telegram_chat_id: chatId },
@@ -298,7 +293,7 @@ export class TgImageService {
   /** Idempotent: an active admin is left alone, a removed one is reactivated (keeping its chat id). */
   async addToWhitelist(telegramUserId: number, logContext?: IRequestLogContext): Promise<void> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Add bot admin");
-    const existing = await this.db.findOne<ITbTgStatsWhitelist>(
+    const existing = await this.db.findOne<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { telegram_user_id: telegramUserId },
       ["id", "record_status"],
@@ -309,7 +304,7 @@ export class TgImageService {
       return;
     }
     if (existing) {
-      await this.db.update<ITbTgStatsWhitelist>(
+      await this.db.update<ITB_TG_STATS_WHITELIST>(
         TG_STATS_WHITELIST_TABLE,
         { telegram_user_id: telegramUserId },
         { record_status: RecordStatus.ACTIVE },
@@ -318,7 +313,7 @@ export class TgImageService {
       if (event) event.detail = "reactivated";
       return;
     }
-    await this.db.insert<ITbTgStatsWhitelist>(
+    await this.db.insert<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { telegram_user_id: telegramUserId, added_dt: Date.now(), record_status: RecordStatus.ACTIVE },
       event,
@@ -328,14 +323,14 @@ export class TgImageService {
   /** Returns false when the user wasn't an active admin. */
   async removeFromWhitelist(telegramUserId: number, logContext?: IRequestLogContext): Promise<boolean> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Remove bot admin");
-    const existing = await this.db.findOne<ITbTgStatsWhitelist>(
+    const existing = await this.db.findOne<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { telegram_user_id: telegramUserId, record_status: RecordStatus.ACTIVE },
       ["id"],
       event,
     );
     if (!existing) return false;
-    await this.db.update<ITbTgStatsWhitelist>(
+    await this.db.update<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { telegram_user_id: telegramUserId },
       { record_status: WHITELIST_REMOVED_STATUS },
@@ -346,7 +341,7 @@ export class TgImageService {
 
   /** The first active admin chat (any one: no ordering, as before) receives every uploaded document. */
   private async getStorageChatId(event?: IRequestLogEvent): Promise<number | null> {
-    const rows = await this.db.find<ITbTgStatsWhitelist>(
+    const rows = await this.db.find<ITB_TG_STATS_WHITELIST>(
       TG_STATS_WHITELIST_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { limit: 1, columns: ["telegram_chat_id"], extraWhere: (qb) => qb.whereNotNull("telegram_chat_id") },

@@ -43,12 +43,8 @@ export interface IRequestLogEvent {
    */
   detail?: string;
 
+  /** Child lines in order (SQL timings, nested steps). */
   children: string[];
-
-  /**
-   * Optional structured metadata.
-   * Useful for debugging / JSON logs.
-   */
 
   /**
    * Time spent for this operation.

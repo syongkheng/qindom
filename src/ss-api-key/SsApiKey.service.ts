@@ -3,7 +3,7 @@ import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogConte
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { sha256Hex } from "../utils/HashUtilities.js";
-import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
+import { ITB_SS_API_KEY } from "../models/databases/tb_ss_api_key.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { SsApiKeyGeneratedDto, SsApiKeyRevokedDto, SsApiKeyStatusDto } from "./SsApiKey.types.js";
@@ -27,7 +27,7 @@ export class SsApiKeyService {
 
   async getKeyStatus(userId: number, logContext?: IRequestLogContext): Promise<SsApiKeyStatusDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Get API key status");
-    const existing = await this.db.findOne<ITbSsApiKey>(
+    const existing = await this.db.findOne<ITB_SS_API_KEY>(
       SS_API_KEY_TABLE,
       { user_id: userId, record_status: RecordStatus.ACTIVE },
       ["id", "name", "key_hint", "created_dt"],
@@ -50,7 +50,7 @@ export class SsApiKeyService {
     await this.deactivateActiveKey(userId, now, event);
 
     const rawValue = crypto.randomBytes(KEY_RANDOM_BYTES).toString("hex");
-    await this.db.insert<ITbSsApiKey>(
+    await this.db.insert<ITB_SS_API_KEY>(
       SS_API_KEY_TABLE,
       {
         user_id: userId,
@@ -76,10 +76,10 @@ export class SsApiKeyService {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Rename API key");
     const activeKey = { user_id: userId, record_status: RecordStatus.ACTIVE };
 
-    const existing = await this.db.findOne<ITbSsApiKey>(SS_API_KEY_TABLE, activeKey, ["id"], event);
+    const existing = await this.db.findOne<ITB_SS_API_KEY>(SS_API_KEY_TABLE, activeKey, ["id"], event);
     if (!existing) throw new Exceptions.NotFound("No active API key");
 
-    await this.db.update<ITbSsApiKey>(
+    await this.db.update<ITB_SS_API_KEY>(
       SS_API_KEY_TABLE,
       activeKey,
       { name, updated_dt: Date.now(), updated_by_id: userId },
@@ -95,7 +95,7 @@ export class SsApiKeyService {
   }
 
   private async deactivateActiveKey(userId: number, now: number, event?: IRequestLogEvent): Promise<void> {
-    await this.db.update<ITbSsApiKey>(
+    await this.db.update<ITB_SS_API_KEY>(
       SS_API_KEY_TABLE,
       { user_id: userId, record_status: RecordStatus.ACTIVE },
       { record_status: RecordStatus.DELETED, updated_dt: now, updated_by_id: userId },

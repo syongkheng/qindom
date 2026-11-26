@@ -1,5 +1,5 @@
-// Request bodies and response DTOs for /auth. Request-log DTOs stay in models/dtos/RequestLogDto.ts
-// (shared with utils/logging); the Telegram matrix type lives with TelegramLogSubscriptionService.
+// Request bodies and response DTOs for /auth. Request-log DTOs live in utils/logging/RequestLog.types.ts
+// (owned by the log parser); the Telegram matrix type lives with TelegramLogSubscriptionService.
 
 /** `tb_aa_user.state` values. */
 export const UserState = {

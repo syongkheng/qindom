@@ -1,11 +1,10 @@
 import crypto from "crypto";
-import { NextFunction, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
+import { IDecodedTokenUser } from "../token/Token.types.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import db from "../config/db/mysql.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
@@ -31,7 +30,7 @@ const INVALID_TOKEN_MESSAGE = "Invalid authentication. Please log in again.";
 const CSRF_INVALID_MESSAGE = "Invalid or missing CSRF token.";
 
 /** Double-submit check: on non-safe methods the `X-CSRF-Token` header must equal the `csrf_token` cookie (timing-safe). */
-function isCsrfValid(req: RequestWithUserInfo): boolean {
+function isCsrfValid(req: Request): boolean {
   if (SAFE_METHODS.has(req.method)) return true;
 
   const header = req.headers[CSRF_HEADER];
@@ -80,7 +79,7 @@ export async function resolveSessionUser(token: string | undefined): Promise<IDe
  * Requires a valid session cookie (401 `token_invalid` otherwise) and, on mutating requests, a
  * matching CSRF header (403 `csrf_invalid`), checked after the session. Sets `req.user`.
  */
-export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
+export const MandatoryTokenFilter = async (req: Request, res: Response, next: NextFunction) => {
   const cr = new ControllerResponse(req, res);
   const event = LoggingUtilities.request.middleware(req.logContext, "VALIDATION", "JWT");
 
@@ -116,7 +115,7 @@ export const MandatoryTokenFilter = async (req: RequestWithUserInfo, res: Respon
  * requests, 403). No cookie, a bad/expired/revoked token or a failed check → continues as a
  * visitor; it never answers 401.
  */
-export const OptionalTokenFilter = async (req: RequestWithUserInfo, res: Response, next: NextFunction) => {
+export const OptionalTokenFilter = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies?.[JWT_COOKIE];
   if (!token) return next();
 

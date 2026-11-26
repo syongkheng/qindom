@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { REQUEST_LOG_DIR, REQUEST_LOG_FILE_PREFIX } from "./RequestLogFileWriter.js";
-import { RequestLogEntryDto, RequestLogMatchDto } from "../../models/dtos/RequestLogDto.js";
+import { RequestLogEntryDto, RequestLogMatchDto } from "./RequestLog.types.js";
 import { parseRequestLogEntry } from "./RequestLogParser.js";
 
 // Reads qindom's own request-log file (see RequestLogFileWriter.ts), not PM2's

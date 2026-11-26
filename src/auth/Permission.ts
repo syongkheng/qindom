@@ -1,6 +1,6 @@
+import type { Request } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
+import { IDecodedTokenUser } from "../token/Token.types.js";
 import { ITB_AA_RESOURCE_ACCESS } from "../models/databases/tb_aa_resource_access.js";
 import { hasRole } from "../utils/RequestUtilities.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
@@ -48,7 +48,7 @@ export function isValidRole(role: unknown): role is string {
   return typeof role === "string" && ROLE_PATTERN.test(role);
 }
 
-export function isOwner(req: RequestWithUserInfo): boolean {
+export function isOwner(req: Request): boolean {
   return hasRole(req, Roles.OWNER);
 }
 

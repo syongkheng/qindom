@@ -6,7 +6,7 @@ import { Time } from "../constants/Time.js";
 import { sha256Hex } from "../utils/HashUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { ITbCameraDevice } from "../models/databases/tb_camera_device.js";
+import { ITB_CAMERA_DEVICE } from "../models/databases/tb_camera_device.js";
 import { CameraRelay } from "./Camera.relay.js";
 import { PairingCodeStore } from "./Camera.pairing.js";
 import { isWellFormedDeviceToken } from "./Camera.validator.js";
@@ -29,7 +29,7 @@ const DTO_COLUMNS = ["uuid", "name", "paired_dt", "last_seen_dt"] as const;
 /** A new device token: 32 random bytes, base64url. Only its SHA-256 is stored. */
 const randomDeviceToken = () => crypto.randomBytes(DEVICE_TOKEN_BYTES).toString("base64url");
 
-export function toCameraDeviceDto(row: ITbCameraDevice, online: boolean): CameraDeviceDto {
+export function toCameraDeviceDto(row: ITB_CAMERA_DEVICE, online: boolean): CameraDeviceDto {
   return {
     deviceId: row.uuid,
     name: row.name,
@@ -40,7 +40,7 @@ export function toCameraDeviceDto(row: ITbCameraDevice, online: boolean): Camera
   };
 }
 
-const toIdentity = (row: ITbCameraDevice): CameraDeviceIdentity => ({
+const toIdentity = (row: ITB_CAMERA_DEVICE): CameraDeviceIdentity => ({
   deviceId: row.uuid,
   userId: row.user_id ?? null,
   name: row.name,
@@ -62,7 +62,7 @@ export class CameraService {
   async authenticateDevice(token: string, logContext?: IRequestLogContext): Promise<CameraDeviceIdentity | null> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Authenticate camera device");
     if (!isWellFormedDeviceToken(token)) return null;
-    const row = await this.db.findOne<ITbCameraDevice>(
+    const row = await this.db.findOne<ITB_CAMERA_DEVICE>(
       CAMERA_DEVICE_TABLE,
       { token_hash: sha256Hex(token), record_status: RecordStatus.ACTIVE },
       IDENTITY_COLUMNS,
@@ -74,7 +74,7 @@ export class CameraService {
   /** Stamps `last_seen_dt` (phone socket connect / disconnect). */
   async touch(deviceId: string, logContext?: IRequestLogContext): Promise<void> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Touch camera device");
-    await this.db.update<ITbCameraDevice>(
+    await this.db.update<ITB_CAMERA_DEVICE>(
       CAMERA_DEVICE_TABLE,
       { uuid: deviceId, record_status: RecordStatus.ACTIVE },
       { last_seen_dt: Date.now() },
@@ -94,7 +94,7 @@ export class CameraService {
     if (!device) {
       await this.retireStaleUnclaimed(event);
       token = this.newDeviceToken();
-      const row = await this.db.insert<ITbCameraDevice>(
+      const row = await this.db.insert<ITB_CAMERA_DEVICE>(
         CAMERA_DEVICE_TABLE,
         {
           uuid: crypto.randomUUID(),
@@ -123,7 +123,7 @@ export class CameraService {
     const deviceId = this.pairing.claim(body.code);
     if (!deviceId) throw new Exceptions.InvalidRequest("code");
 
-    const row = await this.db.findOne<ITbCameraDevice>(
+    const row = await this.db.findOne<ITB_CAMERA_DEVICE>(
       CAMERA_DEVICE_TABLE,
       { uuid: deviceId, record_status: RecordStatus.ACTIVE },
       ["name", "user_id"],
@@ -133,7 +133,7 @@ export class CameraService {
 
     const now = Date.now();
     const name = body.name ?? row.name;
-    const [updated] = await this.db.update<ITbCameraDevice>(
+    const [updated] = await this.db.update<ITB_CAMERA_DEVICE>(
       CAMERA_DEVICE_TABLE,
       { uuid: deviceId, record_status: RecordStatus.ACTIVE },
       { user_id: userId, name, paired_dt: now, updated_dt: now },
@@ -145,7 +145,7 @@ export class CameraService {
 
   async list(userId: number, logContext?: IRequestLogContext): Promise<CameraDeviceDto[]> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List camera devices");
-    const rows = await this.db.find<ITbCameraDevice>(
+    const rows = await this.db.find<ITB_CAMERA_DEVICE>(
       CAMERA_DEVICE_TABLE,
       { user_id: userId, record_status: RecordStatus.ACTIVE },
       { orderBy: "paired_dt", orderDirection: "asc", columns: DTO_COLUMNS },
@@ -158,9 +158,9 @@ export class CameraService {
   async remove(userId: number, deviceId: string, logContext?: IRequestLogContext): Promise<CameraDeviceRemovedDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Remove camera device");
     const owned = { uuid: deviceId, user_id: userId, record_status: RecordStatus.ACTIVE };
-    const row = await this.db.findOne<ITbCameraDevice>(CAMERA_DEVICE_TABLE, owned, ["id"], event);
+    const row = await this.db.findOne<ITB_CAMERA_DEVICE>(CAMERA_DEVICE_TABLE, owned, ["id"], event);
     if (!row) throw new Exceptions.NotFound();
-    await this.db.update<ITbCameraDevice>(
+    await this.db.update<ITB_CAMERA_DEVICE>(
       CAMERA_DEVICE_TABLE,
       owned,
       { record_status: RecordStatus.DELETED, updated_dt: Date.now() },

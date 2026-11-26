@@ -1,3 +1,11 @@
+/**
+ * `tb_tg_stats_whitelist.record_status` for a removed admin. `removeFromWhitelist` has always stored
+ * "I" (not `RecordStatus.DELETED`); `addToWhitelist` reactivates any non-active row, and every read
+ * filters on `RecordStatus.ACTIVE`.
+ */
+export const WHITELIST_REMOVED_STATUS = "I";
+export type WhitelistRemovedStatus = typeof WHITELIST_REMOVED_STATUS;
+
 // ── POST /img/upload ──
 
 /** The multipart `file` part, checked against the `tb_tg_image` column widths. */

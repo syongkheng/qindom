@@ -416,7 +416,7 @@ export class AuthService {
     {
       id: number;
       username: string;
-      email: string | undefined;
+      email: string | null | undefined;
       system: string;
       roles: string[];
       state: string;

@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { Time } from "../constants/Time.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
+import { IDecodedTokenUser } from "./Token.types.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { toMessage } from "../utils/ErrorUtilities.js";
 

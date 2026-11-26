@@ -1,4 +1,4 @@
-import { NextFunction, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import db from "../config/db/mysql.js";
@@ -6,9 +6,8 @@ import { LogEmoji } from "../constants/LogEmoji.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { sha256Hex } from "../utils/HashUtilities.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { ITbSsApiKey } from "../models/databases/tb_ss_api_key.js";
+import { ITB_SS_API_KEY } from "../models/databases/tb_ss_api_key.js";
 import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 
 export type ApiKeyPrefix = "ss";
 
@@ -48,7 +47,7 @@ async function resolveApiKeyUserId(
     return null;
   }
 
-  const key = await db.findOne<ITbSsApiKey>(
+  const key = await db.findOne<ITB_SS_API_KEY>(
     API_KEY_TABLES[prefix as ApiKeyPrefix],
     { api_key_prefix: prefix, api_key_hash: sha256Hex(value), record_status: RecordStatus.ACTIVE },
     ["user_id"],
@@ -77,7 +76,7 @@ async function resolveApiKeyUserId(
  * On success the owner's id is in `logContext.metadata.userId` (read it with `getApiKeyUserId`).
  */
 export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) =>
-  async function (req: RequestWithUserInfo, res: Response, next: NextFunction) {
+  async function (req: Request, res: Response, next: NextFunction) {
     const event = LoggingUtilities.request.middleware(req.logContext, "VALIDATION", "Specific headers");
     const header = req.headers[API_KEY_HEADER];
     const apiKey = Array.isArray(header) ? header[0] : header;

@@ -24,7 +24,9 @@ Each feature folder `src/<module>/` holds:
 
 - A folder with several features prefixes each with the folder name (`house/HouseLayout.service.ts`, `house/HouseShare.service.ts`) and shares one `<Folder>.types.ts` / `<Folder>.validator.ts`.
 - File names: `PascalCase.<role>.ts`, named after the **folder** (`src/profile/Profile.service.ts` → `ProfileService`, `createProfileController`), even when the URL prefix differs (`/pfp`). Shared helpers: `XyzUtilities.ts`.
-- DB row types stay in `src/models/databases/` (`ITB_*`), because migrations and several modules share them.
+- DB row types stay in `src/models/databases/`: file `tb_<table>.ts` exporting one `ITB_<TABLE>`; NULL columns `| null`; `?` only for columns an insert may omit; BIGINT ms `number`; delete the type when its table is dropped (enforced by `Models.test.ts`).
+- No `RequestWithXyz` interfaces: request extensions go in the global augmentation (`src/types/express/index.d.ts`); handlers take plain `Request`.
+- Non-standard `record_status` values (tgimage's `"I"`) are exported constants in the owning module's types.
 - A service lives in the module that **owns its tables**. Other modules (e.g. `siri-shortcut` ingestion routes) import it from there; they never host it.
 
 ## 3. Controllers
@@ -198,6 +200,8 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | User decision: dev must use `.env.dev`. `mysql.ts` loaded `.env` (prod) at import before index.ts's `.env.dev` override (ESM hoisting), so dev was using `.env`'s DB. Folder 30: env loaded by a first-imported `config/loadEnv.ts`, no dotenv in mysql.ts. `npm run migrate` keeps targeting `.env` deliberately. |
+| 2026-11-26 | models: `models/dtos` + `models/requests` emptied (types moved to owners or deleted), `IDecodedTokenUser` → `token/Token.types.ts`, row types renamed `ITB_<TABLE>` + nullable/RecordStatus typing (test-enforced), 7 row types for never-created tables deleted. Questions D1–D3. |
 | 2026-11-26 | utils: `requestUtils`/`errorUtils`/`Structual…` renamed to `*Utilities`; transactions keep typed exceptions and expose a logged `tx`; dotenv removed from utils; lazy mail transporter; Telegram transport moved to utils/logging with one shared sender; mute matrix covers every mount; code-point length caps. |
 | 2026-11-26 | middlewares: 79 pinning tests before refactor (88 total); request-log flush in `finish` could crash the process (fixed); shared `clientIp`; raw API key no longer in log metadata; new registry `UnsupportedMediaType` (415); `mw.authUpload` / `mw.pdcaPublic` presets. Questions M1–M5. |
 | 2026-11-26 | analytics: zod replaced by hand-written validators (176 characterisation cases + 180k-input differential, 0 diffs) and uninstalled; public contracts frozen; services own the SQL. Questions Y1–Y4. |

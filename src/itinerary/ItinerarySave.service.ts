@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import { Knex } from "knex";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ITB_ITINERARY } from "../models/databases/tb_itinerary.js";
-import { ITB_AGENDA_ITEM } from "../models/databases/tb_agenda_item.js";
-import { ITB_AGENDA_FILE } from "../models/databases/tb_agenda_file.js";
+import { ITB_TRAVEL_ITINERARY } from "../models/databases/tb_travel_itinerary.js";
+import { ITB_TRAVEL_AGENDA_ITEM } from "../models/databases/tb_travel_agenda_item.js";
+import { ITB_TRAVEL_AGENDA_FILE } from "../models/databases/tb_travel_agenda_file.js";
 import { ITB_TRAVEL_ITINERARY_BOOKING } from "../models/databases/tb_travel_itinerary_booking.js";
 import { ITB_TRAVEL_PACKING_ITEM } from "../models/databases/tb_travel_packing_item.js";
 import { ITB_TRAVEL_NOTE_ITEM } from "../models/databases/tb_travel_note_item.js";
@@ -59,7 +59,7 @@ const randomIds: ItineraryIdGenerator = {
 const jsonList = (values: string[] | null | undefined) => (values?.length ? JSON.stringify(values) : undefined);
 
 /** Columns shared by create and update. */
-function itineraryColumns(body: ItineraryFieldsBody): Partial<ITB_ITINERARY> {
+function itineraryColumns(body: ItineraryFieldsBody): Partial<ITB_TRAVEL_ITINERARY> {
   return {
     destination: body.destination ?? undefined,
     destination_raw: jsonList(body.destinationRaw),
@@ -73,7 +73,7 @@ function itineraryColumns(body: ItineraryFieldsBody): Partial<ITB_ITINERARY> {
   };
 }
 
-export function agendaColumns(item: AgendaItemBody): Partial<ITB_AGENDA_ITEM> {
+export function agendaColumns(item: AgendaItemBody): Partial<ITB_TRAVEL_AGENDA_ITEM> {
   return {
     category: item.category ?? undefined,
     list_type: item.listType ?? undefined,
@@ -233,14 +233,14 @@ export class ItinerarySaveService {
     idempotencyKey: string,
     event?: IRequestLogEvent,
   ): Promise<ItinerarySavedDto | undefined> {
-    const existing = await this.db.findOne<ITB_ITINERARY>(
+    const existing = await this.db.findOne<ITB_TRAVEL_ITINERARY>(
       ITINERARY_TABLE,
       { idempotency_key: idempotencyKey, created_by_id: userId },
       ["id", "session_id", "short_code"],
       event,
     );
     if (!existing) return undefined;
-    const agenda = await this.db.find<ITB_AGENDA_ITEM>(
+    const agenda = await this.db.find<ITB_TRAVEL_AGENDA_ITEM>(
       AGENDA_ITEM_TABLE,
       { itinerary_id: existing.id, record_status: RecordStatus.ACTIVE },
       { orderBy: "id", orderDirection: "asc", columns: ["id"] },
@@ -304,7 +304,7 @@ export class ItinerarySaveService {
     now: number,
   ): Promise<AgendaFileMapEntryDto[]> {
     const map: AgendaFileMapEntryDto[] = [];
-    const fileRows: Partial<ITB_AGENDA_FILE>[] = [];
+    const fileRows: Partial<ITB_TRAVEL_AGENDA_FILE>[] = [];
     const fileUuids = items.flatMap((i) => i.filesToInsert.map((f) => f.uuid));
     const attached = new Set<string>(
       fileUuids.length

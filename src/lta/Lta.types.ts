@@ -1,5 +1,5 @@
 import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop.js";
-import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station.js";
+import { ITB_LRT_MRT_STATION } from "../models/databases/tb_lrt_mrt_station.js";
 
 // ── GET /lta/timing (LTA DataMall BusArrival v3, passed through) ──
 
@@ -35,19 +35,19 @@ export interface BusArrivalsDto {
 
 // ── GET /lta/bus/services (tb_lta_bus_info) ──
 
-/** Values are kept as stored (VARCHAR), e.g. `distance: "4.1"`, `weekdayFirstBus: "0553"`, `"-"` = no service. */
+/** Values are kept as stored (nullable VARCHAR), e.g. `distance: "4.1"`, `weekdayFirstBus: "0553"`, `"-"` = no service. */
 export interface BusServiceDto {
-  serviceNo: string;
-  operator: string;
-  direction: string;
-  stopSequence: string;
-  distance: string;
-  weekdayFirstBus: string;
-  weekdayLastBus: string;
-  saturdayFirstBus: string;
-  saturdayLastBus: string;
-  sundayFirstBus: string;
-  sundayLastBus: string;
+  serviceNo: string | null;
+  operator: string | null;
+  direction: string | null;
+  stopSequence: string | null;
+  distance: string | null;
+  weekdayFirstBus: string | null;
+  weekdayLastBus: string | null;
+  saturdayFirstBus: string | null;
+  saturdayLastBus: string | null;
+  sundayFirstBus: string | null;
+  sundayLastBus: string | null;
 }
 
 export interface BusServicesDto {
@@ -73,7 +73,7 @@ export interface NearbyBusStopsResult {
   count: number;
 }
 
-export type NearestMrtStationRow = Pick<ITB_LTA_MRT_STATION, "station" | "type"> & {
+export type NearestMrtStationRow = Pick<ITB_LRT_MRT_STATION, "station" | "type"> & {
   distance_m: number;
 };
 

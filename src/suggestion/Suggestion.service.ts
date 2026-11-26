@@ -1,7 +1,7 @@
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
-import { ITb_suggestion_packing } from "../models/databases/tb_suggestion_packing.js";
-import { ITb_suggestion_note } from "../models/databases/tb_suggestion_note.js";
+import { ITB_SUGGESTION_PACKING } from "../models/databases/tb_suggestion_packing.js";
+import { ITB_SUGGESTION_NOTE } from "../models/databases/tb_suggestion_note.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import {
@@ -15,7 +15,7 @@ import {
 const SUGGESTION_PACKING_TABLE = "tb_suggestion_packing";
 const SUGGESTION_NOTE_TABLE = "tb_suggestion_note";
 
-function toPackingDto(row: ITb_suggestion_packing): PackingSuggestionDto {
+function toPackingDto(row: ITB_SUGGESTION_PACKING): PackingSuggestionDto {
   return {
     id: row.id,
     tripType: row.trip_type,
@@ -25,7 +25,7 @@ function toPackingDto(row: ITb_suggestion_packing): PackingSuggestionDto {
   };
 }
 
-function toNoteDto(row: ITb_suggestion_note): NoteSuggestionDto {
+function toNoteDto(row: ITB_SUGGESTION_NOTE): NoteSuggestionDto {
   return {
     id: row.id,
     country: row.country,
@@ -45,7 +45,7 @@ export class SuggestionService {
 
   async getAllPacking(logContext?: IRequestLogContext): Promise<PackingSuggestionDto[]> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List packing suggestions");
-    const rows = await this.db.find<ITb_suggestion_packing>(
+    const rows = await this.db.find<ITB_SUGGESTION_PACKING>(
       SUGGESTION_PACKING_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { orderBy: "trip_type" },
@@ -56,7 +56,7 @@ export class SuggestionService {
 
   async createPacking(body: PackingSuggestionBody, logContext?: IRequestLogContext): Promise<PackingSuggestionDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Create packing suggestion");
-    const row = await this.db.insert<ITb_suggestion_packing>(
+    const row = await this.db.insert<ITB_SUGGESTION_PACKING>(
       SUGGESTION_PACKING_TABLE,
       {
         trip_type: body.tripType,
@@ -73,7 +73,7 @@ export class SuggestionService {
 
   async deletePacking(id: number, logContext?: IRequestLogContext): Promise<SuggestionDeletedDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Delete packing suggestion");
-    await this.db.update<ITb_suggestion_packing>(
+    await this.db.update<ITB_SUGGESTION_PACKING>(
       SUGGESTION_PACKING_TABLE,
       { id },
       { record_status: RecordStatus.DELETED },
@@ -85,7 +85,7 @@ export class SuggestionService {
   /** Exact, case-insensitive country match: the list is small and curated, so no fuzzy search. */
   async getNotesByCountry(country: string, logContext?: IRequestLogContext): Promise<NoteSuggestionDto[]> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List note suggestions");
-    const rows = await this.db.find<ITb_suggestion_note>(
+    const rows = await this.db.find<ITB_SUGGESTION_NOTE>(
       SUGGESTION_NOTE_TABLE,
       { record_status: RecordStatus.ACTIVE },
       { extraWhere: (q) => q.whereRaw("LOWER(country) = LOWER(?)", [country]), orderBy: "id" },
@@ -96,7 +96,7 @@ export class SuggestionService {
 
   async createNote(body: NoteSuggestionBody, logContext?: IRequestLogContext): Promise<NoteSuggestionDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Create note suggestion");
-    const row = await this.db.insert<ITb_suggestion_note>(
+    const row = await this.db.insert<ITB_SUGGESTION_NOTE>(
       SUGGESTION_NOTE_TABLE,
       {
         country: body.country,
@@ -117,7 +117,7 @@ export class SuggestionService {
 
   async deleteNote(id: number, logContext?: IRequestLogContext): Promise<SuggestionDeletedDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Delete note suggestion");
-    await this.db.update<ITb_suggestion_note>(
+    await this.db.update<ITB_SUGGESTION_NOTE>(
       SUGGESTION_NOTE_TABLE,
       { id },
       { record_status: RecordStatus.DELETED },

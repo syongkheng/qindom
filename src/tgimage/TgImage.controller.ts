@@ -1,7 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { clientIp, getUser, requireRole, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Roles } from "../auth/Permission.js";
@@ -48,7 +47,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
   router.post(
     "/upload",
     upload.single(UPLOAD_FIELD),
-    route<RequestWithUserInfo>("TgImageController.POST /upload", "Upload failed", async (req, cr) => {
+    route("TgImageController.POST /upload", "Upload failed", async (req, cr) => {
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Upload form");
       const file = validateUploadFile(req.file, event);
       const body = validateUploadBody(req.body, event);
@@ -62,7 +61,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
 
   router.get(
     "/admin/list",
-    route<RequestWithUserInfo>("TgImageController.GET /admin/list", "Failed to list admins", async (req, cr) => {
+    route("TgImageController.GET /admin/list", "Failed to list admins", async (req, cr) => {
       requireRole(req, Roles.OWNER);
       return cr.ok<TgAdminDto[]>(await svc.listAdmins(req.logContext));
     }),
@@ -70,7 +69,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
 
   router.post(
     "/admin/add",
-    route<RequestWithUserInfo>("TgImageController.POST /admin/add", "Failed to add admin", async (req, cr) => {
+    route("TgImageController.POST /admin/add", "Failed to add admin", async (req, cr) => {
       requireRole(req, Roles.OWNER);
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
       const { telegramUserId } = validateAdminBody(req.body, event);
@@ -81,7 +80,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
 
   router.post(
     "/admin/remove",
-    route<RequestWithUserInfo>("TgImageController.POST /admin/remove", "Failed to remove admin", async (req, cr) => {
+    route("TgImageController.POST /admin/remove", "Failed to remove admin", async (req, cr) => {
       requireRole(req, Roles.OWNER);
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
       const { telegramUserId } = validateAdminBody(req.body, event);
