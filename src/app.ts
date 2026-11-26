@@ -7,11 +7,12 @@ import { createCorsOptions } from "./config/cors.js";
 import { globalLimiter } from "./middlewares/RateLimiter.js";
 import { mw } from "./middlewares/presets.js";
 import { ErrorHandler } from "./middlewares/ErrorHandler.js";
+import { Exceptions } from "./exceptions/AppExceptions.js";
+import { ControllerResponse } from "./models/responses/ControllerResponse.js";
 import { CameraService } from "./camera/Camera.service.js";
 
 // Controllers
 import createConnectivityController from "./connectivity/Connectivity.controller.js";
-import createAnalyticsLegacyController from "./analytics/AnalyticsLegacy.controller.js";
 import createAnalyticsController from "./analytics/Analytics.controller.js";
 import createLtaController from "./lta/Lta.controller.js";
 import createAuthController from "./auth/Auth.controller.js";
@@ -37,8 +38,7 @@ import createDebugController from "./debug/Debug.controller.js";
 const BODY_LIMIT = "5mb";
 const URLENCODED_PARAMETER_LIMIT = 5000;
 const HSTS_VALUE = "max-age=31536000; includeSubDomains";
-const NOT_FOUND = 404;
-const NOT_FOUND_TEXT = "Not Found";
+const ROUTE_NOT_FOUND_MESSAGE = "Route not found";
 
 export type RouteEntry = [prefix: string, preset: RequestHandler[], router: Router];
 
@@ -58,8 +58,7 @@ export interface AppOptions {
 export function createRoutes(db: KnexSqlUtilities, cameraService: CameraService, isPrd = IS_PRD): RouteEntry[] {
   return [
     ["/connectivity", mw.std, createConnectivityController(db)],
-    ["/analytics", mw.std, createAnalyticsLegacyController(db)], // legacy POST / and /heartbeat
-    ["/analytics", mw.std, createAnalyticsController(db)], // v1: /collect, /systems, /admin/*
+    ["/analytics", mw.std, createAnalyticsController(db)], // /heartbeat, /collect, /report, /systems, /admin/*
     ["/lta", mw.std, createLtaController(db)],
     ["/auth", mw.std, createAuthController(db)],
     ["/pfp", mw.auth, createProfileController(db)],
@@ -105,6 +104,20 @@ const enterController: RequestHandler = (req, _res, next) => {
 };
 
 /**
+ * Unmatched routes (user decision G2): the registry `NotFound` body like every other 404
+ * (`status` "EntityNotFoundException", `data.code` "entity_not_found") instead of Express's HTML page.
+ * Paths under a mounted prefix have a request log (recorded through ControllerResponse); unknown
+ * prefixes never ran RestRequestLogger, so they are answered directly.
+ */
+const notFound: RequestHandler = (req, res) => {
+  const err = new Exceptions.NotFound(ROUTE_NOT_FOUND_MESSAGE);
+  if (req.logContext) {
+    return new ControllerResponse(req, res).result(err.httpStatus, err.name, err.toResponseMessage());
+  }
+  res.status(err.httpStatus).json({ code: err.httpStatus, status: err.name, data: err.toResponseMessage() });
+};
+
+/**
  * The Express app, without listening: CORS → security headers → global limiter → cookies/body parsers →
  * route table → JSON 404 → ErrorHandler. index.ts listens and attaches the camera WebSockets.
  */
@@ -124,10 +137,7 @@ export function createApp(deps: AppDependencies, { isPrd = IS_PRD }: AppOptions 
     app.use(prefix, [...preset, enterController], router);
   }
 
-  // Unmatched routes: JSON envelope instead of Express's default "Cannot GET /…" HTML page
-  app.use((_req, res) => {
-    res.status(NOT_FOUND).json({ code: NOT_FOUND, status: NOT_FOUND_TEXT, data: NOT_FOUND_TEXT });
-  });
+  app.use(notFound);
 
   // Must stay last — replaces Express's default handler, which leaks stack traces
   app.use(ErrorHandler);

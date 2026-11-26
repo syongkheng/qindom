@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import { Request, Response } from "express";
 import rateLimit, { ipKeyGenerator, Options } from "express-rate-limit";
 import { Time } from "../constants/Time.js";
@@ -8,7 +9,7 @@ import { Time } from "../constants/Time.js";
  * ipKeyGenerator collapses IPv6 to its /56 so rotating addresses can't dodge limits.
  * (Display IPs use `clientIp()` in utils/RequestUtilities.ts; this is a bucket key, not a display value.)
  */
-const clientIpKey = (req: Request) =>
+const clientIpKey = (req: IncomingMessage) =>
   ipKeyGenerator(String(req.headers["x-real-ip"] || req.socket.remoteAddress || ""));
 
 /** Minimum HTTP status counted as a failure by `skipSuccessfulRequests` limiters. */
@@ -183,3 +184,50 @@ export const pdcaEnquiryLimiter = limiter({
   limit: 5,
   message: "Too many messages. Please try again in 10 minutes, or WhatsApp us.",
 });
+
+// ── Raw WebSocket upgrades ───────────────────────────────────────────────────
+
+/**
+ * Per-IP counter for raw HTTP upgrades, which never pass through Express (so express-rate-limit can't
+ * see them). Fixed window, same key as the Express limiters (X-Real-IP, IPv6 /56). Synchronous and
+ * timer-free: expired buckets are swept at most once per window. `allow(req)` counts the attempt and
+ * says whether it is within the limit.
+ */
+export interface UpgradeLimiter {
+  allow(req: IncomingMessage): boolean;
+}
+
+export function createUpgradeLimiter({
+  windowMs,
+  limit,
+  now = Date.now,
+}: {
+  windowMs: number;
+  limit: number;
+  now?: () => number;
+}): UpgradeLimiter {
+  const buckets = new Map<string, { hits: number; resetAt: number }>();
+  let nextSweepAt = now() + windowMs;
+
+  return {
+    allow(req) {
+      const time = now();
+      if (time >= nextSweepAt) {
+        for (const [key, bucket] of buckets) if (bucket.resetAt <= time) buckets.delete(key);
+        nextSweepAt = time + windowMs;
+      }
+      const key = clientIpKey(req);
+      let bucket = buckets.get(key);
+      if (!bucket || bucket.resetAt <= time) {
+        bucket = { hits: 0, resetAt: time + windowMs };
+        buckets.set(key, bucket);
+      }
+      bucket.hits++;
+      return bucket.hits <= limit;
+    },
+  };
+}
+
+/** `/camera/ws/phone` upgrades per IP (user decision C3): each one costs a device-token DB lookup. */
+export const CAMERA_PHONE_UPGRADE_LIMIT = 60;
+export const CAMERA_PHONE_UPGRADE_WINDOW_MS = 15 * Time.MINUTE_MS;

@@ -1,16 +1,16 @@
 # Analytics `/analytics`
 
-Page-view analytics for every frontend (fndom, jessikheng, the PDCA website), a per-system dashboard in fndom, and the private report the PDCA site's `/insights` page reads. Two routers share the prefix (both `mw.std` in `app.ts`): the deprecated legacy ingest first, then v1.
+Page-view analytics for every frontend (fndom, jessikheng, the PDCA website), a per-system dashboard in fndom, and the private report the PDCA site's `/insights` page reads. One router (`mw.std` in `app.ts`).
 
 | File | Role |
 |---|---|
-| `Analytics.controller.ts` | v1 routes: `/collect`, `/report`, `/systems*`, `/admin/*` |
-| `AnalyticsLegacy.controller.ts` / `.service.ts` | deprecated `POST /` and `POST /heartbeat` |
+| `Analytics.controller.ts` | every route: `/heartbeat`, `/collect`, `/report`, `/systems*`, `/admin/*` |
+| `AnalyticsHeartbeat.service.ts` | `POST /heartbeat` upsert (`tb_analytic_user_activity`) |
 | `AnalyticsSystem.service.ts` | registry (`tb_analytic_system`), 60 s in-memory cache, `toRegisteredSystem` |
 | `AnalyticsDashboard.service.ts` | `/collect` ingest + hourly summary (`tb_analytic_event`) |
 | `AnalyticsReport.ts` / `AnalyticsReport.service.ts` | report contract: pure validation/periods/aggregation + queries, viewer-key check |
 | `AnalyticsAccess.service.ts` | who may view which system (OWNER or a resource grant via `PermissionService`) |
-| `AnalyticsContract.ts` | ingest contract v1: screen resolution, origin check, normalisation |
+| `AnalyticsContract.ts` | ingest contract v1: screen resolution, origin checks (lenient `isOriginAllowed` for `/collect`; strict `isOriginRequiredAndAllowed` for `/report`, also used by pdca), normalisation |
 | `Analytics.validator.ts` | hand-written request validation (replaced zod in Nov 2026, same accept/reject behaviour) |
 | `Analytics.types.ts` | DTOs, bodies, contract enums |
 
@@ -62,7 +62,7 @@ Response: `{ "message": "Event recorded successfully." }`.
 
 ### `POST /analytics/report` — `pdca.analytics.report/v1` (PDCA `/insights`)
 
-No login (the PDCA site has no accounts). Header `x-analytics-key: <viewer key>` must match `tb_analytic_system.read_key_hash` (sha256 hex, timing-safe), and the `Origin` must be in the system's `allowed_origins`. `site` → system via `REPORT_SITES` (`pdcadental.com` → `dental-directory`). `analyticsReportLimiter` 30/min/IP.
+No login (the PDCA site has no accounts). Header `x-analytics-key: <viewer key>` must match `tb_analytic_system.read_key_hash` (sha256 hex, timing-safe), and the `Origin` header is **required** and must be in the system's `allowed_origins` (`isOriginRequiredAndAllowed`; user decision Y1). `site` → system via `REPORT_SITES` (`pdcadental.com` → `dental-directory`). `analyticsReportLimiter` 30/min/IP.
 
 Request (exact keys, no others): `{ contract: "pdca.analytics.report/v1", site: "pdcadental.com", timezone: "Asia/Singapore", period: { start, end }, compare: "previous_month", metrics[], breakdowns[], limit (1–20) }`; period ≤ 366 days.
 
@@ -76,18 +76,19 @@ Response: `{ contract, source: "qindom", generatedAt, period, comparePeriod, tot
 | Status | Body | When |
 |---|---|---|
 | 400 | `status: "Bad Request"`, `data: { message: "Request rejected", problems: [...] }` | invalid request; messages match the PDCA site's own validator (frozen shape, not the registry error) |
-| 403 | `forbidden_access` | the SAME response for unknown site/system, disallowed origin, missing or wrong key |
+| 403 | `forbidden_access` | the SAME response for unknown site/system, missing or disallowed origin, missing or wrong key |
 | 429 | | rate limit |
 
 An OWNER rotates the key with `POST /analytics/admin/systems/:key/read-key` and shares `https://<pdca-site>/insights?key=<key>`.
 
-### Legacy (deprecated, kept so nothing breaks)
+### `POST /analytics/heartbeat` — session last-seen (fndom, frozen)
 
-Public, `OptionalTokenFilter`. Only presence is checked.
+Public, `OptionalTokenFilter`, no route limiter (global only). Only presence is checked.
 
-- `POST /analytics` `{ event, sessionId, system, properties?, page?, referrer?, timestamp? (ms or ISO string) }` → `{ "message": "Event recorded successfully." }`. Missing field → 400 `invalid_request_event|sessionId|system` (in that order). No known caller left.
-- `POST /analytics/heartbeat` `{ sessionId, system }` → `{ "message": "Heartbeat recorded successfully." }`; upserts `tb_analytic_user_activity` by `session_id` (user = username or `Anonymous`). fndom sends it every 30 s. Not sent to Telegram.
-- A DB failure on either is 500 `entity_creation_failed`.
+- `{ sessionId, system }` → `{ "message": "Heartbeat recorded successfully." }`; upserts `tb_analytic_user_activity` by `session_id` (user = username or `Anonymous`). fndom sends it every 30 s. Not sent to Telegram.
+- Missing field → 400 `invalid_request_sessionId|system` (in that order). A DB failure is 500 `entity_creation_failed`.
+
+The old loose ingest `POST /analytics` (no caller, no length caps) was removed (user decision Y2, 2026-11-26): it now answers the app's 404.
 
 ---
 

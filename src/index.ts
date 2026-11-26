@@ -1,7 +1,8 @@
 // Must stay the first import: loads .env / .env.dev before any other module is evaluated (see config/README.md).
 import { ENV_FILE } from "./config/loadEnv.js";
 import { APP_ENV } from "./config/env.js";
-import { parseAllowedOrigins } from "./config/cors.js";
+import { requireAllowedOrigins } from "./config/cors.js";
+import { installCrashGuard } from "./config/crashGuard.js";
 import { initializeDatabase } from "./config/db/mysql.js";
 import { createApp } from "./app.js";
 import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
@@ -17,11 +18,14 @@ import { attachCameraWebSockets } from "./camera/Camera.ws.js";
 const DEFAULT_PORT = 3000;
 const LOG_TAG = "server";
 
-/** Boot order: env (first import) → JWT secret → DB → app (routes, 404, ErrorHandler) → listen → camera WS → Telegram. */
+// Log-and-continue backstop for errors that escape every handler while serving (see config/crashGuard.ts).
+installCrashGuard();
+
+/** Boot order: env (first import) → JWT secret / ALLOWED_ORIGINS → DB → app (routes, 404, ErrorHandler) → listen → camera WS → Telegram. */
 async function startServer() {
   getJwtSecret(); // fail fast at boot (PM2 restart loop → deploy health check fails) if JWT_SECRET is missing
   const port = Number(process.env.PORT) || DEFAULT_PORT;
-  const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+  const allowedOrigins = requireAllowedOrigins(process.env.ALLOWED_ORIGINS); // fail fast like JWT_SECRET
 
   const db = await initializeDatabase(); // exits the process if the DB is unreachable
 
@@ -46,7 +50,7 @@ async function startServer() {
   attachCameraWebSockets(server, { service: cameraService, relay: cameraRelay, allowedOrigins });
 }
 
-// A boot failure (e.g. missing JWT_SECRET) exits non-zero, as the unhandled rejection used to.
+// A boot failure (e.g. missing JWT_SECRET or ALLOWED_ORIGINS) exits non-zero; the crash guard doesn't cover it.
 startServer().catch((err) => {
   LoggingUtilities.service.error(LOG_TAG, `Startup failed: ${toMessage(err)}`);
   process.exit(1);

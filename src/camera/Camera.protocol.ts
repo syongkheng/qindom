@@ -1,4 +1,4 @@
-// Camera relay wire protocol — see docs/camera-protocol.md (mirrored in fndom and fndom-react-native).
+// Camera relay wire protocol — see docs/camera-protocol.md (master copy; fndom and fndom-react-native point to it).
 
 export const CAMERA_WS_PHONE_PATH = "/camera/ws/phone";
 export const CAMERA_WS_DASHBOARD_PATH = "/camera/ws/dashboard";

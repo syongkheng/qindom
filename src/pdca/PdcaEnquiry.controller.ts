@@ -5,7 +5,8 @@ import { route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { pdcaEnquiryLimiter } from "../middlewares/RateLimiter.js";
 import { AnalyticsSystemService } from "../analytics/AnalyticsSystem.service.js";
-import { isEnquiryOriginAllowed, PDCA_ENQUIRY_SYSTEM, PdcaEnquiryService } from "./PdcaEnquiry.service.js";
+import { isOriginRequiredAndAllowed } from "../analytics/AnalyticsContract.js";
+import { PDCA_ENQUIRY_SYSTEM, PdcaEnquiryService } from "./PdcaEnquiry.service.js";
 import { validateEnquiryBody } from "./PdcaEnquiry.validator.js";
 import { PdcaEnquiryReceivedDto } from "./PdcaEnquiry.types.js";
 
@@ -26,7 +27,7 @@ export default function createPdcaEnquiryController(db: KnexSqlUtilities): Route
     pdcaEnquiryLimiter,
     route("PdcaEnquiryController.POST /enquiry", "Failed to send the enquiry", async (req, cr) => {
       const system = await systems.getActive(PDCA_ENQUIRY_SYSTEM);
-      if (!isEnquiryOriginAllowed(system, req.headers.origin)) throw new Exceptions.ForbiddenAccess();
+      if (!isOriginRequiredAndAllowed(system, req.headers.origin)) throw new Exceptions.ForbiddenAccess();
 
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
       const enquiry = validateEnquiryBody(req.body, event);

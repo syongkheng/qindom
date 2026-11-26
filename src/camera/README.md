@@ -1,7 +1,7 @@
 ## Camera relay
 
 - Live previews and remote start/stop for phones running the recorder app (`fndom-react-native`), viewed and controlled from the fndom `/camera` dashboard. Recordings never leave the phone: only preview JPEGs (~12 fps, 480p), status and commands pass through.
-- **Frozen contract.** The wire protocol (REST shapes, WebSocket messages, close codes, paths) is specified in [`docs/camera-protocol.md`](../../docs/camera-protocol.md) and mirrored in fndom and fndom-react-native. Change all three together.
+- **Frozen contract.** The wire protocol (REST shapes, WebSocket messages, close codes, paths) is specified in [`docs/camera-protocol.md`](../../docs/camera-protocol.md), the master copy (fndom and fndom-react-native point to it). Change the server, dashboard and phone app together.
 - **Live state is in memory** (`CameraRelay`: sockets, latest frame and status per device; `PairingCodeStore`: pairing codes). That only works with a **single PM2 process**: a second process would not see the first one's sockets or codes. A restart drops every socket (clients reconnect with backoff) and unclaimed codes (the phone re-registers); device ↔ user bindings survive in `tb_camera_device`.
 
 | File                   | Role                                                                                             |
@@ -52,7 +52,7 @@ fndom reads: `data` of list/claim (`CameraDevice`), and only the HTTP status of 
 | `/camera/ws/phone`     | phone   | `Authorization: Bearer <device token>` → active device whose owner (if bound) has an active user row (else 401; a soft-deleted owner = unknown token)            |
 | `/camera/ws/dashboard` | browser | `Origin` ∈ `ALLOWED_ORIGINS` (else 403; stands in for CSRF) and the `jwt_token` cookie via `resolveSessionUser` (same check as `MandatoryTokenFilter`; else 401) |
 
-Any other upgrade path → 404; an unparseable one (`//`) → 400; a failing lookup (DB down) → 500.
+Any other upgrade path → 404; an unparseable one (`//`) → 400; a failing lookup (DB down; device token or dashboard session) → 500. Phone upgrades are capped per IP (user decision C3): over 60 in 15 minutes (`CAMERA_PHONE_UPGRADE_LIMIT` / `_WINDOW_MS`, `createUpgradeLimiter` in `middlewares/RateLimiter.ts`, keyed like the Express limiters) → 429 before the token is looked up. Every attempt counts; dashboard upgrades don't.
 
 - Relay rules (`Camera.relay.ts`): frames from unbound phones are dropped; only the latest frame per device is kept; per dashboard and device one frame in flight + one waiting (newest wins); dashboards with > 1 MB buffered get nothing new; status and acks are whitelisted by `Camera.protocol.ts`; commands only reach the user's own online phones (a foreign target is reported `offline`, indistinguishable from an offline one).
 - Limits: frames ≤ 512 KB (payloads over 512 KB + 1 KB close the socket, 1009); JSON text ≤ 8 KB (larger text frames are dropped before decoding); invalid UTF-8 text closes the socket (1007, `ws`).

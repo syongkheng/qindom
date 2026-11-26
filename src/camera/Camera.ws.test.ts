@@ -11,6 +11,11 @@ import { CameraDeviceIdentity } from "./Camera.types.js";
 import { CameraService } from "./Camera.service.js";
 import { PairingCodeStore } from "./Camera.pairing.js";
 import { sha256Hex } from "../utils/HashUtilities.js";
+import {
+  CAMERA_PHONE_UPGRADE_LIMIT,
+  CAMERA_PHONE_UPGRADE_WINDOW_MS,
+  createUpgradeLimiter,
+} from "../middlewares/RateLimiter.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 
 // Real `ws` sockets against attachCameraWebSockets on an ephemeral local port, with a fake
@@ -71,7 +76,10 @@ before(async () => {
     service,
     relay: new TrapRelay(),
     allowedOrigins: [ORIGIN],
-    resolveUser: async (token) => (token === "good" ? { id: 1 } : null),
+    resolveUser: async (token) => {
+      if (token === "dbdown") throw new Error("db down"); // like resolveSessionUser on a failed lookup (M2)
+      return token === "good" ? { id: 1 } : null;
+    },
     heartbeatMs: HEARTBEAT_MS,
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -94,9 +102,9 @@ after(async () => {
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Sends a raw upgrade request and returns the HTTP status line's code (or "closed"). */
-function rawUpgrade(path: string, headers: Record<string, string> = {}): Promise<number | "closed"> {
+function rawUpgrade(path: string, headers: Record<string, string> = {}, targetPort = port): Promise<number | "closed"> {
   return new Promise((resolve) => {
-    const socket = net.connect(port, "127.0.0.1", () => {
+    const socket = net.connect(targetPort, "127.0.0.1", () => {
       const lines = [
         `GET ${path} HTTP/1.1`,
         "Host: localhost",
@@ -192,6 +200,11 @@ describe("upgrade handling", () => {
     assert.equal(await rawUpgrade("/camera/ws/dashboard", { Origin: ORIGIN }), 401);
     assert.equal(await rawUpgrade("/camera/ws/dashboard", { Origin: ORIGIN, Cookie: "jwt_token=bad" }), 401);
     assert.equal(await rawUpgrade("/camera/ws/dashboard", { Origin: ORIGIN, Cookie: "jwt_token=%E0%A4%A" }), 401);
+  });
+
+  test("dashboard: a failing session lookup is a 500 (M2), not a 401; the server keeps serving", async () => {
+    assert.equal(await rawUpgrade("/camera/ws/dashboard", { Origin: ORIGIN, Cookie: "jwt_token=dbdown" }), 500);
+    assert.equal(await rawUpgrade("/camera/ws/dashboard", { Origin: ORIGIN, Cookie: "jwt_token=bad" }), 401);
   });
 
   test("an error while wiring up an accepted socket closes it with 1011", async () => {
@@ -391,5 +404,68 @@ describe("phone upgrade with the real CameraService (soft-deleted owner = unknow
     assert.equal(await upgradeStatus(DELETED_OWNER_TOKEN), unknown);
     assert.equal(await upgradeStatus(ACTIVE_OWNER_TOKEN), 101);
     assert.equal(await upgradeStatus(UNCLAIMED_TOKEN), 101);
+  });
+});
+
+describe("phone upgrade rate limit (C3)", () => {
+  const LIMIT = 3;
+  let lookups = 0;
+  let limitedServer: http.Server;
+  let limitedSockets: CameraWebSockets;
+  let limitedPort: number;
+
+  before(async () => {
+    const relay = new CameraRelay();
+    limitedServer = http.createServer();
+    limitedSockets = attachCameraWebSockets(limitedServer, {
+      service: {
+        async authenticateDevice() {
+          lookups++;
+          return null;
+        },
+        async touch() {},
+      },
+      relay,
+      allowedOrigins: [ORIGIN],
+      resolveUser: async () => null,
+      heartbeatMs: HEARTBEAT_MS,
+      phoneUpgradeLimiter: createUpgradeLimiter({ windowMs: CAMERA_PHONE_UPGRADE_WINDOW_MS, limit: LIMIT }),
+    });
+    await new Promise<void>((resolve) => limitedServer.listen(0, "127.0.0.1", resolve));
+    limitedPort = (limitedServer.address() as AddressInfo).port;
+  });
+
+  after(async () => {
+    limitedSockets.close();
+    await new Promise<void>((resolve) => limitedServer.close(() => resolve()));
+  });
+
+  const bearer = (ip: string) => ({ Authorization: `Bearer ${"x".repeat(43)}`, "X-Real-IP": ip });
+
+  test("default: 60 phone upgrades per 15 minutes per IP", () => {
+    assert.equal(CAMERA_PHONE_UPGRADE_LIMIT, 60);
+    assert.equal(CAMERA_PHONE_UPGRADE_WINDOW_MS, 15 * 60 * 1000);
+  });
+
+  test("over the limit → 429 on the upgrade, without a device lookup; other IPs unaffected", async () => {
+    for (let i = 0; i < LIMIT; i++) {
+      assert.equal(await rawUpgrade("/camera/ws/phone", bearer("203.0.113.7"), limitedPort), 401);
+    }
+    assert.equal(lookups, LIMIT);
+    assert.equal(await rawUpgrade("/camera/ws/phone", bearer("203.0.113.7"), limitedPort), 429);
+    assert.equal(await rawUpgrade("/camera/ws/phone", { "X-Real-IP": "203.0.113.7" }, limitedPort), 429);
+    assert.equal(lookups, LIMIT);
+    assert.equal(await rawUpgrade("/camera/ws/phone", bearer("203.0.113.8"), limitedPort), 401);
+    assert.equal(lookups, LIMIT + 1);
+  });
+
+  test("dashboard upgrades don't count toward the phone limit", async () => {
+    for (let i = 0; i < LIMIT + 2; i++) {
+      assert.equal(
+        await rawUpgrade("/camera/ws/dashboard", { Origin: ORIGIN, "X-Real-IP": "203.0.113.9" }, limitedPort),
+        401,
+      );
+    }
+    assert.equal(await rawUpgrade("/camera/ws/phone", bearer("203.0.113.9"), limitedPort), 401);
   });
 });

@@ -55,10 +55,39 @@ describe("route table + 404", () => {
     assert.equal(json.data.database, "up");
   });
 
-  test("unknown path → JSON 404 envelope", async () => {
+  test("unknown path → registry NotFound body (G2)", async () => {
     const res = await fetch(`${dev.base}/nope`);
     assert.equal(res.status, 404);
-    assert.deepEqual(await res.json(), { code: 404, status: "Not Found", data: "Not Found" });
+    const json = (await res.json()) as { code: number; status: string; data: Record<string, unknown> };
+    assert.equal(json.code, 404);
+    assert.equal(json.status, "EntityNotFoundException");
+    assert.equal(json.data.code, "entity_not_found");
+    assert.equal(json.data.message, "Route not found");
+    assert.equal(typeof json.data.timestamp, "number");
+  });
+
+  test("unknown path under a mounted prefix → the same registry 404 (through the request log)", async () => {
+    const res = await fetch(`${dev.base}/connectivity/nope`, { headers: UA });
+    assert.equal(res.status, 404);
+    const json = (await res.json()) as { status: string; data: { code: string; message: string } };
+    assert.equal(json.status, "EntityNotFoundException");
+    assert.deepEqual([json.data.code, json.data.message], ["entity_not_found", "Route not found"]);
+  });
+
+  test("legacy POST /analytics is gone (Y2) → 404; POST /analytics/heartbeat still routed", async () => {
+    const legacy = await fetch(`${dev.base}/analytics`, {
+      method: "POST",
+      headers: { ...UA, "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "x", sessionId: "s", system: "fndom" }),
+    });
+    assert.equal(legacy.status, 404);
+    assert.equal(((await legacy.json()) as { data: { code: string } }).data.code, "entity_not_found");
+    const heartbeat = await fetch(`${dev.base}/analytics/heartbeat`, {
+      method: "POST",
+      headers: { ...UA, "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    assert.equal(heartbeat.status, 400); // validation ran: the route exists
   });
 
   test("/debug is open in dev and needs a login in prd", async () => {
@@ -136,7 +165,7 @@ describe("CORS", () => {
     });
     assert.equal(res.status, 204);
     assert.equal(res.headers.get("access-control-allow-origin"), ALLOWED);
-    assert.equal(res.headers.get("access-control-allow-methods"), "GET,POST,DELETE,OPTIONS");
+    assert.equal(res.headers.get("access-control-allow-methods"), "GET,POST,OPTIONS"); // G1: no DELETE
     assert.equal(res.headers.get("ratelimit-policy"), null);
   });
 

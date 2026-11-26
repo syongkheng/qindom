@@ -8,12 +8,14 @@ import { AnalyticsSystemService } from "./AnalyticsSystem.service.js";
 import { AnalyticsDashboardService } from "./AnalyticsDashboard.service.js";
 import { AnalyticsReportService } from "./AnalyticsReport.service.js";
 import { AnalyticsAccessService } from "./AnalyticsAccess.service.js";
+import { AnalyticsHeartbeatService } from "./AnalyticsHeartbeat.service.js";
 import { reportRequestProblems } from "./AnalyticsReport.js";
 import {
   parseSummaryHours,
   readRequestMeta,
   validateCollectBody,
   validateGrantBody,
+  validateHeartbeatBody,
   validateSystemBody,
   validateUserIdParam,
 } from "./Analytics.validator.js";
@@ -30,10 +32,12 @@ import {
 
 const REPORT_KEY_HEADER = "x-analytics-key";
 const BAD_REQUEST = 400;
+const ANONYMOUS_USER = "Anonymous";
 
 /**
- * Analytics v1, mounted at /analytics (`mw.std`) after the deprecated AnalyticsLegacy controller.
- * Public routes have their own limiters; JWT is per route because the router mixes both.
+ * Analytics, mounted at /analytics (`mw.std`). JWT is per route because the router mixes public and
+ * logged-in routes; public routes have their own limiters (except the frozen heartbeat).
+ *  POST /heartbeat                                session last-seen upsert (fndom, every 30 s; frozen shape)
  *  POST /collect                                  public ingest (fixed contract, see AnalyticsContract.ts)
  *  POST /report                                   pdca.analytics.report/v1 (viewer key in x-analytics-key, see AnalyticsReport.ts)
  *  GET  /systems                                  systems the caller may view
@@ -51,6 +55,23 @@ export default function createAnalyticsController(db: KnexSqlUtilities): Router 
   const dashboard = new AnalyticsDashboardService(db, systems);
   const reports = new AnalyticsReportService(db, systems);
   const access = new AnalyticsAccessService(db, systems);
+  const heartbeats = new AnalyticsHeartbeatService(db);
+
+  router.post(
+    "/heartbeat",
+    OptionalTokenFilter,
+    route("AnalyticsController.POST /heartbeat", "Failed to record heartbeat", async (req, cr) => {
+      const body = validateHeartbeatBody(req.body);
+      const { ipAddress, userAgent } = readRequestMeta(req);
+      await heartbeats.recordHeartbeat(
+        body,
+        req.user?.username ?? ANONYMOUS_USER,
+        { ipAddress, userAgent },
+        req.logContext,
+      );
+      return cr.ok<AnalyticsRecordedDto>({ message: "Heartbeat recorded successfully." });
+    }),
+  );
 
   router.post(
     "/collect",

@@ -2,8 +2,6 @@ import { MailerUtilities, MailOptions } from "../utils/MailerUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { APP_TIMEZONE } from "../constants/Locale.js";
-import { isOriginAllowed } from "../analytics/AnalyticsContract.js";
-import { RegisteredSystem } from "../analytics/Analytics.types.js";
 import { PdcaEnquiryBody } from "./PdcaEnquiry.types.js";
 
 /**
@@ -34,18 +32,6 @@ const nl2br = (s: string) => esc(s).replace(/\r?\n/g, "<br>");
 /** Read lazily, on call (see config/README.md). */
 export function getLabEmail(): string {
   return process.env[LAB_EMAIL_ENV] || LAB_EMAIL_DEFAULT;
-}
-
-/**
- * Stricter than analytics' `isOriginAllowed`: the Origin header is **required**. Browsers always
- * send it on a cross-site form POST, so this only blocks scripts that would otherwise use the form
- * to send mail (and auto-replies with their own text to any address).
- */
-export function isEnquiryOriginAllowed(
-  system: RegisteredSystem | null | undefined,
-  origin: string | undefined,
-): boolean {
-  return !!system && !!origin && isOriginAllowed(system, origin);
 }
 
 export const isSpam = (enquiry: Pick<PdcaEnquiryBody, "website">) => enquiry.website.trim() !== "";

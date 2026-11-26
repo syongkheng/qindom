@@ -41,3 +41,4 @@ Formats covered by tests: UOB, DBS/POSB, Citibank (local + foreign merchants).
 | ------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | 400    | bad / missing field, amount out of range, unparseable SMS | `invalid_request_<field>` (`amount`, `merchant`, `smsBody`)                                       |
 | 401    | missing / unknown API key                                 | rejected by `RequestApiKeyFilter` before the route; `unauthorized_access` if no user was resolved |
+| 500    | the API-key lookup failed (DB down)                       | plain-string `data` from `RequestApiKeyFilter` (not the bad-key 401; see middlewares README)      |

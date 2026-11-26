@@ -50,12 +50,25 @@ export function resolveScreen(
 }
 
 /**
- * Empty allowlist = no origin restriction. A request without an Origin header (curl, server) is allowed:
- * the check only stops other websites' browsers. PDCA enquiries use the stricter `isEnquiryOriginAllowed`.
+ * Lenient check for `POST /analytics/collect`. Empty allowlist = no origin restriction. A request
+ * without an Origin header (curl, server) is allowed: the check only stops other websites' browsers.
+ * Endpoints that read data or send mail use the strict `isOriginRequiredAndAllowed`.
  */
 export function isOriginAllowed(system: Pick<RegisteredSystem, "allowedOrigins">, origin: string | undefined): boolean {
   if (!origin || system.allowedOrigins.length === 0) return true;
   return system.allowedOrigins.includes(origin);
+}
+
+/**
+ * Strict variant (`POST /analytics/report`, user decision Y1; `POST /pdca/enquiry`): the system must exist
+ * and the Origin header is **required**. Browsers always send it on a cross-site POST, so this only blocks
+ * scripts. Then the same allowlist rule as `isOriginAllowed`.
+ */
+export function isOriginRequiredAndAllowed(
+  system: Pick<RegisteredSystem, "allowedOrigins"> | null | undefined,
+  origin: string | undefined,
+): boolean {
+  return !!system && !!origin && isOriginAllowed(system, origin);
 }
 
 export function normaliseEvent(system: RegisteredSystem, req: AnalyticsCollectBody, now = Date.now()): NormalisedEvent {

@@ -1,6 +1,6 @@
 ## Middlewares
 
-The request pipeline. Global order (see `src/app.ts` and MINDMAP "Middleware stack"): CORS → security headers → `globalLimiter` → cookieParser / body parsers → the route's preset chain → router → 404 catch-all → `ErrorHandler`.
+The request pipeline. Global order (see `src/app.ts` and MINDMAP "Middleware stack"): CORS → security headers → `globalLimiter` → cookieParser / body parsers → the route's preset chain → router → 404 catch-all (registry `Exceptions.NotFound`) → `ErrorHandler`.
 
 Route groups get their chain **only** from `presets.ts` (`mw.*`); routers add per-route `MandatoryTokenFilter` / `OptionalTokenFilter` / limiters only when some of their routes need them.
 
@@ -31,24 +31,26 @@ Route groups get their chain **only** from `presets.ts` (`mw.*`); routers add pe
 ### MandatoryTokenFilter / OptionalTokenFilter / resolveSessionUser (`TokenFilter.ts`)
 
 - JWT from the httpOnly `jwt_token` cookie, verified (HS256) and compared with `tb_aa_user.token` for an active user (`username_system`, `record_status = 'A'`): logout / password change revoke it. `req.user` = JWT claims + `id` and `roles` **from the DB row**.
-- CSRF double-submit on non-GET/HEAD/OPTIONS: `X-CSRF-Token` header must equal the `csrf_token` cookie (timing-safe). Checked **after** the session.
+- CSRF double-submit on non-GET/HEAD/OPTIONS: `X-CSRF-Token` header must equal the `csrf_token` cookie (UTF-8 byte lengths compared first, then timing-safe; a same-character-count header with more bytes is a mismatch → 403, user decision M3). Checked **after** the session.
 - Mandatory answers (fndom's HttpClient logs out on `401` + `status: "token_invalid"`, so these keep their custom envelope status and string `data`):
 
-| Status | `status`        | `data`                                                  | When                                                                |
-| ------ | --------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
-| 401    | `token_invalid` | `Authentication required.`                              | no cookie                                                           |
-| 401    | `token_invalid` | `Your session has expired. Please log in again.`        | JWT expired                                                         |
-| 401    | `token_invalid` | `Invalid authentication. Please log in again.`          | bad JWT, DB lookup failed, CSRF header with a different byte length |
-| 401    | `token_invalid` | `Your session is no longer valid. Please log in again.` | token rotated/revoked, user gone or soft-deleted                    |
-| 403    | `csrf_invalid`  | `Invalid or missing CSRF token.`                        | valid session, CSRF missing/mismatched                              |
+| Status | `status`        | `data`                                                  | When                                                                                              |
+| ------ | --------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 401    | `token_invalid` | `Authentication required.`                              | no cookie                                                                                         |
+| 401    | `token_invalid` | `Your session has expired. Please log in again.`        | JWT expired                                                                                       |
+| 401    | `token_invalid` | `Invalid authentication. Please log in again.`          | bad JWT                                                                                           |
+| 401    | `token_invalid` | `Your session is no longer valid. Please log in again.` | token rotated/revoked, user gone or soft-deleted                                                  |
+| 403    | `csrf_invalid`  | `Invalid or missing CSRF token.`                        | valid session, CSRF missing/mismatched                                                            |
+| 500    | `Ko`            | `Failed to check your session. Please try again later.` | the session lookup failed (DB down; user decision M2), logged with its cause; generic text in prd |
 
-- Optional: never 401. No/bad/revoked token or failed lookup → visitor (`req.user` unset). A valid session on a mutating request still needs CSRF → the same 403.
-- `resolveSessionUser(token)`: the same check for the camera dashboard WebSocket (returns user or null; CSRF is replaced by an Origin check there).
+- Optional: never 401. No/bad/revoked token → visitor (`req.user` unset). A valid session on a mutating request still needs CSRF → the same 403. A failed lookup → the same 500 as Mandatory (M2).
+- `resolveSessionUser(token)`: the same check for the camera dashboard WebSocket (returns user or null for a missing/invalid/revoked token; a failed lookup throws → the upgrade answers 500 (M2); CSRF is replaced by an Origin check there).
 
 ### RequestApiKeyFilter (`ApiKeyFilter.ts`)
 
-- `x-api-key: <prefix>_<value>`; each mount names its accepted prefixes (only `ss` today). Looks up `sha256Hex(value)` in the prefix's table (`tb_ss_api_key`, active keys) and checks the owner has an active user row (`record_status = 'A'`; a soft-deleted owner counts as gone). The owner's id goes to `logContext.metadata.userId` → read it with `getApiKeyUserId(req)`.
-- Any failure (missing/empty header, wrong prefix, unknown or revoked key, owner row missing or soft-deleted, DB failure) → **401** `{ code: 401, status: "Ko", data: "Unauthorized. Missing or invalid API key." }` (Shortcuts contract, kept as a plain string). DB failures are also recorded in the request tree.
+- `x-api-key: <prefix>_<value>`, exactly one `_` (keys are hex; `ss_<key>_anything` is an invalid key, user decision M4); each mount names its accepted prefixes (only `ss` today). Looks up `sha256Hex(value)` in the prefix's table (`tb_ss_api_key`, active keys) and checks the owner has an active user row (`record_status = 'A'`; a soft-deleted owner counts as gone). The owner's id goes to `logContext.metadata.userId` → read it with `getApiKeyUserId(req)`.
+- Any key failure (missing/empty header, malformed, wrong prefix, unknown or revoked key, owner row missing or soft-deleted) → **401** `{ code: 401, status: "Ko", data: "Unauthorized. Missing or invalid API key." }` (Shortcuts contract, kept as a plain string).
+- A DB failure → **500** `{ code: 500, status: "Ko", data: "Failed to check the API key. Please try again later." }` (generic text in prd; user decision M2), logged to PM2 and the request tree with its cause.
 - The raw key is never stored on the log context.
 
 ### Rate limiters (`RateLimiter.ts`)
@@ -74,6 +76,8 @@ Per-IP unless noted (X-Real-IP, IPv6 collapsed to /56, socket address if the hea
 | `cameraClaimIpLimiter`      | 10 / 15 min    | failures only                                                                         |
 | `cameraClaimUserLimiter`    | 5 / 15 min     | failures only, keyed on `req.user.id`                                                 |
 | `pdcaEnquiryLimiter`        | 5 / 10 min     |                                                                                       |
+
+Raw WebSocket upgrades never reach Express, so `createUpgradeLimiter({ windowMs, limit })` is a small synchronous fixed-window counter with the same key (X-Real-IP, IPv6 /56, socket address): `allow(req)` counts the attempt and returns whether it is within the limit. Used for `/camera/ws/phone`: `CAMERA_PHONE_UPGRADE_LIMIT` 60 per `CAMERA_PHONE_UPGRADE_WINDOW_MS` 15 min → 429 on the upgrade before any DB lookup.
 
 ### ErrorHandler
 

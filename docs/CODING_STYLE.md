@@ -47,6 +47,12 @@ Each feature folder `src/<module>/` holds:
 - Passwords are capped at 72 UTF-8 bytes (`Buffer.byteLength`); a too-long new password → `weak_password`, an existing one → `invalid_request_<field>`.
 - PM2 lines (`LoggingUtilities.service.*`) are email-masked centrally; still never log raw personal data on purpose.
 - Data migrations that rewrite JSON columns use a pure exported (unit-tested) function + read-modify-write in JS.
+- Auth middlewares tell "credentials invalid" (401/403, frozen bodies) apart from "check failed" (DB/infra → `handleException` → 500); never answer an infrastructure failure as an auth failure.
+- Byte-sensitive compares (`timingSafeEqual`) compare `Buffer.byteLength`, never `string.length`.
+- Raw WebSocket upgrade handlers need their own limiter (`createUpgradeLimiter`); express-rate-limit never runs on them.
+- Origin checks: public ingest (`/analytics/collect`) may be lenient; anything that reads data or sends mail uses `isOriginRequiredAndAllowed`.
+- Specs shared across repos live in one master copy in qindom `docs/` (e.g. `docs/camera-protocol.md`); other repos link to it.
+- Uncaught errors while serving are logged by `config/crashGuard.ts` and the process keeps running; only boot failures exit.
 - Rate limiters are built with the `limiter({...})` factory in `RateLimiter.ts`, windows via `Time`; route-group middleware chains live only in `presets.ts` (`mw.*`).
 - The app is built by `createApp()` in `src/app.ts` (route table: `createRoutes`); `index.ts` only boots. Mount changes go in `app.ts`.
 - Auth goes on the mount in `app.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
@@ -213,6 +219,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | platform decisions: crash guard (log, keep serving); phone WS upgrade limiter 60/15 min/IP; camera protocol master in qindom docs (fndom copy deleted; fndom-react-native pending); CORS without DELETE; registry 404; ALLOWED_ORIGINS fail-fast; DB failure in auth filters → 500; CSRF byte compare → 403; `ss_<key>_x` rejected; `/report` requires Origin; legacy `POST /analytics` removed; fndom login dialog stays on the email step on 429/network/other errors. |
 | 2026-11-26 | auth decisions: password check limiter 10 failures/15 min/user; preflight limiter; owner can't remove own SYSTEM_R5; OTP via randomInt; password email without timestamp; caps (email 255, system 256, password 72 bytes); emails masked in PM2 logs; PPHS roles stripped (migration 20261126000300); PermissionService logs. |
 | 2026-11-26 | itinerary decisions: image ownership via `tb_tg_image.created_by_id` (legacy NULL allowed); blank → NULL on update (absent = unchanged); public views drop internal ids, owner sessionId and challenge; fndom maxlengths. M1: no key migration. G3: unchanged (deploy.sh + health check). |
 | 2026-11-26 | User: HDB PPHS module removed (not working, unused); nearby bus-stop/MRT lookups moved to `/lta`; tables dropped by migration 20261126000100. Wedding: no PIN in email (W1), dead jessikheng constant removed (W2), non-atomic submit accepted (W3). Unused files deleted (A11/M5/Y4). |

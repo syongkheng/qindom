@@ -7,7 +7,6 @@ import {
   AnalyticsCollectScreen,
   AnalyticsGrantBody,
   AnalyticsHeartbeatBody,
-  AnalyticsLegacyEventBody,
   AnalyticsRequestMeta,
   AnalyticsSystemBody,
   SCREEN_SIZES,
@@ -187,28 +186,7 @@ export function parseStoredOrigins(value: unknown): string[] | null {
   return Array.isArray(value) && value.every((v) => typeof v === "string") ? value : null;
 }
 
-/**
- * Legacy `POST /analytics` (deprecated, frozen): only the presence of `event`, `sessionId` and `system`
- * is checked, exactly as before; values are stored as sent.
- */
-export function validateLegacyEventBody(body: unknown): AnalyticsLegacyEventBody {
-  const b: Json = isObject(body) ? body : {};
-  if (!b.event) throw new Exceptions.InvalidRequest("event");
-  if (!b.sessionId) throw new Exceptions.InvalidRequest("sessionId");
-  if (!b.system) throw new Exceptions.InvalidRequest("system");
-  const { timestamp } = b;
-  return {
-    event: b.event as string,
-    properties: (b.properties ?? {}) as Json,
-    page: (b.page ?? "") as string,
-    referrer: (b.referrer ?? "") as string,
-    sessionId: b.sessionId as string,
-    system: b.system as string,
-    timestamp: typeof timestamp === "string" ? new Date(timestamp).getTime() : ((timestamp ?? Date.now()) as number),
-  };
-}
-
-/** Legacy `POST /analytics/heartbeat` (deprecated, frozen): presence checks only. */
+/** `POST /analytics/heartbeat` (frozen): presence checks only. */
 export function validateHeartbeatBody(body: unknown): AnalyticsHeartbeatBody {
   const b: Json = isObject(body) ? body : {};
   if (!b.sessionId) throw new Exceptions.InvalidRequest("sessionId");

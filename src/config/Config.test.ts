@@ -5,7 +5,9 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import db from "./db/mysql.js";
 import { DB_PORT, readDbConnection } from "./db/connection.js";
-import { createCorsOptions, parseAllowedOrigins } from "./cors.js";
+import { EventEmitter } from "node:events";
+import { createCorsOptions, parseAllowedOrigins, requireAllowedOrigins } from "./cors.js";
+import { CRASH_GUARD_TAG, describeCrash, installCrashGuard } from "./crashGuard.js";
 import { BaseException, ForbiddenAccessException } from "../exceptions/AppExceptions.js";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -142,10 +144,66 @@ describe("CORS", () => {
     assert.equal(err.clientMessage, "CORS: origin 'https://evil.example' not allowed");
   });
 
-  test("credentials on, 204 preflight, methods unchanged", () => {
+  test("credentials on, 204 preflight, methods GET/POST/OPTIONS only (G1: no DELETE)", () => {
     const options = createCorsOptions([]);
     assert.equal(options.credentials, true);
     assert.equal(options.optionsSuccessStatus, 204);
-    assert.equal(options.methods, "GET,POST,DELETE,OPTIONS");
+    assert.equal(options.methods, "GET,POST,OPTIONS");
+  });
+
+  test("requireAllowedOrigins: boot fails on unset/empty/blank ALLOWED_ORIGINS (G4), else the parsed list", () => {
+    for (const raw of [undefined, "", "   ", " , ,"]) {
+      assert.throws(() => requireAllowedOrigins(raw), /ALLOWED_ORIGINS is not set/, String(raw));
+    }
+    assert.deepEqual(requireAllowedOrigins(" https://a.example ,"), ["https://a.example"]);
+  });
+
+  test("index.ts checks ALLOWED_ORIGINS at boot with requireAllowedOrigins", () => {
+    const index = readFileSync(join(SRC_DIR, "index.ts"), "utf8");
+    assert.match(index, /requireAllowedOrigins\(process\.env\.ALLOWED_ORIGINS\)/);
+    assert.doesNotMatch(index, /parseAllowedOrigins/);
+  });
+});
+
+describe("crashGuard (C2)", () => {
+  function setup() {
+    const target = new EventEmitter();
+    const logged: { tag: string; message: string }[] = [];
+    installCrashGuard(target, (tag, message) => logged.push({ tag, message }));
+    return { target, logged };
+  }
+
+  test("an uncaught exception is logged with its tag, message and stack; nothing exits", (t) => {
+    const exit = t.mock.method(process, "exit", () => undefined as never);
+    const { target, logged } = setup();
+    const error = new Error("stream blew up");
+    target.emit("uncaughtException", error);
+    assert.equal(logged.length, 1);
+    assert.equal(logged[0].tag, CRASH_GUARD_TAG);
+    assert.match(logged[0].message, /^\[uncaughtException\] process kept running: stream blew up\n/);
+    assert.ok(logged[0].message.includes(error.stack!));
+    assert.equal(exit.mock.callCount(), 0);
+  });
+
+  test("an unhandled rejection is logged (non-Error reasons too); nothing exits", (t) => {
+    const exit = t.mock.method(process, "exit", () => undefined as never);
+    const { target, logged } = setup();
+    target.emit("unhandledRejection", new Error("forgotten promise"));
+    target.emit("unhandledRejection", "plain reason");
+    assert.match(logged[0].message, /^\[unhandledRejection\] process kept running: forgotten promise\n/);
+    assert.equal(logged[1].message, "[unhandledRejection] process kept running: plain reason");
+    assert.equal(exit.mock.callCount(), 0);
+  });
+
+  test("describeCrash: message + stack for errors, String() otherwise", () => {
+    const error = new Error("x");
+    assert.equal(describeCrash(error), `x\n${error.stack}`);
+    assert.equal(describeCrash(42), "42");
+  });
+
+  test("index.ts installs the guard; boot failures still exit 1", () => {
+    const index = readFileSync(join(SRC_DIR, "index.ts"), "utf8");
+    assert.match(index, /^installCrashGuard\(\);$/m);
+    assert.match(index, /startServer\(\)\.catch\([\s\S]*process\.exit\(1\)/);
   });
 });

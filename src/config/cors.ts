@@ -1,8 +1,8 @@
 import type { CorsOptions } from "cors";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
-// DELETE stays allowed for now even though no route uses it any more (mutations are POST).
-const CORS_METHODS = "GET,POST,DELETE,OPTIONS";
+// Reads are GET, mutations POST (user decision G1: DELETE dropped, no route or fndom call uses it).
+const CORS_METHODS = "GET,POST,OPTIONS";
 const PREFLIGHT_STATUS = 204;
 
 /** `ALLOWED_ORIGINS` is a comma-separated list; blanks and surrounding spaces are ignored. */
@@ -11,6 +11,18 @@ export function parseAllowedOrigins(raw: string | undefined): string[] {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+}
+
+/**
+ * Boot check (user decision G4): an empty/blank `ALLOWED_ORIGINS` would 403 every browser origin, so
+ * the server refuses to start, like a missing `JWT_SECRET` / `DB_URL`.
+ */
+export function requireAllowedOrigins(raw: string | undefined): string[] {
+  const origins = parseAllowedOrigins(raw);
+  if (origins.length === 0) {
+    throw new Error("ALLOWED_ORIGINS is not set (comma-separated browser origins, e.g. https://example.com)");
+  }
+  return origins;
 }
 
 /**

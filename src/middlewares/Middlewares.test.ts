@@ -31,6 +31,7 @@ const USER_TABLE = "tb_aa_user";
 const SS_KEY_TABLE = "tb_ss_api_key";
 const CSRF = "c".repeat(64);
 const SECRET = "middleware-test-secret";
+const SESSION_CHECK_FAILED = "Failed to check your session. Please try again later.";
 
 // ── Fake DB (honours columns, equality WHERE) ─────────────────────────────────
 
@@ -302,13 +303,14 @@ describe("MandatoryTokenFilter", () => {
     );
   });
 
-  test("DB failure during the revocation lookup → 401 'Invalid authentication'", async () => {
+  test("DB failure during the revocation lookup → 500 (M2), not 401, recorded with its cause", async () => {
     const token = addUser(1, "amy");
     failDb = true;
-    tokenInvalid(
-      await request("GET", "/auth", { headers: { Cookie: authCookie(token) } }),
-      "Invalid authentication. Please log in again.",
-    );
+    const { res, flush } = await withFlush(() => request("GET", "/auth", { headers: { Cookie: authCookie(token) } }));
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.json, { code: 500, status: "Ko", data: SESSION_CHECK_FAILED });
+    assert.notEqual(res.json.status, "token_invalid"); // fndom only logs out on 401 + token_invalid
+    assert.ok(flush.context.events.some((e) => e.type === "ERROR" && e.detail === "Error: db down"));
   });
 
   test("GET with a valid session needs no CSRF header; id and roles come from the DB row, not the JWT", async () => {
@@ -360,11 +362,11 @@ describe("MandatoryTokenFilter", () => {
     assert.equal(res.json.user.id, 1);
   });
 
-  test("pinned: CSRF header with the cookie's length but more bytes (latin-1 'é' vs 'e') → 401 'Invalid authentication'", async () => {
+  test("CSRF header with the cookie's length but more bytes (latin-1 'é' vs 'e') → 403 csrf_invalid (M3)", async () => {
     const token = addUser(1, "amy");
     const res = await postJson("/auth", {}, { Cookie: authCookie(token, "e"), "X-CSRF-Token": "\u00e9" });
-    assert.equal(res.status, 401);
-    assert.equal(res.json.data, "Invalid authentication. Please log in again.");
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.json, { code: 403, status: "csrf_invalid", data: "Invalid or missing CSRF token." });
   });
 
   test("failures are recorded on the request tree's JWT event", async () => {
@@ -432,19 +434,19 @@ describe("OptionalTokenFilter", () => {
     assert.equal(res.json.user.id, 3);
   });
 
-  test("pinned: CSRF header with the cookie's length but more bytes → visitor (not 403)", async () => {
+  test("CSRF header with the cookie's length but more bytes → 403 csrf_invalid (M3)", async () => {
     const token = addUser(3, "amy");
     const res = await postJson("/optional", {}, { Cookie: authCookie(token, "e"), "X-CSRF-Token": "\u00e9" });
-    assert.equal(res.status, 200);
-    assert.equal(res.json.user, null);
+    assert.equal(res.status, 403);
+    assert.equal(res.json.status, "csrf_invalid");
   });
 
-  test("DB failure → visitor", async () => {
+  test("DB failure → 500 (M2), not a silent visitor", async () => {
     const token = addUser(3, "amy");
     failDb = true;
     const res = await postJson("/optional", {}, { Cookie: authCookie(token) });
-    assert.equal(res.status, 200);
-    assert.equal(res.json.user, null);
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.json, { code: 500, status: "Ko", data: SESSION_CHECK_FAILED });
   });
 });
 
@@ -453,7 +455,7 @@ describe("OptionalTokenFilter", () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe("resolveSessionUser", () => {
-  test("missing / garbage / revoked / DB failure → null; valid → user from the DB row", async () => {
+  test("missing / garbage / revoked → null; DB failure throws (M2); valid → user from the DB row", async () => {
     assert.equal(await resolveSessionUser(undefined), null);
     assert.equal(await resolveSessionUser(""), null);
     assert.equal(await resolveSessionUser("garbage"), null);
@@ -465,7 +467,7 @@ describe("resolveSessionUser", () => {
     assert.equal(user?.username, "amy");
 
     failDb = true;
-    assert.equal(await resolveSessionUser(token), null);
+    await assert.rejects(resolveSessionUser(token), /db down/);
     failDb = false;
 
     tables[USER_TABLE][0].token = "rotated";
@@ -513,10 +515,16 @@ describe("RequestApiKeyFilter", () => {
     unauthorized(await withKey(`ss_${RAW}`));
   });
 
-  test("DB failure → 401 (not 500)", async () => {
+  test("DB failure → 500 (M2), not the bad-key 401", async () => {
     addSsKey(1, RAW);
     failDb = true;
-    unauthorized(await withKey(`ss_${RAW}`));
+    const res = await withKey(`ss_${RAW}`);
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.json, {
+      code: 500,
+      status: "Ko",
+      data: "Failed to check the API key. Please try again later.",
+    });
   });
 
   test("valid key → passes and exposes the owner's id to getApiKeyUserId", async () => {
@@ -541,10 +549,13 @@ describe("RequestApiKeyFilter", () => {
     assert.deepEqual(deletedOwner.json, unknownKey.json);
   });
 
-  test("pinned: only the segment after the first '_' is hashed (trailing '_…' ignored)", async () => {
+  test("extra '_' segments → the same 401 as an invalid key, without a DB lookup (M4)", async () => {
     tables[USER_TABLE].push({ id: 9, username: "amy", record_status: "A" });
     addSsKey(9, RAW);
-    assert.equal((await withKey(`ss_${RAW}_anything`)).status, 200);
+    unauthorized(await withKey(`ss_${RAW}_anything`));
+    unauthorized(await withKey(`ss_${RAW}_`));
+    assert.equal(findOneCalls.length, 0);
+    assert.equal((await withKey(`ss_${RAW}`)).status, 200);
   });
 
   test("the raw key never reaches the request tree", async () => {
@@ -555,11 +566,11 @@ describe("RequestApiKeyFilter", () => {
     assert.ok(!JSON.stringify(flush.context).includes(RAW));
   });
 
-  test("a failed lookup is answered 401 but recorded as an exception in the request tree", async () => {
+  test("a failed lookup is answered 500 and recorded as an exception in the request tree", async () => {
     addSsKey(1, RAW);
     failDb = true;
     const { res, flush } = await withFlush(() => withKey(`ss_${RAW}`));
-    unauthorized(res);
+    assert.equal(res.status, 500);
     assert.ok(flush.context.events.some((e) => e.type === "ERROR" && e.detail === "Error: db down"));
   });
 
@@ -1065,6 +1076,34 @@ describe("Rate limiters", () => {
     assert.equal((await hit("cameraClaimUserLimiter", { "x-test-user": "78" }, 400)).status, 400);
     for (let i = 0; i < 5; i++) await hit("cameraClaimUserLimiter", { "X-Real-IP": ip() }, 400);
     assert.equal((await hit("cameraClaimUserLimiter", { "X-Real-IP": ip() }, 400)).status, 429);
+  });
+});
+
+describe("createUpgradeLimiter (raw WebSocket upgrades)", () => {
+  const upgradeReq = (ip: string) =>
+    ({ headers: { "x-real-ip": ip }, socket: { remoteAddress: "127.0.0.1" } }) as unknown as http.IncomingMessage;
+
+  test("fixed window per IP: `limit` allowed, then refused until the window ends", () => {
+    let time = 1_000;
+    const limiter = Limiters.createUpgradeLimiter({ windowMs: 100, limit: 2, now: () => time });
+    assert.deepEqual(
+      [1, 2, 3].map(() => limiter.allow(upgradeReq("10.0.0.1"))),
+      [true, true, false],
+    );
+    assert.equal(limiter.allow(upgradeReq("10.0.0.2")), true); // own bucket
+    time += 99;
+    assert.equal(limiter.allow(upgradeReq("10.0.0.1")), false);
+    time += 1;
+    assert.equal(limiter.allow(upgradeReq("10.0.0.1")), true); // window reset
+  });
+
+  test("keyed like the Express limiters: IPv6 collapses to /56, socket address without X-Real-IP", () => {
+    const limiter = Limiters.createUpgradeLimiter({ windowMs: 1_000, limit: 1 });
+    assert.equal(limiter.allow(upgradeReq("2001:db8:abcd:1200::1")), true);
+    assert.equal(limiter.allow(upgradeReq("2001:db8:abcd:12ff::2")), false);
+    const bare = { headers: {}, socket: { remoteAddress: "192.0.2.1" } } as unknown as http.IncomingMessage;
+    assert.equal(limiter.allow(bare), true);
+    assert.equal(limiter.allow(bare), false);
   });
 });
 

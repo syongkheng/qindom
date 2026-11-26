@@ -3,7 +3,7 @@
 Contact form for the PDCA website (dental-directory M21). **Public.** **Stores nothing**: it emails the lab and auto-replies to the visitor.
 
 - Mounted at `/pdca` with `[RestRequestLogger, stripPersonalDataFromLog, RequestHeaderFilter]`. `stripPersonalDataFromLog` (`PdcaEnquiry.middleware.ts`) replaces the logged body with field lengths, so personal data never reaches logs or Telegram.
-- Origin must be in the `dental-directory` analytics system's `allowed_origins` (and in `ALLOWED_ORIGINS` for CORS), otherwise 403. **The `Origin` header is required** (`isEnquiryOriginAllowed`, stricter than analytics' `isOriginAllowed`), so scripts can't use the form to send mail.
+- Origin must be in the `dental-directory` analytics system's `allowed_origins` (and in `ALLOWED_ORIGINS` for CORS), otherwise 403. **The `Origin` header is required** (`isOriginRequiredAndAllowed` from `analytics/AnalyticsContract.ts`, shared with `POST /analytics/report`; `/analytics/collect` uses the lenient `isOriginAllowed`), so scripts can't use the form to send mail.
 - `pdcaEnquiryLimiter`: 5 per 10 min per IP.
 
 ---

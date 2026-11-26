@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isOriginAllowed, normaliseEvent, resolveScreen } from "./AnalyticsContract.js";
+import { isOriginAllowed, isOriginRequiredAndAllowed, normaliseEvent, resolveScreen } from "./AnalyticsContract.js";
 import { validateCollectBody } from "./Analytics.validator.js";
 import { RegisteredSystem } from "./Analytics.types.js";
 import { BaseException } from "../exceptions/AppExceptions.js";
@@ -82,6 +82,17 @@ test("origin allowlist: empty = open, otherwise exact match; no Origin header pa
   assert.equal(isOriginAllowed(locked, "https://jessikheng.com"), true);
   assert.equal(isOriginAllowed(locked, "https://evil.example"), false);
   assert.equal(isOriginAllowed(locked, undefined), true);
+});
+
+test("strict origin check (report, pdca): Origin required and system required, then the same allowlist rule", () => {
+  const locked = { ...wedding, allowedOrigins: ["https://jessikheng.com"] };
+  assert.equal(isOriginRequiredAndAllowed(locked, "https://jessikheng.com"), true);
+  assert.equal(isOriginRequiredAndAllowed(locked, undefined), false);
+  assert.equal(isOriginRequiredAndAllowed(locked, ""), false);
+  assert.equal(isOriginRequiredAndAllowed(locked, "https://evil.example"), false);
+  assert.equal(isOriginRequiredAndAllowed(wedding, "https://any.example"), true); // empty allowlist
+  assert.equal(isOriginRequiredAndAllowed(wedding, undefined), false);
+  assert.equal(isOriginRequiredAndAllowed(null, "https://jessikheng.com"), false);
 });
 
 test("timestamps far from server time are replaced with server time", () => {

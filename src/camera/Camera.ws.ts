@@ -6,6 +6,12 @@ import { toMessage } from "../utils/ErrorUtilities.js";
 import { clientIp } from "../utils/RequestUtilities.js";
 import { JWT_COOKIE } from "../utils/AuthCookieUtilities.js";
 import { resolveSessionUser } from "../middlewares/TokenFilter.js";
+import {
+  CAMERA_PHONE_UPGRADE_LIMIT,
+  CAMERA_PHONE_UPGRADE_WINDOW_MS,
+  createUpgradeLimiter,
+  UpgradeLimiter,
+} from "../middlewares/RateLimiter.js";
 import { Time } from "../constants/Time.js";
 import { CameraService } from "./Camera.service.js";
 import { CameraRelay } from "./Camera.relay.js";
@@ -32,6 +38,7 @@ const HttpStatus = {
   UNAUTHORIZED: { code: 401, reason: "Unauthorized" },
   FORBIDDEN: { code: 403, reason: "Forbidden" },
   NOT_FOUND: { code: 404, reason: "Not Found" },
+  TOO_MANY_REQUESTS: { code: 429, reason: "Too Many Requests" },
   INTERNAL: { code: 500, reason: "Internal Server Error" },
 } as const;
 type HttpStatus = (typeof HttpStatus)[keyof typeof HttpStatus];
@@ -45,6 +52,8 @@ export interface CameraWebSocketDeps {
   allowedOrigins: string[];
   resolveUser?: SessionUserResolver;
   heartbeatMs?: number;
+  /** Per-IP cap on phone upgrades (default 60 / 15 min); injectable for tests. */
+  phoneUpgradeLimiter?: UpgradeLimiter;
 }
 
 export interface CameraWebSockets {
@@ -117,7 +126,8 @@ const toText = (data: RawData): string | null => {
 
 /**
  * Handles HTTP upgrades for the camera relay on the Express server:
- *  - /camera/ws/phone      — `Authorization: Bearer <device token>`
+ *  - /camera/ws/phone      — `Authorization: Bearer <device token>`; 60 upgrades / 15 min per IP,
+ *    over that → 429 before any DB lookup
  *  - /camera/ws/dashboard  — session cookie + Origin in ALLOWED_ORIGINS (browsers
  *    can't send the CSRF header on a WebSocket, so Origin stands in for it)
  * Any other upgrade path is refused. Every socket/timer callback is guarded: a bad client
@@ -126,6 +136,9 @@ const toText = (data: RawData): string | null => {
 export function attachCameraWebSockets(server: Server, deps: CameraWebSocketDeps): CameraWebSockets {
   const { service, relay, allowedOrigins } = deps;
   const resolveUser = deps.resolveUser ?? resolveSessionUser;
+  const phoneUpgradeLimiter =
+    deps.phoneUpgradeLimiter ??
+    createUpgradeLimiter({ windowMs: CAMERA_PHONE_UPGRADE_WINDOW_MS, limit: CAMERA_PHONE_UPGRADE_LIMIT });
   const wss = new WebSocketServer({
     noServer: true,
     // Frames are already JPEG; compression would only cost CPU and latency.
@@ -243,8 +256,10 @@ export function attachCameraWebSockets(server: Server, deps: CameraWebSocketDeps
     try {
       socket.on("error", () => socket.destroy());
       const path = upgradePath(req.url);
-      if (path === CAMERA_WS_PHONE_PATH) run("phone", handlePhone(req, socket, head), socket);
-      else if (path === CAMERA_WS_DASHBOARD_PATH) run("dashboard", handleDashboard(req, socket, head), socket);
+      if (path === CAMERA_WS_PHONE_PATH) {
+        if (!phoneUpgradeLimiter.allow(req)) return rejectUpgrade(socket, HttpStatus.TOO_MANY_REQUESTS);
+        run("phone", handlePhone(req, socket, head), socket);
+      } else if (path === CAMERA_WS_DASHBOARD_PATH) run("dashboard", handleDashboard(req, socket, head), socket);
       else rejectUpgrade(socket, path === null ? HttpStatus.BAD_REQUEST : HttpStatus.NOT_FOUND);
     } catch (err) {
       logError("upgrade", err);

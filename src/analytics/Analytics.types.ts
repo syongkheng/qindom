@@ -108,24 +108,12 @@ export interface AnalyticsRequestMeta {
   userAgent: string;
 }
 
-/** Acknowledgement of `/collect` and the legacy ingest routes. */
+/** Acknowledgement of `/collect` and `/heartbeat`. */
 export interface AnalyticsRecordedDto {
   message: string;
 }
 
-// ── Legacy (deprecated): POST /analytics and /analytics/heartbeat ─────────────
-
-/** Only presence of `event`, `sessionId` and `system` is checked (frozen legacy behaviour). */
-export interface AnalyticsLegacyEventBody {
-  event: string;
-  properties: Record<string, unknown>;
-  page: string;
-  referrer: string;
-  sessionId: string;
-  system: string;
-  /** Epoch ms; ISO strings are converted. NaN (unparseable string) falls back to server time. */
-  timestamp: number;
-}
+// ── POST /analytics/heartbeat (frozen) ────────────────────────────────────────
 
 export interface AnalyticsHeartbeatBody {
   sessionId: string;

@@ -12,7 +12,6 @@ import { RecordStatus } from "../constants/RecordStatus.js";
 import { BaseException } from "../exceptions/AppExceptions.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import createAnalyticsController from "./Analytics.controller.js";
-import createAnalyticsLegacyController from "./AnalyticsLegacy.controller.js";
 import { AnalyticsSystemService, toRegisteredSystem } from "./AnalyticsSystem.service.js";
 import { AnalyticsReportService, generateReadKey, readKeyMatches } from "./AnalyticsReport.service.js";
 import { AnalyticsAccessService } from "./AnalyticsAccess.service.js";
@@ -242,10 +241,11 @@ describe("AnalyticsReportService", () => {
     assert.equal((await reports.authorise("pdcadental.com", PDCA_ORIGIN, READ_KEY)).key, "dental-directory");
   });
 
-  test("authorise: a request without an Origin header is let through when the key is right (current behaviour)", async () => {
+  test("authorise: a request without an Origin header is refused even with the right key (Y1)", async () => {
     const db = fakeDb();
     seed(db);
-    assert.equal((await services(db).reports.authorise("pdcadental.com", undefined, READ_KEY)).key, "dental-directory");
+    await rejects(services(db).reports.authorise("pdcadental.com", undefined, READ_KEY), "forbidden_access", 403);
+    await rejects(services(db).reports.authorise("pdcadental.com", "", READ_KEY), "forbidden_access", 403);
   });
 
   test("authorise: a disabled system or one with no key is refused", async () => {
@@ -531,7 +531,6 @@ describe("HTTP /analytics", () => {
       next();
     };
     app.use(fakeLogContext);
-    app.use("/analytics", createAnalyticsLegacyController(asDb(db)));
     app.use("/analytics", createAnalyticsController(asDb(db)));
     server = app.listen(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
@@ -608,7 +607,7 @@ describe("HTTP /analytics", () => {
     });
   });
 
-  test("report: the identical 403 for a wrong key, missing key and wrong origin", async () => {
+  test("report: the identical 403 for a wrong key, missing key, wrong origin and missing origin", async () => {
     const strip = (j: any) => ({ ...j, data: { ...j.data, timestamp: 0 } });
     const wrongKey = await call("POST", "/report", {
       body: reportBody,
@@ -619,7 +618,8 @@ describe("HTTP /analytics", () => {
       body: reportBody,
       headers: { ...pdca, origin: "https://evil.example" },
     });
-    for (const r of [wrongKey, noKey, wrongOrigin]) {
+    const noOrigin = await call("POST", "/report", { body: reportBody, headers: { "x-analytics-key": READ_KEY } });
+    for (const r of [wrongKey, noKey, wrongOrigin, noOrigin]) {
       assert.equal(r.status, 403);
       assert.deepEqual(strip(r.json), strip(wrongKey.json));
     }
@@ -755,22 +755,7 @@ describe("HTTP /analytics", () => {
     assert.equal((await call("POST", "/admin/systems/nope/read-key", { session: ownerSession })).status, 404);
   });
 
-  // Legacy (deprecated, frozen)
-
-  test("legacy POST /analytics: presence checks only, 200 acknowledgement", async () => {
-    const missing = await call("POST", "", { body: { event: "x", system: "llm" } });
-    assert.equal(missing.status, 400);
-    assert.equal(missing.json.data.code, "invalid_request_sessionId");
-    const ok = await call("POST", "", {
-      body: { event: "button_click", sessionId: "s9", system: "llm", timestamp: "2026-06-26T10:00:00.000Z" },
-    });
-    assert.deepEqual(ok.json, { code: 200, status: "Ok", data: { message: "Event recorded successfully." } });
-    const row = db.tables[EVENT_TABLE].at(-1)!;
-    assert.equal(row.created_at, Date.parse("2026-06-26T10:00:00.000Z"));
-    assert.equal(row.properties, "{}");
-  });
-
-  test("legacy POST /analytics/heartbeat: upserts by session, Anonymous for visitors", async () => {
+  test("POST /analytics/heartbeat: upserts by session, Anonymous for visitors", async () => {
     assert.equal(
       (await call("POST", "/heartbeat", { body: { system: "fndom" } })).json.data.code,
       "invalid_request_sessionId",

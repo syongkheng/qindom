@@ -7,7 +7,7 @@ import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { ITB_ANALYTIC_SYSTEM } from "../models/databases/tb_analytic_system.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { aggregateReport, comparePeriod, EventRow, periodRangeMs, REPORT_SITES, visitorOf } from "./AnalyticsReport.js";
-import { isOriginAllowed } from "./AnalyticsContract.js";
+import { isOriginRequiredAndAllowed } from "./AnalyticsContract.js";
 import { ANALYTIC_SYSTEM_TABLE, AnalyticsSystemService } from "./AnalyticsSystem.service.js";
 import { ANALYTIC_EVENT_TABLE } from "./AnalyticsDashboard.service.js";
 import { AnalyticsReadKeyDto, AnalyticsReportBody, AnalyticsReportDto, RegisteredSystem } from "./Analytics.types.js";
@@ -60,8 +60,8 @@ export class AnalyticsReportService {
   }
 
   /**
-   * The system a report request may read. The SAME 403 for an unknown site/system, a disallowed
-   * origin and a wrong key, so nothing can be probed.
+   * The system a report request may read. The SAME 403 for an unknown site/system, a missing or
+   * disallowed origin and a wrong key, so nothing can be probed.
    */
   async authorise(
     site: string,
@@ -71,7 +71,7 @@ export class AnalyticsReportService {
   ): Promise<RegisteredSystem> {
     const systemKey = REPORT_SITES[site];
     const system = systemKey ? await this.systems.getActive(systemKey, logContext) : undefined;
-    if (!system || !isOriginAllowed(system, origin)) throw new Exceptions.ForbiddenAccess();
+    if (!system || !isOriginRequiredAndAllowed(system, origin)) throw new Exceptions.ForbiddenAccess();
 
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Check report read key");
     const row = await this.db.findOne<ITB_ANALYTIC_SYSTEM>(

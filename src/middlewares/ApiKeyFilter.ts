@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { handleException } from "../utils/RequestUtilities.js";
 import db from "../config/db/mysql.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
@@ -12,8 +13,12 @@ import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 export type ApiKeyPrefix = "ss";
 
 const API_KEY_HEADER = "x-api-key";
-/** Keys look like `<prefix>_<hex>`; only the segment right after the first `_` is hashed. */
+/**
+ * Keys look like `<prefix>_<hex>` (hex never contains `_`): exactly one separator, so
+ * `ss_<key>_anything` is an invalid key (user decision M4), not `ss_<key>`.
+ */
 const KEY_SEPARATOR = "_";
+const KEY_SEGMENTS = 2;
 const USER_TABLE = "tb_aa_user";
 /** Where each key type is stored. Every allowed prefix is looked up; there is no unchecked prefix. */
 const API_KEY_TABLES: Record<ApiKeyPrefix, string> = { ss: "tb_ss_api_key" };
@@ -22,10 +27,13 @@ const API_KEY_TABLES: Record<ApiKeyPrefix, string> = { ss: "tb_ss_api_key" };
  * not the registry error shape.
  */
 const INVALID_API_KEY_MESSAGE = "Unauthorized. Missing or invalid API key.";
+const LOOKUP_FAILED_MESSAGE = "Failed to check the API key. Please try again later.";
+const LOG_LABEL = "RequestApiKeyFilter";
 
 /**
- * The key owner's user id, or null when the key is missing, has the wrong prefix, is unknown/revoked,
- * or its owner has no active user row (soft-deleted = gone, CODING_STYLE §7).
+ * The key owner's user id, or null when the key is missing, malformed (not exactly `<prefix>_<value>`),
+ * has the wrong prefix, is unknown/revoked, or its owner has no active user row (soft-deleted = gone,
+ * CODING_STYLE §7). A failed lookup throws the DB's error.
  */
 async function resolveApiKeyUserId(
   apiKey: string | undefined,
@@ -36,7 +44,8 @@ async function resolveApiKeyUserId(
     event.children.push(`(M) '${API_KEY_HEADER}' ${LogEmoji.error} `);
     return null;
   }
-  const [prefix, value] = apiKey.split(KEY_SEPARATOR);
+  const segments = apiKey.split(KEY_SEPARATOR);
+  const [prefix, value] = segments;
   event.children.push(`Prefix: '${prefix}'`);
 
   if (!(allowedPrefixes as readonly string[]).includes(prefix)) {
@@ -45,7 +54,7 @@ async function resolveApiKeyUserId(
     );
     return null;
   }
-  if (!value) {
+  if (!value || segments.length !== KEY_SEGMENTS) {
     event.children.push(`Key Validity: ${LogEmoji.error} `);
     return null;
   }
@@ -81,6 +90,7 @@ async function resolveApiKeyUserId(
  * Each route must name its own key type, so a key minted for one integration can never
  * authenticate another's routes (every key type resolves to the owner's userId).
  * On success the owner's id is in `logContext.metadata.userId` (read it with `getApiKeyUserId`).
+ * A failed lookup (DB down) is a 500 (user decision M2), so a Shortcut doesn't look like it has a bad key.
  */
 export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) =>
   async function (req: Request, res: Response, next: NextFunction) {
@@ -88,15 +98,14 @@ export const RequestApiKeyFilter = (...allowedPrefixes: ApiKeyPrefix[]) =>
     const header = req.headers[API_KEY_HEADER];
     const apiKey = Array.isArray(header) ? header[0] : header;
 
+    const cr = new ControllerResponse(req, res);
     let userId: number | null;
     try {
       userId = await resolveApiKeyUserId(apiKey, allowedPrefixes, event);
     } catch (err) {
-      // A failed lookup is answered like a bad key (pinned), but recorded in the request tree.
-      LoggingUtilities.request.exception(req.logContext, "RequestApiKeyFilter", err);
-      userId = null;
+      return handleException(err, cr, LOG_LABEL, LOOKUP_FAILED_MESSAGE);
     }
-    if (userId === null) return new ControllerResponse(req, res).badAuthorization(INVALID_API_KEY_MESSAGE);
+    if (userId === null) return cr.badAuthorization(INVALID_API_KEY_MESSAGE);
 
     req.logContext.metadata = { ...req.logContext.metadata, userId };
     next();

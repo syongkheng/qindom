@@ -1,13 +1,8 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import {
-  autoReplyMail,
-  isEnquiryOriginAllowed,
-  isSpam,
-  notificationMail,
-  PdcaEnquiryService,
-} from "./PdcaEnquiry.service.js";
+import { autoReplyMail, isSpam, notificationMail, PdcaEnquiryService } from "./PdcaEnquiry.service.js";
 import type { RegisteredSystem } from "../analytics/Analytics.types.js";
+import { isOriginRequiredAndAllowed } from "../analytics/AnalyticsContract.js";
 import { validateEnquiryBody } from "./PdcaEnquiry.validator.js";
 import { loggablePayload } from "./PdcaEnquiry.middleware.js";
 import { MailerUtilities, MailOptions } from "../utils/MailerUtilities.js";
@@ -111,10 +106,10 @@ test("a failed lab email is an error", async () => {
 
 test("origin is required and must be on the system's list", () => {
   const system = { allowedOrigins: ["https://pdcadental.com"] } as unknown as RegisteredSystem;
-  assert.equal(isEnquiryOriginAllowed(system, "https://pdcadental.com"), true);
-  assert.equal(isEnquiryOriginAllowed(system, undefined), false);
-  assert.equal(isEnquiryOriginAllowed(system, "https://evil.example"), false);
-  assert.equal(isEnquiryOriginAllowed(null, "https://pdcadental.com"), false);
+  assert.equal(isOriginRequiredAndAllowed(system, "https://pdcadental.com"), true);
+  assert.equal(isOriginRequiredAndAllowed(system, undefined), false);
+  assert.equal(isOriginRequiredAndAllowed(system, "https://evil.example"), false);
+  assert.equal(isOriginRequiredAndAllowed(null, "https://pdcadental.com"), false);
 });
 
 test("log payload holds no personal data", () => {
