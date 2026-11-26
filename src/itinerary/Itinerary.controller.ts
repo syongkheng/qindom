@@ -1,116 +1,100 @@
-import { Router, Request, Response } from "express";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { Request, Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { itineraryChallengeLimiter } from "../middlewares/RateLimiter.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { ItineraryService } from "./Itinerary.service.js";
-import { ItineraryValidator } from "./Itinerary.validator.js";
-import { getUser, handleException } from "../utils/requestUtils.js";
+import { clientIp, getUser, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { ItineraryService } from "./Itinerary.service.js";
+import { ItinerarySaveService } from "./ItinerarySave.service.js";
+import { validateChallengeBody, validateCreateBody, validateUpdateBody } from "./Itinerary.validator.js";
+import {
+  ItineraryChallengeRequiredDto,
+  ItineraryDeletedDto,
+  ItineraryDto,
+  ItineraryListDto,
+  ItinerarySavedDto,
+  PublicItineraryDto,
+} from "./Itinerary.types.js";
 
-function extractIp(req: Request): string {
-  const raw = req.headers["x-real-ip"] || req.socket.remoteAddress || "Unknown";
-  return Array.isArray(raw) ? raw[0] : raw;
-}
+const UNKNOWN = "Unknown";
 
-export default function createItineraryController(db: KnexSqlUtilities) {
+const validationEvent = (req: Request) => LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+const userAgent = (req: Request) => req.headers["user-agent"] || UNKNOWN;
+
+/**
+ * Trips. Mounted with `mw.std`: the owner routes add `MandatoryTokenFilter` per route, while the
+ * share routes (`GET /v/:shortCode`, `POST /challenge`) are public.
+ */
+export default function createItineraryController(db: KnexSqlUtilities): Router {
   const router = Router();
   const svc = new ItineraryService(db);
+  const saveSvc = new ItinerarySaveService(db);
 
-  router.get("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const myTrips = await svc.listTrips(getUser(req).id);
-      return cr.ok({ myTrips, sharedTrips: [] });
-    } catch (err) {
-      return handleException(err, cr, "ItineraryController.GET /", "Failed to load itineraries");
-    }
-  });
+  router.get(
+    "/",
+    MandatoryTokenFilter,
+    route("ItineraryController.GET /", "Failed to load itineraries", async (req, cr) =>
+      cr.ok<ItineraryListDto>(await svc.listTrips(getUser(req).id, req.logContext)),
+    ),
+  );
 
-  router.post("/delete/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      await svc.deleteTrip(getUser(req).id, req.params.sessionId);
-      return cr.ok({ deleted: true });
-    } catch (err) {
-      return handleException(err, cr, "ItineraryController.POST /delete/:sessionId", "Failed to delete itinerary");
-    }
-  });
+  router.post(
+    "/",
+    MandatoryTokenFilter,
+    route("ItineraryController.POST /", "Failed to create itinerary", async (req, cr) => {
+      const body = validateCreateBody(req.body, validationEvent(req));
+      return cr.ok<ItinerarySavedDto>(await saveSvc.create(getUser(req).id, body, req.logContext));
+    }),
+  );
 
-  router.post("/challenge", [itineraryChallengeLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { shortCode, challenge } = ItineraryValidator.validateChallengeRequest(req.body, validationEvent);
-      const result = await svc.verifyChallenge(shortCode, challenge);
-      void svc.recordView(shortCode, extractIp(req), (req.headers["user-agent"] || "Unknown").slice(0, 512));
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "ItineraryController.POST /challenge", "Failed to verify challenge");
-    }
-  });
+  // Public: a wrong code is a 400, and only failed attempts count towards the limiter (10 / 15 min / IP).
+  router.post(
+    "/challenge",
+    itineraryChallengeLimiter,
+    route("ItineraryController.POST /challenge", "Failed to verify challenge", async (req, cr) => {
+      const { shortCode, challenge } = validateChallengeBody(req.body, validationEvent(req));
+      const itinerary = await svc.verifyChallenge(shortCode, challenge, req.logContext);
+      void svc.recordView(shortCode, clientIp(req), userAgent(req));
+      return cr.ok<PublicItineraryDto>(itinerary);
+    }),
+  );
 
-  router.post("/add-collaborator", async (_req: Request, res: Response) => {
-    return new ControllerResponse(_req, res).ok({ added: false, message: "Not yet implemented" });
-  });
+  // Public viewer. Views are counted only when the trip is actually shown (no access code).
+  router.get(
+    "/v/:shortCode",
+    route("ItineraryController.GET /v/:shortCode", "Failed to load itinerary", async (req, cr) => {
+      const result = await svc.getByShortCode(req.params.shortCode, req.logContext);
+      if (!("hasChallenge" in result)) void svc.recordView(req.params.shortCode, clientIp(req), userAgent(req));
+      return cr.ok<PublicItineraryDto | ItineraryChallengeRequiredDto>(result);
+    }),
+  );
 
-  router.post("/", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const body = ItineraryValidator.validateCreateRequest(req.body, validationEvent);
-      const result = await svc.create(getUser(req).id, body);
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "ItineraryController.POST /", "Failed to create itinerary");
-    }
-  });
+  router.get(
+    "/:sessionId",
+    MandatoryTokenFilter,
+    route("ItineraryController.GET /:sessionId", "Failed to load itinerary", async (req, cr) =>
+      cr.ok<ItineraryDto>(await svc.getBySessionId(getUser(req).id, req.params.sessionId, req.logContext)),
+    ),
+  );
 
-  router.get("/v/:shortCode", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const result = await svc.getByShortCode(req.params.shortCode);
-      if (!("hasChallenge" in result)) {
-        void svc.recordView(req.params.shortCode, extractIp(req), (req.headers["user-agent"] || "Unknown").slice(0, 512));
-      }
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "ItineraryController.GET /v/:shortCode", "Failed to load itinerary");
-    }
-  });
+  router.post(
+    "/:sessionId/update",
+    MandatoryTokenFilter,
+    route("ItineraryController.POST /:sessionId/update", "Failed to update itinerary", async (req, cr) => {
+      const body = validateUpdateBody(req.body, validationEvent(req));
+      return cr.ok<ItinerarySavedDto>(
+        await saveSvc.update(getUser(req).id, req.params.sessionId, body, req.logContext),
+      );
+    }),
+  );
 
-  router.get("/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const result = await svc.getBySessionId(getUser(req).id, req.params.sessionId);
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "ItineraryController.GET /:sessionId", "Failed to load itinerary");
-    }
-  });
-
-  router.post("/edit/:sessionId", MandatoryTokenFilter, async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const body = ItineraryValidator.validateEditRequest(req.body, validationEvent);
-      const result = await svc.edit(getUser(req).id, req.params.sessionId, body);
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "ItineraryController.POST /edit/:sessionId", "Failed to update itinerary");
-    }
-  });
+  router.post(
+    "/:sessionId/delete",
+    MandatoryTokenFilter,
+    route("ItineraryController.POST /:sessionId/delete", "Failed to delete itinerary", async (req, cr) =>
+      cr.ok<ItineraryDeletedDto>(await svc.deleteTrip(getUser(req).id, req.params.sessionId, req.logContext)),
+    ),
+  );
 
   return router;
 }

@@ -1,297 +1,161 @@
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { UnknownException } from "../exceptions/UnknownException.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import dotenv from "dotenv";
-import { toMessage } from "../utils/errorUtils.js";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
+import {
+  BusArrivalServiceDto,
+  BusArrivalsDto,
+  BusServiceDto,
+  BusServicesDto,
+  NearbyBusStopDto,
+  NearbyBusStopRow,
+  NearbyBusStopsDto,
+  NearbyBusStopsQuery,
+  NearestMrtStationDto,
+  NearestMrtStationRow,
+  NearestMrtStationsDto,
+  NearestMrtStationsQuery,
+} from "./Lta.types.js";
 
-// Load environment variables from .env file
-dotenv.config();
+const LTA_BUS_STOP_TABLE = "tb_lta_busstop";
+const LTA_BUS_INFO_TABLE = "tb_lta_bus_info";
+const LRT_MRT_STATION_TABLE = "tb_lrt_mrt_station";
 
-interface BusTimingRecord {
-  ServiceNo: string;
-  Operator: string;
-  NextBus: NextBusRecord;
-  NextBus2: NextBusRecord;
-  NextBus3: NextBusRecord;
+const DATAMALL_SERVICE_NAME = "LTA DataMall";
+const DATAMALL_BUS_ARRIVAL_URL = "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival";
+
+/** GET /lta/bus-stops/nearby returns at most this many stops (nearest first); `count` is still the full total. */
+export const NEARBY_BUS_STOPS_MAX_ROWS = 10;
+
+type BusInfoRow = Omit<ITB_LTA_BUS_INFO, "id" | "busstop_code" | "created_dt" | "created_by">;
+
+/** Read lazily, on call (see config/README.md). Missing key = our misconfiguration (500). */
+function getDataMallApiKey(): string {
+  const apiKey = process.env.LTA_DATAMALL_API_KEY;
+  if (!apiKey) {
+    LoggingUtilities.service.error("LtaService.getDataMallApiKey", "LTA_DATAMALL_API_KEY is not set");
+    throw new Exceptions.Unknown();
+  }
+  return apiKey;
 }
 
-interface NextBusRecord {
-  OriginCode: string;
-  DestinationCode: string;
-  EstimatedArrival: string;
-  Monitored: number;
-  Latitude: string;
-  Longitude: string;
-  VisitNumber: number;
-  Load: string;
-  Feature: string;
-  Type: string;
+export function toBusServiceDto(row: BusInfoRow): BusServiceDto {
+  return {
+    serviceNo: row.service_no,
+    operator: row.operator,
+    direction: row.direction,
+    stopSequence: row.stop_sequence,
+    distance: row.distance,
+    weekdayFirstBus: row.wd_first_bus,
+    weekdayLastBus: row.wd_last_bus,
+    saturdayFirstBus: row.sat_first_bus,
+    saturdayLastBus: row.sat_last_bus,
+    sundayFirstBus: row.sun_first_bus,
+    sundayLastBus: row.sun_last_bus,
+  };
 }
 
-// interface LtaBusstopRecord {
-//   ServiceNo: string;
-//   Operator: string;
-//   Direction: string;
-//   StopSequence: string;
-//   BusStopCode: string;
-//   Distance: string;
-//   WD_FirstBus: string;
-//   WD_LastBus: string;
-//   SAT_FirstBus: string;
-//   SAT_LastBus: string;
-//   SUN_FirstBus: string;
-//   SUN_LastBus: string;
-// }
+export function toNearbyBusStopDto(row: NearbyBusStopRow): NearbyBusStopDto {
+  return {
+    busStopCode: row.busstop_code,
+    roadName: row.road_name,
+    description: row.desc,
+    distanceM: Math.round(Number(row.distance_m)),
+  };
+}
 
-// interface LtaBusInfoRecord {}
+export function toNearestMrtStationDto(row: NearestMrtStationRow): NearestMrtStationDto {
+  return { station: row.station, type: row.type, distanceM: Math.round(Number(row.distance_m)) };
+}
 
+/** Owns the LTA tables (`tb_lta_busstop`, `tb_lta_bus_info`, `tb_lrt_mrt_station`) and the DataMall call. */
 export class LtaService {
   constructor(private db: KnexSqlUtilities) {}
 
   /**
-   * Makes a call to LTA DataMall to retrieve bus arrival timings for a specific bus stop code.
-   * @param busStopCode
-   * @returns Array of bus timing records and source of data
+   * Live arrivals at a stop, straight from LTA DataMall. A network error, non-OK
+   * status or unreadable body is a 502 (`ExternalRequest`).
    */
-  async statistics(busStopCode: string): Promise<{
-    records: BusTimingRecord[];
-    source: "website";
-  }> {
-    const apiKey = process.env.LTA_DATAMALL_API_KEY;
-    if (!apiKey) {
-      LoggingUtilities.service.error(
-        "LtaService.statistics",
-        "LTA_DATAMALL_API_KEY is not set in environment variables"
-      );
-      throw new Exceptions.Unknown();
-    }
+  async getBusArrivals(busStopCode: string, logContext?: IRequestLogContext): Promise<BusArrivalsDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "LTA bus arrivals");
+    const apiKey = getDataMallApiKey();
+    const url = `${DATAMALL_BUS_ARRIVAL_URL}?${new URLSearchParams({ BusStopCode: busStopCode })}`;
 
+    let services: BusArrivalServiceDto[];
     try {
-      LoggingUtilities.service.debug(
-        "LtaService.statistics",
-        `busStopCode: ${busStopCode}`
-      );
-      const response = await fetch(
-        `https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=${busStopCode}`,
-        {
-          method: "GET",
-          headers: {
-            AccountKey: apiKey,
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        LoggingUtilities.service.error(
-          "LtaService.statistics",
-          `LTA API request failed with status ${response.status}`
-        );
-        throw new Exceptions.ExternalRequest("LTA Datamall");
-      }
-
-      const data = await response.json();
-
-      return {
-        records: data.Services as BusTimingRecord[],
-        source: "website",
-      };
+      const response = await fetch(url, { headers: { AccountKey: apiKey, Accept: "application/json" } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as { Services?: BusArrivalServiceDto[] };
+      services = data.Services ?? [];
     } catch (error) {
       LoggingUtilities.service.error(
-        "LtaService.statistics",
-        `Error fetching LTA data: ${toMessage(error)}`
+        "LtaService.getBusArrivals",
+        `${DATAMALL_SERVICE_NAME} failed: ${toMessage(error)}`,
       );
+      throw new Exceptions.ExternalRequest(DATAMALL_SERVICE_NAME);
     }
-    throw new Exceptions.Unknown();
+
+    if (event) event.detail = `${services.length} service(s) at ${busStopCode}`;
+    return { records: services };
   }
 
-  async retrieveBusServicesByBusStopCode(busStopCode: string) {
-    try {
-      return await this.db.lta.findBusServicesByBusStopCode(busStopCode);
-    } catch (error) {
-      throw new UnknownException();
-    }
+  /** Bus services that call at a stop, ordered by service number (numeric first, then suffix: 13, 13A, 50). */
+  async listBusServices(busStopCode: string, logContext?: IRequestLogContext): Promise<BusServicesDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "LTA bus services");
+    const rows = await this.db.raw<BusInfoRow[]>(
+      `SELECT service_no, operator, direction, stop_sequence, distance,
+              wd_first_bus, wd_last_bus, sat_first_bus, sat_last_bus, sun_first_bus, sun_last_bus
+       FROM ${LTA_BUS_INFO_TABLE}
+       WHERE busstop_code = ?
+       ORDER BY CAST(service_no AS UNSIGNED), service_no`,
+      [busStopCode],
+      event,
+    );
+    if (event) event.detail = `${rows.length} service(s)`;
+    return { services: rows.map(toBusServiceDto), count: rows.length };
   }
 
-  // async _retrieveAllBusstops(): Promise<{ totalCount: number }> {
-  //   const apiKey = process.env.LTA_DATAMALL_API_KEY;
+  /** Bus stops within `radiusM` metres of a point, nearest first (capped at `NEARBY_BUS_STOPS_MAX_ROWS`). */
+  async findBusStopsNear(
+    { lat, lng, radiusM }: NearbyBusStopsQuery,
+    logContext?: IRequestLogContext,
+  ): Promise<NearbyBusStopsDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "LTA bus stops near point");
+    const rows = await this.db.raw<NearbyBusStopRow[]>(
+      `SELECT b.busstop_code, b.road_name, b.desc,
+              ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) AS distance_m
+       FROM ${LTA_BUS_STOP_TABLE} b
+       WHERE ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) <= ?
+       ORDER BY distance_m ASC`,
+      [lng, lat, lng, lat, radiusM],
+      event,
+    );
+    if (event) event.detail = `${rows.length} stop(s) within ${radiusM} m`;
+    return { busStops: rows.slice(0, NEARBY_BUS_STOPS_MAX_ROWS).map(toNearbyBusStopDto), count: rows.length };
+  }
 
-  //   if (!apiKey) {
-  //     LoggingUtilities.service.error(
-  //       "LtaService._retrieveAllBusstops",
-  //       "LTA_DATAMALL_API_KEY is not set in environment variables"
-  //     );
-  //     throw new Error("LTA API key not configured");
-  //   }
-
-  //   const baseUrl = "https://datamall2.mytransport.sg/ltaodataservice/BusStops";
-
-  //   const headers = {
-  //     AccountKey: apiKey,
-  //     Accept: "application/json",
-  //   };
-
-  //   let skip = 0;
-  //   let totalCount = 0;
-  //   const pageSize = 500;
-
-  //   while (true) {
-  //     const url = `${baseUrl}?$skip=${skip}`;
-  //     LoggingUtilities.service.debug("LtaService._retrieveAllBusstops", `Fetching: ${url}`);
-
-  //     const response = await fetch(url, { headers });
-
-  //     if (!response.ok) {
-  //       throw new Error(
-  //         `Failed to fetch data: ${response.status} ${response.statusText}`
-  //       );
-  //     }
-
-  //     const data = await response.json();
-
-  //     if (!data.value || data.value.length === 0) {
-  //       LoggingUtilities.service.info(
-  //         "LtaService._retrieveAllBusstops",
-  //         "No more bus stops to fetch"
-  //       );
-  //       break; // Stop when no more results
-  //     }
-
-  //     // Optional: batch insert using transaction for better performance
-  //     try {
-  //       await this.db.transaction(async (trx) => {
-  //         for (const busStop of data.value as LtaBusstopRecord[]) {
-  //           await this.db.insert.call({ knex: trx }, "tb_lta_busstop", {
-  //             busstop_code: busStop.BusStopCode,
-  //             road_name: busStop.RoadName,
-  //             desc: busStop.Description,
-  //             lat: busStop.Latitude,
-  //             lng: busStop.Longitude,
-  //             created_dt: new Date().getTime(),
-  //             created_by: "SYSTEM",
-  //           });
-  //         }
-  //       });
-  //     } catch (err: any) {
-  //       LoggingUtilities.service.error(
-  //         "LtaService._retrieveAllBusstops",
-  //         `Insert batch failed at skip=${skip}: ${err.message}`
-  //       );
-  //     }
-
-  //     totalCount += data.value.length;
-  //     LoggingUtilities.service.info(
-  //       "LtaService._retrieveAllBusstops",
-  //       `Inserted ${data.value.length} bus stops (total so far: ${totalCount})`
-  //     );
-
-  //     skip += pageSize; // Move to the next batch
-  //   }
-
-  //   LoggingUtilities.service.info(
-  //     "LtaService._retrieveAllBusstops",
-  //     `Completed fetching all bus stops. Total: ${totalCount}`
-  //   );
-
-  //   return {
-  //     totalCount,
-  //   };
-  // }
-
-  // async _retrieveAllBusInformation(): Promise<{ totalCount: number }> {
-  //   const apiKey = process.env.LTA_DATAMALL_API_KEY;
-
-  //   if (!apiKey) {
-  //     LoggingUtilities.service.error(
-  //       "LtaService._retrieveAllBusInformation",
-  //       "LTA_DATAMALL_API_KEY is not set in environment variables"
-  //     );
-  //     throw new Error("LTA API key not configured");
-  //   }
-
-  //   const baseUrl =
-  //     "https://datamall2.mytransport.sg/ltaodataservice/BusRoutes";
-
-  //   const headers = {
-  //     AccountKey: apiKey,
-  //     Accept: "application/json",
-  //   };
-
-  //   let skip = 0;
-  //   let totalCount = 0;
-  //   const pageSize = 500;
-
-  //   while (true) {
-  //     const url = `${baseUrl}?$skip=${skip}`;
-  //     LoggingUtilities.service.debug(
-  //       "LtaService._retrieveAllBusInformation",
-  //       `Fetching: ${url}`
-  //     );
-
-  //     const response = await fetch(url, { headers });
-
-  //     if (!response.ok) {
-  //       throw new Error(
-  //         `Failed to fetch data: ${response.status} ${response.statusText}`
-  //       );
-  //     }
-
-  //     const data = await response.json();
-
-  //     if (!data.value || data.value.length === 0) {
-  //       LoggingUtilities.service.info(
-  //         "LtaService._retrieveAllBusInformation",
-  //         "No more bus route information to fetch"
-  //       );
-  //       break; // Stop when no more results
-  //     }
-
-  //     // Optional: batch insert using transaction for better performance
-  //     try {
-  //       await this.db.transaction(async (trx) => {
-  //         for (const busService of data.value as LtaBusstopRecord[]) {
-  //           await this.db.insert.call({ knex: trx }, "tb_lta_bus_info", {
-  //             service_no: busService.ServiceNo,
-  //             operator: busService.Operator,
-  //             direction: busService.Direction,
-  //             stop_sequence: busService.StopSequence,
-  //             busstop_code: busService.BusStopCode,
-  //             distance: busService.Distance,
-  //             wd_first_bus: busService.WD_FirstBus,
-  //             wd_last_bus: busService.WD_LastBus,
-  //             sat_first_bus: busService.SAT_FirstBus,
-  //             sat_last_bus: busService.SAT_LastBus,
-  //             sun_first_bus: busService.SUN_FirstBus,
-  //             sun_last_bus: busService.SUN_LastBus,
-  //             created_dt: new Date().getTime(),
-  //             created_by: "SYSTEM",
-  //           });
-  //         }
-  //       });
-  //     } catch (err: any) {
-  //       LoggingUtilities.service.error(
-  //         "LtaService._retrieveAllBusInformation",
-  //         `Insert batch failed at skip=${skip}: ${err.message}`
-  //       );
-  //     }
-
-  //     totalCount += data.value.length;
-  //     LoggingUtilities.service.info(
-  //       "LtaService._retrieveAllBusInformation",
-  //       `Inserted ${data.value.length} bus route information (total so far: ${totalCount})`
-  //     );
-
-  //     skip += pageSize; // Move to the next batch
-  //   }
-
-  //   LoggingUtilities.service.info(
-  //     "LtaService._retrieveAllBusInformation",
-  //     `Completed fetching all bus route information. Total: ${totalCount}`
-  //   );
-
-  //   return {
-  //     totalCount,
-  //   };
-  // }
+  /** The `limit` nearest MRT/LRT stations to a point (one row per station, using its closest exit). */
+  async findNearestMrtStations(
+    { lat, lng, limit }: NearestMrtStationsQuery,
+    logContext?: IRequestLogContext,
+  ): Promise<NearestMrtStationsDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "LTA nearest MRT stations");
+    // NOT a typo: tb_lrt_mrt_station stores latitude in `lng` and longitude in `lat`
+    // (swapped at import). POINT(e.lat, e.lng) is therefore POINT(longitude, latitude),
+    // matching POINT(b.lng, b.lat) for bus stops. Don't "fix" one without the other.
+    const rows = await this.db.raw<NearestMrtStationRow[]>(
+      `SELECT e.station, e.type,
+              MIN(ST_Distance_Sphere(POINT(e.lat, e.lng), POINT(?, ?))) AS distance_m
+       FROM ${LRT_MRT_STATION_TABLE} e
+       GROUP BY e.station, e.type
+       ORDER BY distance_m ASC
+       LIMIT ?`,
+      [lng, lat, limit],
+      event,
+    );
+    if (event) event.detail = `${rows.length} station(s)`;
+    return { stations: rows.map(toNearestMrtStationDto), count: rows.length };
+  }
 }

@@ -4,51 +4,402 @@ import sharp from "sharp";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { ITbTgImage } from "../models/databases/tb_tg_image.js";
-import { ITbTgStatsWhitelist } from "../models/databases/tb_tg_stats_whitelist.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
+import { RecordStatus } from "../constants/RecordStatus.js";
+import { getTelegramBotToken, TELEGRAM_API_URL, TELEGRAM_BOT_TOKEN_ENV } from "../utils/TelegramUtilities.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
+import { ITB_TG_IMAGE } from "../models/databases/tb_tg_image.js";
+import { ITB_TG_STATS_WHITELIST } from "../models/databases/tb_tg_stats_whitelist.js";
+import {
+  TgAdminDto,
+  TgImageFile,
+  TgImageStatsDto,
+  TgImageContent,
+  TgImageSummaryDto,
+  TgImageUploadBody,
+  TgImageUploadDto,
+  TgImageUploader,
+  WHITELIST_REMOVED_STATUS,
+} from "./TgImage.types.js";
 
-const TABLE = "tb_tg_image";
-const TABLE_WHITELIST = "tb_tg_stats_whitelist";
+const TG_IMAGE_TABLE = "tb_tg_image";
+const TG_STATS_WHITELIST_TABLE = "tb_tg_stats_whitelist";
 
+const TELEGRAM_SERVICE_NAME = "Telegram";
+
+const MB = 1024 * 1024;
+/**
+ * Telegram's getFile/download endpoint hard-caps at 20MB regardless of the ~50MB
+ * sendDocument upload limit: anything stored bigger can never be retrieved again,
+ * so we compress before upload to stay under it.
+ */
+const MAX_TELEGRAM_FILE_BYTES = 19 * MB;
+/** Telegram's own download cap; anything larger is refused rather than buffered. */
+const MAX_TELEGRAM_DOWNLOAD_BYTES = 20 * MB;
+const COMPRESS_MAX_ATTEMPTS = 8;
+const COMPRESS_START_QUALITY = 80;
+const COMPRESS_QUALITY_STEP = 10;
+/** Below this quality, shrink the width instead of lowering quality further. */
+const COMPRESS_MIN_QUALITY = 40;
+const COMPRESS_RESIZE_QUALITY = 60;
+const COMPRESS_RESIZE_FACTOR = 0.85;
+/** Starting width when sharp can't read the image's own. */
+const COMPRESS_FALLBACK_WIDTH = 4000;
+
+/** Quality of the JPEG every non-SVG image is re-encoded to on read. */
+const SERVE_JPEG_QUALITY = 80;
+/** Stored when the upload row has no mime type. */
+const DEFAULT_MIME_TYPE = "image/jpeg";
+const SVG_MIME_TYPE = "image/svg+xml";
+const PNG_MIME_TYPE = "image/png";
+const JPEG_MIME_TYPE = "image/jpeg";
+
+/** 4 random bytes = 8 hex chars (`tb_tg_image.short_code` VARCHAR(16), unique). */
+const SHORT_CODE_BYTES = 4;
+const UPLOAD_CAPTION_TITLE = "📤 agenda_upload";
+
+const SUMMARY_COLUMNS = ["short_code", "file_name", "mime_type", "size_in_bytes", "created_dt"] as const;
+const ADMIN_COLUMNS = ["id", "telegram_user_id", "added_dt"] as const;
+const OWNER_COLUMNS = ["short_code", "created_by_id"] as const;
+
+type TgImageSummaryRow = Pick<ITB_TG_IMAGE, (typeof SUMMARY_COLUMNS)[number]>;
+type TgAdminRow = Pick<ITB_TG_STATS_WHITELIST, (typeof ADMIN_COLUMNS)[number]>;
+
+/** Missing token = our misconfiguration (500). */
+function getBotToken(): string {
+  const token = getTelegramBotToken();
+  if (!token) {
+    LoggingUtilities.service.error("TgImageService.getBotToken", `${TELEGRAM_BOT_TOKEN_ENV} is not set`);
+    throw new Exceptions.Unknown();
+  }
+  return token;
+}
+
+export function toTgImageSummaryDto(row: TgImageSummaryRow): TgImageSummaryDto {
+  return {
+    shortCode: row.short_code,
+    fileName: row.file_name ?? null,
+    mimeType: row.mime_type ?? null,
+    sizeInBytes: row.size_in_bytes ?? null,
+    createdAt: row.created_dt,
+  };
+}
+
+export function toTgAdminDto(row: TgAdminRow): TgAdminDto {
+  return { id: row.id!, telegramUserId: row.telegram_user_id, addedAt: row.added_dt };
+}
+
+/** Caption shown on the stored Telegram document (one line per known detail). */
+export function buildUploadCaption(uploader: TgImageUploader, sessionId: string | null): string {
+  const parts = [UPLOAD_CAPTION_TITLE];
+  if (uploader.username) parts.push(`👤 ${uploader.username}`);
+  if (uploader.ip) parts.push(`🌐 ${uploader.ip}`);
+  if (sessionId) parts.push(`📋 ${sessionId}`);
+  return parts.join("\n");
+}
+
+/**
+ * Owns `tb_tg_image` (the Telegram-backed image CDN) and the bot-admin writes to
+ * `tb_tg_stats_whitelist`. `TelegramLogSubscriptionService` also reads the whitelist.
+ */
 export class TgImageService {
-  private readonly botToken: string;
+  constructor(private db: KnexSqlUtilities) {}
 
-  // Telegram's getFile/download endpoint hard-caps at 20MB regardless of the
-  // ~50MB sendDocument upload limit — anything stored bigger than this can
-  // never be retrieved again, so we compress before upload to stay under it.
-  private static readonly MAX_TELEGRAM_FILE_BYTES = 19 * 1024 * 1024;
+  /**
+   * Stores the file as a Telegram document in the storage chat and returns its short code.
+   * SVG is rasterised to PNG first; anything over Telegram's retrieval cap is re-encoded as JPEG.
+   */
+  async upload(
+    file: TgImageFile,
+    body: TgImageUploadBody,
+    uploader: TgImageUploader,
+    logContext?: IRequestLogContext,
+  ): Promise<TgImageUploadDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Upload image to Telegram");
+    const token = getBotToken();
+    const storageChatId = await this.getStorageChatId(event);
+    if (!storageChatId) {
+      // Nobody on the whitelist has sent the CDN bot /start yet (see TgImage.bot.ts).
+      LoggingUtilities.service.error(
+        "TgImageService.upload",
+        "No storage chat configured: open the CDN bot in Telegram and send /start to activate uploads",
+      );
+      throw new Exceptions.Unknown();
+    }
 
-  constructor(private db: KnexSqlUtilities) {
-    this.botToken = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN!;
+    // SVG can carry <script>, and /img is served from the API origin (where the
+    // auth + CSRF cookies live), so it's rasterised here and never stored as SVG.
+    const safe =
+      file.mimeType === SVG_MIME_TYPE
+        ? { buffer: await sharp(file.buffer).png().toBuffer(), mimetype: PNG_MIME_TYPE }
+        : { buffer: file.buffer, mimetype: file.mimeType };
+
+    const { buffer: uploadBuffer, mimetype: uploadMimetype } = await this.compressForTelegram(
+      safe.buffer,
+      safe.mimetype,
+    );
+
+    const formData = new FormData();
+    formData.append("chat_id", String(storageChatId));
+    formData.append("caption", buildUploadCaption(uploader, body.sessionId));
+    formData.append("document", new Blob([new Uint8Array(uploadBuffer)], { type: uploadMimetype }), file.originalName);
+
+    let tgBody: { ok: boolean; result?: { document?: { file_id: string } } };
+    try {
+      const tgRes = await fetch(`${TELEGRAM_API_URL}/bot${token}/sendDocument`, { method: "POST", body: formData });
+      tgBody = (await tgRes.json()) as typeof tgBody;
+    } catch (error) {
+      LoggingUtilities.service.error("TgImageService.upload", `sendDocument failed: ${toMessage(error)}`);
+      throw new Exceptions.ExternalRequest(TELEGRAM_SERVICE_NAME);
+    }
+    const telegramFileId = tgBody.result?.document?.file_id;
+    if (!tgBody.ok || !telegramFileId) {
+      LoggingUtilities.service.error("TgImageService.upload", JSON.stringify(tgBody));
+      throw new Exceptions.ExternalRequest(TELEGRAM_SERVICE_NAME);
+    }
+
+    const shortCode = crypto.randomBytes(SHORT_CODE_BYTES).toString("hex");
+    await this.db.insert<ITB_TG_IMAGE>(
+      TG_IMAGE_TABLE,
+      {
+        short_code: shortCode,
+        uuid: body.uuid ?? undefined,
+        telegram_file_id: telegramFileId,
+        mime_type: uploadMimetype,
+        file_name: file.originalName,
+        size_in_bytes: uploadBuffer.length,
+        created_by_id: uploader.id,
+        created_dt: Date.now(),
+        record_status: RecordStatus.ACTIVE,
+      },
+      event,
+    );
+    if (event) event.detail = `${shortCode} (${uploadBuffer.length} bytes)`;
+
+    return { shortCode, url: `/img/${shortCode}` };
   }
 
-  private async compressForTelegram(
-    buffer: Buffer,
-    mimetype: string,
-  ): Promise<{ buffer: Buffer; mimetype: string }> {
-    if (buffer.length <= TgImageService.MAX_TELEGRAM_FILE_BYTES) {
+  /**
+   * Downloads an active image from Telegram and re-encodes it with sharp: never the raw bytes.
+   * Fully buffered (Telegram caps downloads at 20MB), so every failure happens before the
+   * controller writes a header: unknown short code = 404, Telegram unreachable or refusing = 502,
+   * stored bytes sharp can't decode = 500 (server log).
+   */
+  async loadImage(shortCode: string, logContext?: IRequestLogContext): Promise<TgImageContent> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Load image from Telegram");
+    const record = await this.db.findOne<ITB_TG_IMAGE>(
+      TG_IMAGE_TABLE,
+      { short_code: shortCode, record_status: RecordStatus.ACTIVE },
+      ["telegram_file_id", "mime_type"],
+      event,
+    );
+    if (!record) throw new Exceptions.NotFound();
+    const mimeType = record.mime_type ?? DEFAULT_MIME_TYPE;
+    const token = getBotToken();
+
+    let source: Buffer;
+    try {
+      const query = new URLSearchParams({ file_id: record.telegram_file_id });
+      const fileInfo = await axios.get(`${TELEGRAM_API_URL}/bot${token}/getFile?${query}`);
+      const filePath: unknown = fileInfo.data?.result?.file_path;
+      if (!fileInfo.data?.ok || typeof filePath !== "string" || !filePath) throw new Error("getFile returned no path");
+      const fileResponse = await axios.get<ArrayBuffer>(`${TELEGRAM_API_URL}/file/bot${token}/${filePath}`, {
+        responseType: "arraybuffer",
+        maxContentLength: MAX_TELEGRAM_DOWNLOAD_BYTES,
+      });
+      source = Buffer.from(fileResponse.data);
+    } catch (error) {
+      LoggingUtilities.service.error("TgImageService.loadImage", `Telegram download failed: ${toMessage(error)}`);
+      throw new Exceptions.ExternalRequest(TELEGRAM_SERVICE_NAME);
+    }
+
+    try {
+      // Rows stored before SVGs were rasterised at upload: never serve raw SVG.
+      if (mimeType === SVG_MIME_TYPE) {
+        return { body: await sharp(source).png().toBuffer(), contentType: PNG_MIME_TYPE };
+      }
+      // sharp() strips EXIF (including Orientation) on re-encode by default.
+      // .rotate() with no args bakes the EXIF-specified rotation into the
+      // pixels first, so the image still displays upright once that tag is gone.
+      return {
+        body: await sharp(source).rotate().jpeg({ quality: SERVE_JPEG_QUALITY }).toBuffer(),
+        contentType: JPEG_MIME_TYPE,
+      };
+    } catch (error) {
+      // A stored file that isn't a decodable image (uploads weren't restricted to image/* before).
+      LoggingUtilities.service.error("TgImageService.loadImage", `Cannot re-encode ${shortCode}: ${toMessage(error)}`);
+      if (event) event.detail = "undecodable stored file";
+      throw new Exceptions.Unknown();
+    }
+  }
+
+  /**
+   * Itinerary attachments (`_filesToInsert`): every short code must be an active image (else 400
+   * `tgShortCode`) uploaded by `userId` (else 403). Rows uploaded before `created_by_id` existed
+   * (migration 20261126000200) have no known uploader and are accepted for anyone.
+   */
+  async assertAttachableBy(userId: number, shortCodes: string[], logContext?: IRequestLogContext): Promise<void> {
+    const unique = [...new Set(shortCodes)];
+    if (!unique.length) return;
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Check image uploaders");
+    const rows = await this.db.find<ITB_TG_IMAGE>(
+      TG_IMAGE_TABLE,
+      { record_status: RecordStatus.ACTIVE },
+      { columns: OWNER_COLUMNS, extraWhere: (qb) => qb.whereIn("short_code", unique) },
+      event,
+    );
+    const uploaderOf = new Map(rows.map((r) => [r.short_code, r.created_by_id ?? null]));
+    if (unique.some((code) => !uploaderOf.has(code))) throw new Exceptions.InvalidRequest("tgShortCode", "format");
+    const legacy = [...uploaderOf.values()].filter((id) => id === null).length;
+    if (event) event.detail = `${unique.length} image(s), ${legacy} without uploader`;
+    if ([...uploaderOf.values()].some((id) => id !== null && Number(id) !== userId)) {
+      throw new Exceptions.ForbiddenAccess("Image uploaded by another user");
+    }
+  }
+
+  /** Newest first (bot `/list`). */
+  async listRecent(limit: number, logContext?: IRequestLogContext): Promise<TgImageSummaryDto[]> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List recent images");
+    const rows = await this.db.find<ITB_TG_IMAGE>(
+      TG_IMAGE_TABLE,
+      { record_status: RecordStatus.ACTIVE },
+      { orderBy: "id", orderDirection: "desc", limit, columns: SUMMARY_COLUMNS },
+      event,
+    );
+    return rows.map(toTgImageSummaryDto);
+  }
+
+  /** File count and total stored bytes (bot `/stats`). */
+  async getStats(logContext?: IRequestLogContext): Promise<TgImageStatsDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Image hosting stats");
+    const rows = await this.db.raw<{ count: string; total: string }[]>(
+      `SELECT COUNT(*) AS count, COALESCE(SUM(size_in_bytes), 0) AS total FROM ${TG_IMAGE_TABLE} WHERE record_status = ?`,
+      [RecordStatus.ACTIVE],
+      event,
+    );
+    return { totalFiles: Number(rows[0].count), totalSizeBytes: Number(rows[0].total) };
+  }
+
+  // ── Bot admins (tb_tg_stats_whitelist) ──
+
+  /** Active bot admins, most recently added first. */
+  async listAdmins(logContext?: IRequestLogContext): Promise<TgAdminDto[]> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List bot admins");
+    const rows = await this.db.find<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { record_status: RecordStatus.ACTIVE },
+      { orderBy: "added_dt", orderDirection: "desc", columns: ADMIN_COLUMNS },
+      event,
+    );
+    return rows.map(toTgAdminDto);
+  }
+
+  async isWhitelisted(telegramUserId: number, logContext?: IRequestLogContext): Promise<boolean> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Check bot admin");
+    const row = await this.db.findOne<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { telegram_user_id: telegramUserId, record_status: RecordStatus.ACTIVE },
+      ["id"],
+      event,
+    );
+    return !!row;
+  }
+
+  /** Remembers the admin's private chat with the bot (set on /start); it becomes a storage/log chat. */
+  async storeAdminChatId(telegramUserId: number, chatId: number, logContext?: IRequestLogContext): Promise<void> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Store bot admin chat id");
+    await this.db.update<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { telegram_user_id: telegramUserId, record_status: RecordStatus.ACTIVE },
+      { telegram_chat_id: chatId },
+      event,
+    );
+  }
+
+  /** Idempotent: an active admin is left alone, a removed one is reactivated (keeping its chat id). */
+  async addToWhitelist(telegramUserId: number, logContext?: IRequestLogContext): Promise<void> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Add bot admin");
+    const existing = await this.db.findOne<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { telegram_user_id: telegramUserId },
+      ["id", "record_status"],
+      event,
+    );
+    if (existing?.record_status === RecordStatus.ACTIVE) {
+      if (event) event.detail = "already active";
+      return;
+    }
+    if (existing) {
+      await this.db.update<ITB_TG_STATS_WHITELIST>(
+        TG_STATS_WHITELIST_TABLE,
+        { telegram_user_id: telegramUserId },
+        { record_status: RecordStatus.ACTIVE },
+        event,
+      );
+      if (event) event.detail = "reactivated";
+      return;
+    }
+    await this.db.insert<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { telegram_user_id: telegramUserId, added_dt: Date.now(), record_status: RecordStatus.ACTIVE },
+      event,
+    );
+  }
+
+  /** Returns false when the user wasn't an active admin. */
+  async removeFromWhitelist(telegramUserId: number, logContext?: IRequestLogContext): Promise<boolean> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Remove bot admin");
+    const existing = await this.db.findOne<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { telegram_user_id: telegramUserId, record_status: RecordStatus.ACTIVE },
+      ["id"],
+      event,
+    );
+    if (!existing) return false;
+    await this.db.update<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { telegram_user_id: telegramUserId },
+      { record_status: WHITELIST_REMOVED_STATUS },
+      event,
+    );
+    return true;
+  }
+
+  /** The first active admin chat (any one: no ordering, as before) receives every uploaded document. */
+  private async getStorageChatId(event?: IRequestLogEvent): Promise<number | null> {
+    const rows = await this.db.find<ITB_TG_STATS_WHITELIST>(
+      TG_STATS_WHITELIST_TABLE,
+      { record_status: RecordStatus.ACTIVE },
+      { limit: 1, columns: ["telegram_chat_id"], extraWhere: (qb) => qb.whereNotNull("telegram_chat_id") },
+      event,
+    );
+    return rows[0]?.telegram_chat_id ?? null;
+  }
+
+  private async compressForTelegram(buffer: Buffer, mimetype: string): Promise<{ buffer: Buffer; mimetype: string }> {
+    if (buffer.length <= MAX_TELEGRAM_FILE_BYTES) {
       return { buffer, mimetype };
     }
 
-    let quality = 80;
+    let quality = COMPRESS_START_QUALITY;
     let width: number | undefined;
     let output = buffer;
 
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for (let attempt = 0; attempt < COMPRESS_MAX_ATTEMPTS; attempt++) {
       const pipeline = sharp(buffer, { failOn: "none" }).rotate();
       if (width) pipeline.resize({ width, withoutEnlargement: true });
       output = await pipeline.jpeg({ quality }).toBuffer();
 
-      if (output.length <= TgImageService.MAX_TELEGRAM_FILE_BYTES) {
+      if (output.length <= MAX_TELEGRAM_FILE_BYTES) {
         break;
       }
 
-      if (quality > 40) {
-        quality -= 10;
+      if (quality > COMPRESS_MIN_QUALITY) {
+        quality -= COMPRESS_QUALITY_STEP;
       } else {
         const metadata = await sharp(buffer).metadata();
-        width = Math.round((width ?? metadata.width ?? 4000) * 0.85);
-        quality = 60;
+        width = Math.round((width ?? metadata.width ?? COMPRESS_FALLBACK_WIDTH) * COMPRESS_RESIZE_FACTOR);
+        quality = COMPRESS_RESIZE_QUALITY;
       }
     }
 
@@ -56,177 +407,6 @@ export class TgImageService {
       "TgImageService.upload",
       `Compressed image from ${buffer.length} to ${output.length} bytes to stay under Telegram's 20MB retrieval cap`,
     );
-    return { buffer: output, mimetype: "image/jpeg" };
-  }
-
-  async getStorageChatId(): Promise<number | null> {
-    const rows = await this.db.raw<{ telegram_chat_id: number }[]>(
-      `SELECT telegram_chat_id FROM ${TABLE_WHITELIST} WHERE record_status = 'A' AND telegram_chat_id IS NOT NULL LIMIT 1`
-    );
-    return rows[0]?.telegram_chat_id ?? null;
-  }
-
-  async storeAdminChatId(telegramUserId: number, chatId: number): Promise<void> {
-    await this.db.update<ITbTgStatsWhitelist>(
-      TABLE_WHITELIST,
-      { telegram_user_id: telegramUserId, record_status: "A" } as Partial<ITbTgStatsWhitelist>,
-      { telegram_chat_id: chatId },
-    );
-  }
-
-  async upload(
-    fileBuffer: Buffer,
-    originalname: string,
-    mimetype: string,
-    meta?: { username?: string; ip?: string; sessionId?: string; uuid?: string },
-  ): Promise<{ shortCode: string; url: string }> {
-    const storageChatId = await this.getStorageChatId();
-    if (!storageChatId) {
-      throw new Exceptions.InvalidRequest("No storage chat configured. Open the CDN bot in Telegram and send /start to activate uploads.");
-    }
-
-    const captionParts = ["📤 agenda_upload"];
-    if (meta?.username) captionParts.push(`👤 ${meta.username}`);
-    if (meta?.ip) captionParts.push(`🌐 ${meta.ip}`);
-    if (meta?.sessionId) captionParts.push(`📋 ${meta.sessionId}`);
-
-    // SVG can carry <script>, and /img is served from the API origin (where the
-    // auth + CSRF cookies live), so it's rasterised here and never stored as SVG.
-    const safe =
-      mimetype === "image/svg+xml"
-        ? { buffer: await sharp(fileBuffer).png().toBuffer(), mimetype: "image/png" }
-        : { buffer: fileBuffer, mimetype };
-
-    const { buffer: uploadBuffer, mimetype: uploadMimetype } = await this.compressForTelegram(safe.buffer, safe.mimetype);
-
-    const formData = new FormData();
-    formData.append("chat_id", String(storageChatId));
-    formData.append("caption", captionParts.join("\n"));
-    formData.append(
-      "document",
-      new Blob([new Uint8Array(uploadBuffer)], { type: uploadMimetype }),
-      originalname,
-    );
-
-    const tgRes = await fetch(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
-      method: "POST",
-      body: formData,
-    });
-    const body = await tgRes.json() as {
-      ok: boolean;
-      result?: { document?: { file_id: string } };
-    };
-
-    if (!body.ok || !body.result?.document?.file_id) {
-      LoggingUtilities.service.error("TgImageService.upload", JSON.stringify(body));
-      throw new Exceptions.ExternalRequest("Telegram");
-    }
-
-    const shortCode = crypto.randomBytes(4).toString("hex");
-
-    await this.db.insert<ITbTgImage>(TABLE, {
-      short_code: shortCode,
-      uuid: meta?.uuid,
-      telegram_file_id: body.result.document.file_id,
-      mime_type: uploadMimetype,
-      file_name: originalname,
-      size_in_bytes: uploadBuffer.length,
-      created_dt: Date.now(),
-      record_status: "A",
-    });
-
-    return { shortCode, url: `/img/${shortCode}` };
-  }
-
-  async getByShortCode(shortCode: string): Promise<Pick<ITbTgImage, "telegram_file_id" | "mime_type"> | undefined> {
-    return this.db.findOne<ITbTgImage>(TABLE, { short_code: shortCode, record_status: "A" }, [
-      "telegram_file_id",
-      "mime_type",
-    ]);
-  }
-
-  async resolveStream(telegramFileId: string, mimeType: string): Promise<{ stream: NodeJS.ReadableStream; contentType: string }> {
-    const fileInfo = await axios.get(
-      `https://api.telegram.org/bot${this.botToken}/getFile?file_id=${telegramFileId}`,
-    );
-
-    if (!fileInfo.data?.ok || !fileInfo.data?.result?.file_path) {
-      LoggingUtilities.service.error("TgImageService.resolveStream", "Telegram getFile failed");
-      throw new Exceptions.ExternalRequest("Telegram");
-    }
-
-    const filePath: string = fileInfo.data.result.file_path;
-    const fileResponse = await axios.get(
-      `https://api.telegram.org/file/bot${this.botToken}/${filePath}`,
-      { responseType: "stream" },
-    );
-
-    // Rows stored before SVGs were rasterised at upload — never serve raw SVG.
-    if (mimeType === "image/svg+xml") {
-      return { stream: fileResponse.data.pipe(sharp().png()), contentType: "image/png" };
-    }
-    // sharp() strips EXIF (including Orientation) on re-encode by default —
-    // .rotate() with no args bakes the EXIF-specified rotation into the
-    // pixels first, so the image still displays upright once that tag is gone.
-    return { stream: fileResponse.data.pipe(sharp().rotate().jpeg({ quality: 80 })), contentType: "image/jpeg" };
-  }
-
-  async listAdmins(): Promise<{ id: number; telegram_user_id: number; added_dt: number }[]> {
-    return this.db.raw<{ id: number; telegram_user_id: number; added_dt: number }[]>(
-      `SELECT id, telegram_user_id, added_dt FROM ${TABLE_WHITELIST} WHERE record_status = 'A' ORDER BY added_dt DESC`
-    );
-  }
-
-  async listRecent(limit: number): Promise<{ short_code: string; file_name: string | null; mime_type: string | null; size_in_bytes: number | null; created_dt: number }[]> {
-    return this.db.raw<{ short_code: string; file_name: string | null; mime_type: string | null; size_in_bytes: number | null; created_dt: number }[]>(
-      `SELECT short_code, file_name, mime_type, size_in_bytes, created_dt FROM ${TABLE} WHERE record_status = 'A' ORDER BY id DESC LIMIT ?`,
-      [limit]
-    );
-  }
-
-  async getStats(): Promise<{ totalFiles: number; totalSizeBytes: number }> {
-    const rows = await this.db.raw<{ count: string; total: string }[]>(
-      `SELECT COUNT(*) as count, COALESCE(SUM(size_in_bytes), 0) as total FROM ${TABLE} WHERE record_status = 'A'`
-    );
-    const row = rows[0];
-    return { totalFiles: Number(row.count), totalSizeBytes: Number(row.total) };
-  }
-
-  async isWhitelisted(telegramUserId: number): Promise<boolean> {
-    const row = await this.db.findOne<ITbTgStatsWhitelist>(
-      TABLE_WHITELIST,
-      { telegram_user_id: telegramUserId, record_status: "A" } as Partial<ITbTgStatsWhitelist>,
-      ["id"],
-    );
-    return !!row;
-  }
-
-  async addToWhitelist(telegramUserId: number): Promise<void> {
-    const existing = await this.db.findOne<ITbTgStatsWhitelist>(
-      TABLE_WHITELIST,
-      { telegram_user_id: telegramUserId } as Partial<ITbTgStatsWhitelist>,
-      ["id", "record_status"],
-    );
-    if (existing) {
-      if (existing.record_status === "A") return;
-      await this.db.update<ITbTgStatsWhitelist>(TABLE_WHITELIST, { telegram_user_id: telegramUserId }, { record_status: "A" });
-    } else {
-      await this.db.insert<ITbTgStatsWhitelist>(TABLE_WHITELIST, {
-        telegram_user_id: telegramUserId,
-        added_dt: Date.now(),
-        record_status: "A",
-      });
-    }
-  }
-
-  async removeFromWhitelist(telegramUserId: number): Promise<boolean> {
-    const existing = await this.db.findOne<ITbTgStatsWhitelist>(
-      TABLE_WHITELIST,
-      { telegram_user_id: telegramUserId, record_status: "A" } as Partial<ITbTgStatsWhitelist>,
-      ["id"],
-    );
-    if (!existing) return false;
-    await this.db.update<ITbTgStatsWhitelist>(TABLE_WHITELIST, { telegram_user_id: telegramUserId }, { record_status: "I" });
-    return true;
+    return { buffer: output, mimetype: JPEG_MIME_TYPE };
   }
 }

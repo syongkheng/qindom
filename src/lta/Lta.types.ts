@@ -1,0 +1,112 @@
+import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop.js";
+import { ITB_LRT_MRT_STATION } from "../models/databases/tb_lrt_mrt_station.js";
+
+// ── GET /lta/timing (LTA DataMall BusArrival v3, passed through) ──
+
+/**
+ * One upcoming bus from DataMall's BusArrival payload, passed through unchanged.
+ * Only the fields fndom reads are typed; DataMall sends more (OriginCode, Latitude, …).
+ * Every field is `""` when DataMall has no estimate for that slot.
+ */
+export interface BusArrivalNextBusDto {
+  EstimatedArrival: string;
+  /** "SEA" | "SDA" | "LSD" | "" */
+  Load: string;
+  /** "WAB" (wheelchair accessible) | "" */
+  Feature: string;
+  /** "SD" | "DD" | "BD" | "" */
+  Type: string;
+  [field: string]: unknown;
+}
+
+/** One bus service at the stop, as DataMall sends it (PascalCase is DataMall's, not ours). */
+export interface BusArrivalServiceDto {
+  ServiceNo: string;
+  Operator: string;
+  NextBus: BusArrivalNextBusDto;
+  NextBus2: BusArrivalNextBusDto;
+  NextBus3: BusArrivalNextBusDto;
+  [field: string]: unknown;
+}
+
+export interface BusArrivalsDto {
+  records: BusArrivalServiceDto[];
+}
+
+// ── GET /lta/bus/services (tb_lta_bus_info) ──
+
+/** Values are kept as stored (nullable VARCHAR), e.g. `distance: "4.1"`, `weekdayFirstBus: "0553"`, `"-"` = no service. */
+export interface BusServiceDto {
+  serviceNo: string | null;
+  operator: string | null;
+  direction: string | null;
+  stopSequence: string | null;
+  distance: string | null;
+  weekdayFirstBus: string | null;
+  weekdayLastBus: string | null;
+  saturdayFirstBus: string | null;
+  saturdayLastBus: string | null;
+  sundayFirstBus: string | null;
+  sundayLastBus: string | null;
+}
+
+export interface BusServicesDto {
+  services: BusServiceDto[];
+  count: number;
+}
+
+export interface BusStopCodeQuery {
+  busStopCode: string;
+}
+
+// ── GET /lta/bus-stops/nearby and GET /lta/mrt-stations/nearest (tb_lta_busstop, tb_lrt_mrt_station) ──
+
+/** Text fields come from nullable `tb_lta_busstop` VARCHARs. */
+export interface NearbyBusStopDto {
+  busStopCode: string | null;
+  roadName: string | null;
+  description: string | null;
+  /** Whole metres from the requested point. */
+  distanceM: number;
+}
+
+export interface NearbyBusStopsDto {
+  /** The nearest stops inside the radius, nearest first (at most `NEARBY_BUS_STOPS_MAX_ROWS`). */
+  busStops: NearbyBusStopDto[];
+  /** Every stop inside the radius, before the cap. */
+  count: number;
+}
+
+export interface NearestMrtStationDto {
+  station: string | null;
+  /** "MRT" | "LRT" (nullable column) */
+  type: string | null;
+  /** Whole metres from the requested point to the station's closest exit. */
+  distanceM: number;
+}
+
+export interface NearestMrtStationsDto {
+  stations: NearestMrtStationDto[];
+  count: number;
+}
+
+export interface NearbyBusStopsQuery {
+  lat: number;
+  lng: number;
+  radiusM: number;
+}
+
+export interface NearestMrtStationsQuery {
+  lat: number;
+  lng: number;
+  limit: number;
+}
+
+/** Raw proximity rows (snake_case, internal), mapped by `toNearbyBusStopDto` / `toNearestMrtStationDto`. */
+export type NearbyBusStopRow = Pick<ITB_LTA_BUSSTOP, "busstop_code" | "road_name" | "desc"> & {
+  distance_m: number;
+};
+
+export type NearestMrtStationRow = Pick<ITB_LRT_MRT_STATION, "station" | "type"> & {
+  distance_m: number;
+};

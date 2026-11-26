@@ -1,26 +1,21 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { route } from "../utils/RequestUtilities.js";
 import { GeocodeService } from "./Geocode.service.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
-import { handleException } from "../utils/requestUtils.js";
+import { NominatimPlaceDto } from "./Geocode.types.js";
+import { validateGeocodeQuery } from "./Geocode.validator.js";
 
-const MAX_QUERY_LENGTH = 200;
-
-export default function createGeocodeController(db: KnexSqlUtilities) {
+export default function createGeocodeController(db: KnexSqlUtilities): Router {
   const router = Router();
   const svc = new GeocodeService(db);
 
-  router.get("/", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const q = String(req.query.q ?? "").trim();
-      if (!q || q.length > MAX_QUERY_LENGTH) throw new Exceptions.InvalidRequest("q");
-      return cr.ok(await svc.search(q));
-    } catch (err) {
-      return handleException(err, cr, "GeocodeController.GET /", "Failed to geocode");
-    }
-  });
+  router.get(
+    "/",
+    route("GeocodeController.GET /", "Failed to geocode", async (req, cr) => {
+      const q = validateGeocodeQuery(req.query.q);
+      return cr.ok<NominatimPlaceDto[]>(await svc.search(q, req.logContext));
+    }),
+  );
 
   return router;
 }

@@ -3,21 +3,21 @@ import type { Knex } from "knex";
 const P = "travel.suggestion.packing.items";
 
 const LABEL_KEY_MAP: Record<string, string> = {
-  "Umbrella":                  `${P}.umbrella`,
-  "Sunscreen SPF 50":          `${P}.sunscreen`,
+  Umbrella: `${P}.umbrella`,
+  "Sunscreen SPF 50": `${P}.sunscreen`,
   "Comfortable walking shoes": `${P}.walkingShoes`,
   "Light breathable clothing": `${P}.breathableClothing`,
-  "Sunglasses":                `${P}.sunglasses`,
-  "Mosquito repellent":        `${P}.mosquitoRepellent`,
-  "Portable charger":          `${P}.portableCharger`,
-  "Travel adaptor":            `${P}.travelAdaptor`,
-  "Camera":                    `${P}.camera`,
-  "Reusable water bottle":     `${P}.waterBottle`,
-  "Collapsible tote bag":      `${P}.toteBag`,
-  "Hand sanitiser":            `${P}.handSanitiser`,
-  "Wet wipes":                 `${P}.wetWipes`,
-  "Passport / travel docs":    `${P}.passport`,
-  "Emergency cash":            `${P}.emergencyCash`,
+  Sunglasses: `${P}.sunglasses`,
+  "Mosquito repellent": `${P}.mosquitoRepellent`,
+  "Portable charger": `${P}.portableCharger`,
+  "Travel adaptor": `${P}.travelAdaptor`,
+  Camera: `${P}.camera`,
+  "Reusable water bottle": `${P}.waterBottle`,
+  "Collapsible tote bag": `${P}.toteBag`,
+  "Hand sanitiser": `${P}.handSanitiser`,
+  "Wet wipes": `${P}.wetWipes`,
+  "Passport / travel docs": `${P}.passport`,
+  "Emergency cash": `${P}.emergencyCash`,
 };
 
 export async function up(knex: Knex): Promise<void> {
@@ -32,9 +32,7 @@ export async function up(knex: Knex): Promise<void> {
   }
 
   for (const [label, key] of Object.entries(LABEL_KEY_MAP)) {
-    await knex("tb_suggestion_packing")
-      .where({ label, record_status: "A" })
-      .update({ label_key: key });
+    await knex("tb_suggestion_packing").where({ label, record_status: "A" }).update({ label_key: key });
   }
 }
 

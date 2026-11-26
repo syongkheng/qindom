@@ -20,16 +20,16 @@ const OLD_DENTAL_BREAKPOINTS = [
 
 export async function up(knex: Knex): Promise<void> {
   await knex.raw(`ALTER TABLE tb_analytic_system ADD COLUMN read_key_hash CHAR(64) NULL AFTER allowed_origins`);
-  await knex.raw(`UPDATE tb_analytic_system SET breakpoints = ?, updated_dt = ? WHERE system_key = 'dental-directory'`, [
-    JSON.stringify(DENTAL_BREAKPOINTS),
-    Date.now(),
-  ]);
+  await knex.raw(
+    `UPDATE tb_analytic_system SET breakpoints = ?, updated_dt = ? WHERE system_key = 'dental-directory'`,
+    [JSON.stringify(DENTAL_BREAKPOINTS), Date.now()],
+  );
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.raw(`UPDATE tb_analytic_system SET breakpoints = ?, updated_dt = ? WHERE system_key = 'dental-directory'`, [
-    JSON.stringify(OLD_DENTAL_BREAKPOINTS),
-    Date.now(),
-  ]);
+  await knex.raw(
+    `UPDATE tb_analytic_system SET breakpoints = ?, updated_dt = ? WHERE system_key = 'dental-directory'`,
+    [JSON.stringify(OLD_DENTAL_BREAKPOINTS), Date.now()],
+  );
   await knex.raw(`ALTER TABLE tb_analytic_system DROP COLUMN read_key_hash`);
 }

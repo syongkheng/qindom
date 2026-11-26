@@ -1,26 +1,28 @@
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
+import { ConnectivityDto } from "./Connectivity.types.js";
+import { APP_ENV } from "../config/env.js";
+
+const SERVER_CONNECTED_MESSAGE = "Server is connected";
+const DB_PING_SQL = "SELECT 1";
 
 /**
- * Service to handle connectivity checks.
+ * Health check used by `deploy.sh` after each deploy.
  */
 export class ConnectivityService {
   constructor(private db: KnexSqlUtilities) {}
 
   /**
-   * Simple JSON message to indicate server status.
-   * @returns status, message, and timestamp of server
+   * Confirms the process is up and the DB answers. A failed DB ping throws,
+   * so the endpoint returns 500 and the deploy is reported unhealthy.
    */
-  async statistics(): Promise<{
-    status: string;
-    message: string;
-    timestamp: string;
-    environment: string;
-  }> {
+  async statistics(): Promise<ConnectivityDto> {
+    await this.db.raw(DB_PING_SQL);
     return {
       status: "ok",
-      message: "Server is connected",
+      message: SERVER_CONNECTED_MESSAGE,
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV ?? "unknown",
+      environment: APP_ENV,
+      database: "up",
     };
   }
 }

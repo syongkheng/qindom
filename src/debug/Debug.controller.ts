@@ -1,49 +1,53 @@
-import { Router, Response } from "express";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { handleException, hasRole } from "../utils/requestUtils.js";
+import { Router } from "express";
+import { ResponseStatus } from "../models/responses/ControllerResponse.js";
+import { requireRole, route } from "../utils/RequestUtilities.js";
 import { Roles } from "../auth/Permission.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
+import { IS_PRD } from "../config/env.js";
+import { DebugStatusDto } from "./Debug.types.js";
 
-const isPrd = process.env.NODE_ENV === "prd";
+const MIN_STATUS = 200;
+const MAX_STATUS = 599;
+const FIRST_NON_SUCCESS_STATUS = 300;
+const FIRST_SERVER_ERROR_STATUS = 500;
+const INTERNAL_SERVER_ERROR = 500;
 
 // Throws from a nested call so the logged stack has a real frame to point at.
 function simulateUnhandledFailure(): never {
   throw new Error("Simulated unhandled exception from /debug/status/500");
 }
 
-// Test-only endpoint for exercising the response/logging pipeline (request
-// tree, Telegram compact alerts, Log Searcher). Open in dev; in prd it's
-// mounted behind MandatoryTokenFilter (see index.ts) and limited to SYSTEM_R5.
-export default function createDebugController(_db: KnexSqlUtilities) {
+/**
+ * Test-only endpoint for exercising the response/logging pipeline (request tree,
+ * Telegram compact alerts, Log Searcher). Open in dev; in prd it's mounted behind
+ * MandatoryTokenFilter (see app.ts) and limited to OWNER.
+ */
+export default function createDebugController(): Router {
   const router = Router();
 
-  // GET /debug/status/:code — responds with that status (200–599).
   // 500 goes through a real thrown Error → handleException (exception + stack);
   // every other code is returned directly.
-  router.get("/status/:code", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (isPrd && !hasRole(req, Roles.OWNER)) throw new Exceptions.ForbiddenAccess();
+  router.get(
+    "/status/:code",
+    route("DebugController.GET /status/:code", "Simulated failure", async (req, cr) => {
+      if (IS_PRD) requireRole(req, Roles.OWNER);
 
       const code = Number(req.params.code);
-      if (!Number.isInteger(code) || code < 200 || code > 599) {
+      if (!Number.isInteger(code) || code < MIN_STATUS || code > MAX_STATUS) {
         throw new Exceptions.InvalidRequest("code", "format");
       }
 
-      if (req.logContext) {
-        LoggingUtilities.request.branch(req.logContext, "SERVICE", `Simulating HTTP ${code}`);
-      }
+      LoggingUtilities.request.branch(req.logContext, "SERVICE", `Simulating HTTP ${code}`);
 
-      if (code === 500) simulateUnhandledFailure();
-      if (code < 300) return cr.result(code, "Ok", { simulated: code });
-      return cr.result(code, code < 500 ? `debug_${code}` : "Ko", `Simulated ${code} response`);
-    } catch (err) {
-      return handleException(err, cr, "DebugController.GET /status/:code", "Simulated failure");
-    }
-  });
+      if (code === INTERNAL_SERVER_ERROR) simulateUnhandledFailure();
+      if (code < FIRST_NON_SUCCESS_STATUS) {
+        return cr.result(code, ResponseStatus.OK, { simulated: code } satisfies DebugStatusDto);
+      }
+      const status = code < FIRST_SERVER_ERROR_STATUS ? `debug_${code}` : ResponseStatus.KO;
+      return cr.result(code, status, `Simulated ${code} response`);
+    }),
+  );
 
   return router;
 }

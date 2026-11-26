@@ -1,79 +1,67 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { getUser, handleException } from "../utils/requestUtils.js";
+import { getUser, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { TodoService } from "./Todo.service.js";
-import { TodoValidator } from "./Todo.validator.js";
+import { validateCreateBody, validateReorderBody, validateUpdateBody } from "./Todo.validator.js";
+import { TodoDeletedDto, TodoListDto, TodoTaskDto } from "./Todo.types.js";
 
-// Authenticated web CRUD for the personal to-do list. The read-only lock-screen
-// widget feed lives in siri-shortcut/Todo.v1.controller.ts (ss_ API key).
-export default function createTodoController(db: KnexSqlUtilities) {
+/**
+ * Authenticated web CRUD for the personal to-do list (mounted under `mw.auth`).
+ * The read-only lock-screen widget feed is `siri-shortcut/Todo.v1.controller.ts` (ss_ API key).
+ */
+export default function createTodoController(db: KnexSqlUtilities): Router {
   const router = Router();
-  const service = new TodoService(db);
+  const svc = new TodoService(db);
 
-  const validationEvent = (logContext?: IRequestLogContext) =>
-    logContext ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body") : undefined;
+  router.get(
+    "/",
+    route("TodoController.GET /", "Failed to load tasks", async (req, cr) =>
+      cr.ok<TodoListDto>(await svc.list(getUser(req).id, req.logContext)),
+    ),
+  );
 
-  router.get("/", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      return cr.ok(await service.list(getUser(req).id));
-    } catch (err) {
-      return handleException(err, cr, "TodoController.GET /", "Failed to load tasks");
-    }
-  });
-
-  router.post("/", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const { title } = TodoValidator.validateCreateRequest(req.body, validationEvent(req.logContext));
-      return cr.ok(await service.create(getUser(req).id, title));
-    } catch (err) {
-      return handleException(err, cr, "TodoController.POST /", "Failed to add task");
-    }
-  });
+  router.post(
+    "/",
+    route("TodoController.POST /", "Failed to add task", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { title } = validateCreateBody(req.body, event);
+      return cr.ok<TodoTaskDto>(await svc.create(getUser(req).id, title, req.logContext));
+    }),
+  );
 
   // Registered before /:taskId/* so "reorder" is never read as a task id.
-  router.post("/reorder", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const { ids } = TodoValidator.validateReorderRequest(req.body);
-      return cr.ok(await service.reorder(getUser(req).id, ids));
-    } catch (err) {
-      return handleException(err, cr, "TodoController.POST /reorder", "Failed to reorder tasks");
-    }
-  });
+  router.post(
+    "/reorder",
+    route("TodoController.POST /reorder", "Failed to reorder tasks", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { ids } = validateReorderBody(req.body, event);
+      return cr.ok<TodoListDto>(await svc.reorder(getUser(req).id, ids, req.logContext));
+    }),
+  );
 
-  router.post("/:taskId/update", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const body = TodoValidator.validateUpdateRequest(req.body, validationEvent(req.logContext));
-      return cr.ok(await service.update(getUser(req).id, req.params.taskId, body));
-    } catch (err) {
-      return handleException(err, cr, "TodoController.POST /:taskId/update", "Failed to update task");
-    }
-  });
+  router.post(
+    "/:taskId/update",
+    route("TodoController.POST /:taskId/update", "Failed to update task", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const update = validateUpdateBody(req.body, event);
+      return cr.ok<TodoTaskDto>(await svc.update(getUser(req).id, req.params.taskId, update, req.logContext));
+    }),
+  );
 
-  router.post("/:taskId/delete", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      return cr.ok(await service.delete(getUser(req).id, req.params.taskId));
-    } catch (err) {
-      return handleException(err, cr, "TodoController.POST /:taskId/delete", "Failed to delete task");
-    }
-  });
+  router.post(
+    "/:taskId/delete",
+    route("TodoController.POST /:taskId/delete", "Failed to delete task", async (req, cr) =>
+      cr.ok<TodoDeletedDto>(await svc.delete(getUser(req).id, req.params.taskId, req.logContext)),
+    ),
+  );
 
-  router.post("/:taskId/restore", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      return cr.ok(await service.restore(getUser(req).id, req.params.taskId));
-    } catch (err) {
-      return handleException(err, cr, "TodoController.POST /:taskId/restore", "Failed to restore task");
-    }
-  });
+  router.post(
+    "/:taskId/restore",
+    route("TodoController.POST /:taskId/restore", "Failed to restore task", async (req, cr) =>
+      cr.ok<TodoTaskDto>(await svc.restore(getUser(req).id, req.params.taskId, req.logContext)),
+    ),
+  );
 
   return router;
 }

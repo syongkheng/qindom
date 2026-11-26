@@ -5,7 +5,6 @@ import type { Knex } from "knex";
 // (verified via SHOW CREATE TABLE on 2026-06-15).
 // All tables use utf8mb4 for full Unicode support.
 export async function up(knex: Knex): Promise<void> {
-
   // ── Auth & Users ────────────────────────────────────────────────────────────
   await knex.raw(`
     CREATE TABLE IF NOT EXISTS tb_aa_user (

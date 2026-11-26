@@ -1,98 +1,90 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
 import multer from "multer";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { TgImageService } from "./TgImage.service.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
-import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
+import { clientIp, getUser, requireRole, route } from "../utils/RequestUtilities.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Roles } from "../auth/Permission.js";
+import { TgImageService } from "./TgImage.service.js";
+import { validateAdminBody, validateUploadBody, validateUploadFile } from "./TgImage.validator.js";
+import { TgAdminAddedDto, TgAdminDto, TgAdminRemovedDto, TgImageUploadDto } from "./TgImage.types.js";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
+const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
+const UPLOAD_FIELD = "file";
+/** A short code always serves the same image (a new upload gets a new code), so clients may cache it for a day. */
+const IMAGE_CACHE_CONTROL = "public, max-age=86400";
+// User content on the API origin: if anything ever renders as a document,
+// it gets no script, no requests and a unique origin.
+const IMAGE_CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
+
+/** Public `GET /img/:shortCode` (mounted under `mw.pub`). */
 export function createTgImageGetController(db: KnexSqlUtilities): Router {
   const router = Router();
   const svc = new TgImageService(db);
 
-  router.get("/:shortCode", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const record = await svc.getByShortCode(req.params.shortCode);
-      if (!record) throw new Exceptions.NotFound();
-      const { stream, contentType } = await svc.resolveStream(record.telegram_file_id, record.mime_type ?? "image/jpeg");
-      res.setHeader("Cache-Control", "public, max-age=86400");
-      // User content on the API origin — if anything ever renders as a document,
-      // it gets no script, no requests and a unique origin.
-      res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+  // Writes binary with its own headers, so it uses `res` instead of `cr.ok`. The image is loaded
+  // and re-encoded before the first header, so any failure still gets the standard JSON error.
+  router.get(
+    "/:shortCode",
+    route("TgImageController.GET /:shortCode", "Failed to stream image", async (req, _cr, res) => {
+      const { body, contentType } = await svc.loadImage(String(req.params.shortCode), req.logContext);
+      res.setHeader("Cache-Control", IMAGE_CACHE_CONTROL);
+      res.setHeader("Content-Security-Policy", IMAGE_CONTENT_SECURITY_POLICY);
       res.setHeader("Content-Type", contentType);
-      stream.pipe(res);
-    } catch (err) {
-      return handleException(err, cr, "TgImageController.GET /:shortCode", "Failed to stream image");
-    }
-  });
+      res.end(body);
+    }),
+  );
 
   return router;
 }
 
+/** JWT routes (auth on the mount): upload, plus the SYSTEM_R5-only bot-admin whitelist. */
 export function createTgImageController(db: KnexSqlUtilities): Router {
   const router = Router();
   const svc = new TgImageService(db);
 
-  router.post("/upload", upload.single("file"), async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!req.file) return cr.badRequest("No file provided");
-      const username = getUser(req).username;
-      const ip = req.ip ?? req.socket?.remoteAddress ?? "unknown";
-      const sessionId = req.body?.sessionId as string | undefined;
-      const uuid = req.body?.uuid as string | undefined;
-      const result = await svc.upload(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype,
-        { username, ip, sessionId, uuid },
-      );
-      return cr.ok(result);
-    } catch (err) {
-      return handleException(err, cr, "TgImageController.POST /upload", "Upload failed");
-    }
-  });
+  router.post(
+    "/upload",
+    upload.single(UPLOAD_FIELD),
+    route("TgImageController.POST /upload", "Upload failed", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Upload form");
+      const file = validateUploadFile(req.file, event);
+      const body = validateUploadBody(req.body, event);
+      const user = getUser(req);
+      const uploader = { id: user.id, username: user.username, ip: clientIp(req) };
+      return cr.ok<TgImageUploadDto>(await svc.upload(file, body, uploader, req.logContext));
+    }),
+  );
 
-  router.get("/admin/list", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-      return cr.ok(await svc.listAdmins());
-    } catch (err) {
-      return handleException(err, cr, "TgImageController.GET /admin/list", "Failed to list admins");
-    }
-  });
+  router.get(
+    "/admin/list",
+    route("TgImageController.GET /admin/list", "Failed to list admins", async (req, cr) => {
+      requireRole(req, Roles.OWNER);
+      return cr.ok<TgAdminDto[]>(await svc.listAdmins(req.logContext));
+    }),
+  );
 
-  router.post("/admin/add", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-      const telegramUserId = Number(req.body?.telegramUserId);
-      if (!telegramUserId || isNaN(telegramUserId)) return cr.badRequest("telegramUserId required");
-      await svc.addToWhitelist(telegramUserId);
-      return cr.ok({ added: true });
-    } catch (err) {
-      return handleException(err, cr, "TgImageController.POST /admin/add", "Failed to add admin");
-    }
-  });
+  router.post(
+    "/admin/add",
+    route("TgImageController.POST /admin/add", "Failed to add admin", async (req, cr) => {
+      requireRole(req, Roles.OWNER);
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { telegramUserId } = validateAdminBody(req.body, event);
+      await svc.addToWhitelist(telegramUserId, req.logContext);
+      return cr.ok<TgAdminAddedDto>({ added: true });
+    }),
+  );
 
-  router.post("/admin/remove", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-      const telegramUserId = Number(req.body?.telegramUserId);
-      if (!telegramUserId || isNaN(telegramUserId)) return cr.badRequest("telegramUserId required");
-      const removed = await svc.removeFromWhitelist(telegramUserId);
-      return cr.ok({ removed });
-    } catch (err) {
-      return handleException(err, cr, "TgImageController.POST /admin/remove", "Failed to remove admin");
-    }
-  });
+  router.post(
+    "/admin/remove",
+    route("TgImageController.POST /admin/remove", "Failed to remove admin", async (req, cr) => {
+      requireRole(req, Roles.OWNER);
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { telegramUserId } = validateAdminBody(req.body, event);
+      return cr.ok<TgAdminRemovedDto>({ removed: await svc.removeFromWhitelist(telegramUserId, req.logContext) });
+    }),
+  );
 
   return router;
 }

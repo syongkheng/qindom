@@ -1,4 +1,6 @@
-export interface ITb_wedding_rsvp_guest {
+import type { RecordStatus } from "../../constants/RecordStatus.js";
+
+export interface ITB_WEDDING_RSVP_GUEST {
   id: number;
   rsvp_id: number;
   name: string;
@@ -6,6 +8,6 @@ export interface ITb_wedding_rsvp_guest {
   contact_number: string | null;
   dietary_restrictions: string | null;
   meal_preference: string | null;
-  record_status: "A" | "D";
+  record_status: RecordStatus;
   created_dt: number;
 }

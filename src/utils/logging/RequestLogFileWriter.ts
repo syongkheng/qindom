@@ -1,18 +1,20 @@
 import fs from "fs";
 import path from "path";
+import { IS_PRD } from "../../config/env.js";
 
 // Independent of PM2/stdout capture — qindom writes its own copy of every
 // rendered request tree here, so log search works the same whether the app
 // is run via `tsx watch` (dev) or PM2 (prod). Deliberately a distinct file
 // from PM2's own out_file (qindom.out.log) to avoid double-logging the same
 // content twice in prod.
-const LOG_DIR = process.env.NODE_ENV === "prd" ? "/home/ubuntu/.pm2/logs" : path.join(process.cwd(), "logs");
+const LOG_DIR = IS_PRD ? "/home/ubuntu/.pm2/logs" : path.join(process.cwd(), "logs");
 
 export const REQUEST_LOG_DIR = LOG_DIR;
 export const REQUEST_LOG_FILE_PREFIX = "qindom-request-tree";
 
 const LOG_FILE = path.join(LOG_DIR, `${REQUEST_LOG_FILE_PREFIX}.log`);
-const MAX_SIZE_BYTES = 50 * 1024 * 1024;
+const MB = 1024 * 1024;
+const MAX_SIZE_BYTES = 50 * MB;
 
 function rotateIfNeeded(): void {
   try {

@@ -1,4 +1,6 @@
-export interface ITb_suggestion_note {
+import type { RecordStatus } from "../../constants/RecordStatus.js";
+
+export interface ITB_SUGGESTION_NOTE {
   id: number;
   country: string;
   title: string;
@@ -8,6 +10,6 @@ export interface ITb_suggestion_note {
   min_days_before_arrival: number | null;
   max_advance_hours: number | null;
   notes: string | null;
-  record_status: "A" | "D";
+  record_status: RecordStatus;
   created_dt: number;
 }

@@ -1,17 +1,20 @@
 import crypto from "crypto";
 import { Response } from "express";
+import { JWT_TTL_MS } from "../token/Token.service.js";
+import { IS_PRD } from "../config/env.js";
 
 export const JWT_COOKIE = "jwt_token";
 export const CSRF_COOKIE = "csrf_token";
 
-const isPrd = process.env.NODE_ENV === "prd";
-const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30d — matches Token.service.ts jwtExpiration
+/** Shared by the frontend (awense.com) and the API (api.awense.com) in prd. */
+const PRD_COOKIE_DOMAIN = ".awense.com";
+const CSRF_TOKEN_BYTES = 32;
 
 const commonCookieOptions = {
-  secure: isPrd,
+  secure: IS_PRD,
   sameSite: "lax" as const,
   path: "/",
-  maxAge: MAX_AGE_MS,
+  maxAge: JWT_TTL_MS,
 };
 
 const baseCookieOptions = {
@@ -22,12 +25,15 @@ const baseCookieOptions = {
   // (the browser still sends it to api.awense.com, it just can't be read to
   // build the X-CSRF-Token header), and every mutating request 403s with
   // csrf_invalid. Scoping to .awense.com shares it across both.
-  ...(isPrd ? { domain: ".awense.com" } : {}),
+  ...(IS_PRD ? { domain: PRD_COOKIE_DOMAIN } : {}),
 };
 
 export function setAuthCookies(res: Response, token: string): void {
   res.cookie(JWT_COOKIE, token, { ...baseCookieOptions, httpOnly: true });
-  res.cookie(CSRF_COOKIE, crypto.randomBytes(32).toString("hex"), { ...baseCookieOptions, httpOnly: false });
+  res.cookie(CSRF_COOKIE, crypto.randomBytes(CSRF_TOKEN_BYTES).toString("hex"), {
+    ...baseCookieOptions,
+    httpOnly: false,
+  });
 }
 
 export function clearAuthCookies(res: Response): void {
@@ -43,7 +49,7 @@ export function clearAuthCookies(res: Response): void {
   // or the stale cookie lingers and intermittently wins, failing the token/
   // CSRF check right after a fresh login. Harmless no-op in dev, where
   // baseCookieOptions never had a domain to begin with.
-  if (isPrd) {
+  if (IS_PRD) {
     res.clearCookie(JWT_COOKIE, { ...commonCookieOptions, httpOnly: true });
     res.clearCookie(CSRF_COOKIE, { ...commonCookieOptions, httpOnly: false });
   }

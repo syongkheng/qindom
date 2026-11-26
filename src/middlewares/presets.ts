@@ -3,15 +3,19 @@ import { RestRequestLogger } from "./RestRequestLogger.js";
 import { RequestHeaderFilter } from "./RequestHeaderFilter.js";
 import { RequestApiKeyFilter } from "./ApiKeyFilter.js";
 import { MandatoryTokenFilter } from "./TokenFilter.js";
-import { houseViewLimiter, mcpLimiter } from "./RateLimiter.js";
+import { houseViewLimiter } from "./RateLimiter.js";
+import { stripPersonalDataFromLog } from "../pdca/PdcaEnquiry.middleware.js";
 
+/** The middleware chains route groups are mounted with in app.ts. Every chain starts with RestRequestLogger. */
 export const mw = {
-  pub:    [RestRequestLogger] as RequestHandler[],
-  std:    [RestRequestLogger, RequestHeaderFilter] as RequestHandler[],
-  auth:   [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter] as RequestHandler[],
-  ssKey:  [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter("ss")] as RequestHandler[],
-  // Public, stateless MCP endpoint: no auth and no RequestHeaderFilter (MCP clients send their own Accept/Content-Type, no guaranteed user-agent).
+  pub: [RestRequestLogger],
+  std: [RestRequestLogger, RequestHeaderFilter],
+  auth: [RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter],
+  // Multipart uploads (`/img/upload`): no RequestHeaderFilter, which would 415 a non-JSON POST.
+  authUpload: [RestRequestLogger, MandatoryTokenFilter],
+  ssKey: [RestRequestLogger, RequestHeaderFilter, RequestApiKeyFilter("ss")],
   // Public read of one shared house by its unguessable token: no auth, per-IP rate limit.
-  housePublic: [RestRequestLogger, houseViewLimiter] as RequestHandler[],
-  mcpPublic: [RestRequestLogger, mcpLimiter] as RequestHandler[],
-};
+  housePublic: [RestRequestLogger, houseViewLimiter],
+  // PDCA contact form: the logged body is reduced to field lengths before anything else runs.
+  pdcaPublic: [RestRequestLogger, stripPersonalDataFromLog, RequestHeaderFilter],
+} satisfies Record<string, RequestHandler[]>;

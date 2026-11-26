@@ -1,0 +1,6 @@
+dist
+node_modules
+logs
+coverage
+*.sql
+package-lock.json

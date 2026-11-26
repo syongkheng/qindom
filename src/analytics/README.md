@@ -1,8 +1,28 @@
-## Analytics Controller
+# Analytics `/analytics`
 
-### v1 (use this) — `POST /analytics/collect`
+Page-view analytics for every frontend (fndom, jessikheng, the PDCA website), a per-system dashboard in fndom, and the private report the PDCA site's `/insights` page reads. One router (`mw.std` in `app.ts`).
 
-One fixed shape for every frontend; the schema lives in `AnalyticsContract.ts`.
+| File | Role |
+|---|---|
+| `Analytics.controller.ts` | every route: `/heartbeat`, `/collect`, `/report`, `/systems*`, `/admin/*` |
+| `AnalyticsHeartbeat.service.ts` | `POST /heartbeat` upsert (`tb_analytic_user_activity`) |
+| `AnalyticsSystem.service.ts` | registry (`tb_analytic_system`), 60 s in-memory cache, `toRegisteredSystem` |
+| `AnalyticsDashboard.service.ts` | `/collect` ingest + hourly summary (`tb_analytic_event`) |
+| `AnalyticsReport.ts` / `AnalyticsReport.service.ts` | report contract: pure validation/periods/aggregation + queries, viewer-key check |
+| `AnalyticsAccess.service.ts` | who may view which system (OWNER or a resource grant via `PermissionService`) |
+| `AnalyticsContract.ts` | ingest contract v1: screen resolution, origin checks (lenient `isOriginAllowed` for `/collect`; strict `isOriginRequiredAndAllowed` for `/report`, also used by pdca), normalisation |
+| `Analytics.validator.ts` | hand-written request validation (replaced zod in Nov 2026, same accept/reject behaviour) |
+| `Analytics.types.ts` | DTOs, bodies, contract enums |
+
+All responses use the usual envelope `{ code, status, data }`. Errors use the registry shape `data = { code, message, fieldName, typeOfError, timestamp }`, except the report's 400 (below).
+
+---
+
+## Public routes (frozen contracts)
+
+### `POST /analytics/collect` — ingest, contract v1
+
+Public (`OptionalTokenFilter`: a logged-in user's username is stored, otherwise NULL). `analyticsLimiter` 120/min/IP. Not sent to Telegram (`RestRequestLogger` skip list).
 
 ```json
 {
@@ -18,97 +38,86 @@ One fixed shape for every frontend; the schema lives in `AnalyticsContract.ts`.
 }
 ```
 
-- `system` must be an active row in `tb_analytic_system` (else 400). If the row has `allowed_origins`, the `Origin` header must match (else 403).
-- `screen.breakpoint` is the site's own breakpoint key from that row; unknown keys are stored as `unknown`.
-- `screen.size` is `small | medium | large`; if missing/invalid it is derived from the breakpoint's mapping.
-- `event` is snake_case; `page_view` drives the dashboard. `properties` ≤ 4KB. Rate limit 120/min/IP.
-- Dashboard reads: `GET /analytics/systems`, `GET /analytics/systems/:key/summary?hours=24` (login; SYSTEM_R5 or a grant in `tb_aa_resource_access`).
+| Field | Rule |
+|---|---|
+| `v` | exactly `1` |
+| `system` | `^[a-z0-9][a-z0-9-]{0,63}$`, must be an active `tb_analytic_system` row |
+| `event` | snake_case `^[a-z][a-z0-9_]{0,63}$`; `page_view` drives the dashboard |
+| `sessionId` | 1–64 chars |
+| `timestamp` | optional whole number ≥ 0 (epoch ms); more than 24 h from server time → server time |
+| `page`, `referrer` | optional, ≤ 512 chars, default `""` |
+| `screen` | optional; `width`/`height` whole numbers 0–100000; `breakpoint` ≤ 32 chars; `size` ≤ 16 chars |
+| `properties` | optional plain object, default `{}`, ≤ 4096 bytes as JSON |
 
-### Report — `POST /analytics/report` (PDCA website `/insights`)
+Lengths count Unicode characters (an emoji is one). Unknown keys are ignored. `screen.breakpoint` must be one of the system's keys, else it's stored as `unknown`; `screen.size` is kept if it is `small | medium | large`, else derived from the breakpoint, else `unknown`.
 
-Takes a `pdca.analytics.report/v1` request (the PDCA site's `buildRequest()`) and returns the v1 response with `source: "qindom"`, wrapped in the usual `{ code, status, data }` envelope. Validation, periods and aggregation live in `AnalyticsReport.ts`; queries in `AnalyticsReport.service.ts`.
+Response: `{ "message": "Event recorded successfully." }`.
 
-- **Auth:** there is no login, because the PDCA site has no accounts. The header `x-analytics-key: <viewer key>` must match `tb_analytic_system.read_key_hash` (sha256, timing-safe), and the `Origin` must be in `allowed_origins`. Every failure gets the same 403. An OWNER rotates the key with `POST /analytics/admin/systems/:key/read-key`, which returns the plain key once and invalidates the old one. Share it as `https://<pdca-site>/insights?key=<key>`.
-- **Validation:** a bad request gets a 400 with `data.problems[]`. The messages match the frontend validator.
-- **Data:** events from `tb_analytic_event` for the site's system, counted on Singapore dates.
-  - `visitors` = distinct `properties.visitorId` (or `session_id` when there is none). `newVisitors` = visitors whose first-ever event falls in the period.
-  - Event counts: `page_view`, `whatsapp_click`, `call_click`, `email_click`, `directions_click`, `file_download` and `generate_lead`. `enquiries` = whatsapp + call + email + form.
-  - Breakdowns:
-    - source: the referrer of each visitor's first event in the period, classified as Google search, Google Maps, Instagram, Facebook, LinkedIn, TikTok, Other sites or Direct
-    - page: `page_view` by path
-    - device: each visitor's last `screen_size` (small = mobile, medium = tablet, large = desktop)
-    - tails beyond `limit` collapse into "Other"
-- **Not measurable:** `country` and `searchTerm` come back as `[]`, and `listing*` as 0. Rate limit 30/min/IP.
+| Status | `data.code` | When |
+|---|---|---|
+| 400 | `invalid_request_<field>` (`typeOfError: "format"`) | first failing field, as a path: `v`, `screen.width`, `properties`, or `body` when the body isn't an object |
+| 400 | `invalid_request_system` | system unknown or disabled |
+| 403 | `forbidden_access` | the system has `allowed_origins` and the `Origin` header isn't one of them (no `Origin` header passes) |
+| 429 | | rate limit |
 
-To add a site: create its registry row with `POST /analytics/admin/systems` (SYSTEM_R5; body `{key, displayName, breakpoints, allowedOrigins, active}`), then send the payload above. fndom `/admin/analytics-access` manages viewers and allowed origins for existing rows.
+### `POST /analytics/report` — `pdca.analytics.report/v1` (PDCA `/insights`)
 
-### Legacy (deprecated, kept so nothing breaks)
+No login (the PDCA site has no accounts). Header `x-analytics-key: <viewer key>` must match `tb_analytic_system.read_key_hash` (sha256 hex, timing-safe), and the `Origin` header is **required** and must be in the system's `allowed_origins` (`isOriginRequiredAndAllowed`; user decision Y1). `site` → system via `REPORT_SITES` (`pdcadental.com` → `dental-directory`). `analyticsReportLimiter` 30/min/IP.
 
-- `POST /analytics` — ingest a structured event from any frontend system
-- `POST /analytics/heartbeat` — legacy session-activity ping (kept for compatibility)
-- Authentication is optional on both routes — anonymous sessions are accepted
+Request (exact keys, no others): `{ contract: "pdca.analytics.report/v1", site: "pdcadental.com", timezone: "Asia/Singapore", period: { start, end }, compare: "previous_month", metrics[], breakdowns[], limit (1–20) }`; period ≤ 366 days.
 
-The base `POST /analytics` endpoint mirrors the mock server's `POST /analytics` path, so
-frontends switch between dev (`http://localhost:3000/analytics`) and production
-(`https://<qindom-host>/analytics`) by changing only `VITE_ANALYTICS_ENDPOINT`.
+Response: `{ contract, source: "qindom", generatedAt, period, comparePeriod, totals, series, breakdowns }`.
 
-------------------------------------------------------------------------------------------
+- `visitors` = distinct `properties.visitorId` (or `session_id`); `newVisitors` = first-ever event in the period.
+- Counts: `page_view`, `whatsapp_click`, `call_click`, `email_click`, `directions_click`, `file_download`, `generate_lead`; `enquiries` = whatsapp + call + email + form.
+- Breakdowns: source (referrer of each visitor's first event: Google search, Google Maps, Instagram, Facebook, LinkedIn, TikTok, Other sites, Direct; the site's own hosts count as Direct), page (`page_view` by path), device (last `screen_size`: small = mobile, medium = tablet, large = desktop); tails beyond `limit` collapse into "Other".
+- Periods are Singapore dates. Not measurable: `country`/`searchTerm` → `[]`, `listing*` → 0.
 
-#### Ingest an analytics event
+| Status | Body | When |
+|---|---|---|
+| 400 | `status: "Bad Request"`, `data: { message: "Request rejected", problems: [...] }` | invalid request; messages match the PDCA site's own validator (frozen shape, not the registry error) |
+| 403 | `forbidden_access` | the SAME response for unknown site/system, missing or disallowed origin, missing or wrong key |
+| 429 | | rate limit |
 
-<details>
- <summary><code>POST</code> <code>/analytics</code></summary>
+An OWNER rotates the key with `POST /analytics/admin/systems/:key/read-key` and shares `https://<pdca-site>/insights?key=<key>`.
 
-Header: Authorization: Bearer &lt;Token&gt;  (optional)
+### `POST /analytics/heartbeat` — session last-seen (fndom, frozen)
 
-##### Payload
-```json
-{
-    "event":      "string",            // e.g. "page_view", "button_click"
-    "properties": { },                 // event-specific metadata (any JSON object)
-    "page":       "string",            // e.g. "/services"
-    "referrer":   "string",
-    "sessionId":  "string",
-    "timestamp":  "ISO-8601 string",   // e.g. "2026-06-26T10:00:00.000Z"
-    "system":     "string"             // e.g. "llm" | "travel-planner" | "dental-directory"
-}
-```
+Public, `OptionalTokenFilter`, no route limiter (global only). Only presence is checked.
 
-##### Response
-```json
-{ "code": 200, "status": "Ok", "data": { "message": "Event recorded successfully." } }
-```
-</details>
+- `{ sessionId, system }` → `{ "message": "Heartbeat recorded successfully." }`; upserts `tb_analytic_user_activity` by `session_id` (user = username or `Anonymous`). fndom sends it every 30 s. Not sent to Telegram.
+- Missing field → 400 `invalid_request_sessionId|system` (in that order). A DB failure is 500 `entity_creation_failed`.
 
-------------------------------------------------------------------------------------------
+The old loose ingest `POST /analytics` (no caller, no length caps) was removed (user decision Y2, 2026-11-26): it now answers the app's 404.
 
-#### Record a heartbeat (legacy)
+---
 
-<details>
- <summary><code>POST</code> <code>/analytics/heartbeat</code></summary>
+## Dashboard reads (JWT, `MandatoryTokenFilter`)
 
-Header: Authorization: Bearer &lt;Token&gt;  (optional)
+- `GET /analytics/systems` → `[{ key, displayName, breakpoints }]`: every active system for OWNER (SYSTEM_R5), otherwise only systems with an active grant in `tb_aa_resource_access`.
+- `GET /analytics/systems/:key/summary?hours=24` → `{ system, range: { from, to, bucket: "hour", hours }, views: { total, uniqueSessions, series[{ t, views, sessions }] }, breakpoints[{ key, label, views, sessions }], sizes[...], topPages[{ page, views }] }`. `hours` is lenient: missing/invalid → 24, clamped to 1–168. 403 `forbidden_access` for "not granted", unknown and disabled keys alike (keys can't be probed).
 
-##### Payload
-```json
-{
-    "sessionId": "string",
-    "system":    "string"
-}
-```
+## Owner administration (JWT + SYSTEM_R5, `adminLimiter` 60/15 min)
 
-##### Response
-```json
-{ "code": 200, "status": "Ok", "data": { "message": "Heartbeat recorded successfully." } }
-```
-</details>
+Non-owner → 403 `forbidden_access` ("Insufficient permissions"). POSTs need the CSRF header. Grants never confer roles.
 
-------------------------------------------------------------------------------------------
+| Route | Body | Response | Errors |
+|---|---|---|---|
+| `POST /admin/systems/:key/read-key` | `{}` | `{ readKey }` (shown once; only its hash is stored, the old key stops working) | 404 unknown system |
+| `GET /admin/systems` | | `[{ key, displayName, breakpoints, allowedOrigins, active }]` incl. disabled | |
+| `POST /admin/systems` | `{ key, displayName (trimmed, 1–128), breakpoints (1–12 of { key ^[A-Za-z0-9_-]{1,32}$, label 1–64, maxWidth positive int or null, size small/medium/large }), allowedOrigins? (≤ 20, `^https?://host[:port]$`, default []), active? (default true) }` | the full list | 400 `invalid_request_<path>` (e.g. `breakpoints.0.key`) |
+| `GET /admin/systems/:key/access` | | `[{ userId, username, email, system, accessLevel, grantedDt }]` | |
+| `POST /admin/systems/:key/access` | `{ username }` (an awense.com `fnd` account) | the grant list | 404 unknown system (checked first), 400 `invalid_request_username`, 404 "No awense.com account with that username" |
+| `POST /admin/systems/:key/access/:userId/revoke` | `{}` | the grant list | 400 `invalid_request_userId` |
 
-### Known system identifiers
+fndom `/admin/analytics-access` manages viewers and allowed origins; `/analytics` shows the dashboards.
 
-| system             | Frontend             |
-|--------------------|----------------------|
+## Adding a site
+
+Create its row with `POST /analytics/admin/systems`, add its origin to `allowedOrigins` (and to `ALLOWED_ORIGINS` for CORS), then send the collect payload above.
+
+| system | Frontend |
+|---|---|
+| `fndom` | awense.com |
+| `jessikheng` | wedding site |
 | `dental-directory` | PDCA dental lab site |
-| `travel-planner`   | fndom travel planner |
-| `llm`              | LLM chat interface   |

@@ -1,90 +1,61 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { LogEmoji } from "../constants/LogEmoji.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
-import { InvalidRequestException } from "../exceptions/InvalidRequestException.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
+import { NoteSuggestionBody, PackingSuggestionBody } from "./Suggestion.types.js";
 
-export class SuggestionValidator {
-  static validateCreatePacking(
-    body: Record<string, unknown>,
-    loggingEvent?: IRequestLogEvent,
-  ): { tripType: string; label: string; labelKey?: string; category?: string } {
-    const { tripType, label, labelKey, category } = body;
-    V.requiredString(tripType, "tripType", loggingEvent);
-    V.requiredString(label, "label", loggingEvent);
-    V.optionalString(labelKey, "labelKey", loggingEvent);
-    V.optionalString(category, "category", loggingEvent);
-    return {
-      tripType: (tripType as string).trim(),
-      label: (label as string).trim(),
-      labelKey: labelKey as string | undefined,
-      category: category as string | undefined,
-    };
-  }
+// Column widths: tb_suggestion_packing / tb_suggestion_note.
+const TRIP_TYPE_MAX_LENGTH = 64;
+const LABEL_MAX_LENGTH = 255;
+const LABEL_KEY_MAX_LENGTH = 128;
+const CATEGORY_MAX_LENGTH = 64;
+const COUNTRY_MAX_LENGTH = 128;
+const TITLE_MAX_LENGTH = 255;
+const URL_MAX_LENGTH = 512;
+// tb_suggestion_note.notes is TEXT (64 KB); keep it to something a person would write.
+const NOTES_MAX_LENGTH = 5000;
+const HTTP_URL_REGEX = /^https?:\/\/\S+$/i;
 
-  static validateNoteSearch(
-    query: Record<string, unknown>,
-    loggingEvent?: IRequestLogEvent,
-  ): { country: string } {
-    const { country } = query;
-    V.requiredString(country, "country", loggingEvent);
-    if (!(country as string).trim()) {
-      loggingEvent?.children?.push(`'country' nonEmpty ${LogEmoji.error}`);
-      throw new InvalidRequestException("country", "format");
-    }
-    loggingEvent?.children?.push(`'country' nonEmpty ${LogEmoji.success}`);
-    return { country: (country as string).trim() };
-  }
+/** Optional non-negative whole number (days / hours). */
+function optionalCount(value: unknown, field: string, event?: IRequestLogEvent): number | null {
+  if (value === undefined || value === null) return null;
+  V.number(value, field, event, "(O)");
+  if (!Number.isInteger(value) || (value as number) < 0) throw new Exceptions.InvalidRequest(field, "format");
+  return value as number;
+}
 
-  static validateCreateNote(
-    body: Record<string, unknown>,
-    loggingEvent?: IRequestLogEvent,
-  ): {
-    country: string;
-    title: string;
-    url: string;
-    category?: string;
-    mandatory?: boolean;
-    minDaysBeforeArrival?: number;
-    maxAdvanceHours?: number;
-    notes?: string;
-  } {
-    const { country, title, url, category, mandatory, minDaysBeforeArrival, maxAdvanceHours, notes } = body;
-    V.requiredString(country, "country", loggingEvent);
-    V.requiredString(title, "title", loggingEvent);
-    V.requiredString(url, "url", loggingEvent);
-    V.optionalString(category, "category", loggingEvent);
-    V.optionalString(notes, "notes", loggingEvent);
-    if (mandatory !== undefined && mandatory !== null) {
-      V.boolean(mandatory, "mandatory", loggingEvent, "(O)");
-    }
-    if (minDaysBeforeArrival !== undefined && minDaysBeforeArrival !== null) {
-      V.number(minDaysBeforeArrival, "minDaysBeforeArrival", loggingEvent, "(O)");
-    }
-    if (maxAdvanceHours !== undefined && maxAdvanceHours !== null) {
-      V.number(maxAdvanceHours, "maxAdvanceHours", loggingEvent, "(O)");
-    }
-    return {
-      country: (country as string).trim(),
-      title: (title as string).trim(),
-      url: (url as string).trim(),
-      category: category as string | undefined,
-      mandatory: mandatory as boolean | undefined,
-      minDaysBeforeArrival: minDaysBeforeArrival as number | undefined,
-      maxAdvanceHours: maxAdvanceHours as number | undefined,
-      notes: notes as string | undefined,
-    };
-  }
+export function validatePackingBody(body: Record<string, unknown>, event?: IRequestLogEvent): PackingSuggestionBody {
+  return {
+    tripType: V.requiredText(body.tripType, "tripType", TRIP_TYPE_MAX_LENGTH, event),
+    label: V.requiredText(body.label, "label", LABEL_MAX_LENGTH, event),
+    labelKey: V.optionalText(body.labelKey, "labelKey", LABEL_KEY_MAX_LENGTH, event),
+    category: V.optionalText(body.category, "category", CATEGORY_MAX_LENGTH, event),
+  };
+}
 
-  static validateIdParam(
-    params: Record<string, string>,
-    loggingEvent?: IRequestLogEvent,
-  ): { id: number } {
-    const id = Number(params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      loggingEvent?.children?.push(`'id' invalid ${LogEmoji.error}`);
-      throw new InvalidRequestException("id", "format");
-    }
-    loggingEvent?.children?.push(`'id' valid ${LogEmoji.success}`);
-    return { id };
-  }
+export function validateNoteBody(body: Record<string, unknown>, event?: IRequestLogEvent): NoteSuggestionBody {
+  const url = V.requiredText(body.url, "url", URL_MAX_LENGTH, event);
+  if (!HTTP_URL_REGEX.test(url)) throw new Exceptions.InvalidRequest("url", "format");
+
+  if (body.mandatory !== undefined && body.mandatory !== null) V.boolean(body.mandatory, "mandatory", event, "(O)");
+
+  return {
+    country: V.requiredText(body.country, "country", COUNTRY_MAX_LENGTH, event),
+    title: V.requiredText(body.title, "title", TITLE_MAX_LENGTH, event),
+    url,
+    category: V.optionalText(body.category, "category", CATEGORY_MAX_LENGTH, event),
+    mandatory: body.mandatory === true,
+    minDaysBeforeArrival: optionalCount(body.minDaysBeforeArrival, "minDaysBeforeArrival", event),
+    maxAdvanceHours: optionalCount(body.maxAdvanceHours, "maxAdvanceHours", event),
+    notes: V.optionalText(body.notes, "notes", NOTES_MAX_LENGTH, event),
+  };
+}
+
+export function validateCountryQuery(query: Record<string, unknown>, event?: IRequestLogEvent): { country: string } {
+  return { country: V.requiredText(query.country, "country", COUNTRY_MAX_LENGTH, event) };
+}
+
+export function validateIdParam(params: Record<string, string>): { id: number } {
+  const id = Number(params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Exceptions.InvalidRequest("id", "format");
+  return { id };
 }

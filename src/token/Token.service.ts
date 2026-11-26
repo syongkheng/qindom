@@ -1,58 +1,45 @@
-import { Exceptions } from "../exceptions/AppExceptions.js";
-import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import jwt from "jsonwebtoken";
+import { Time } from "../constants/Time.js";
+import { Exceptions } from "../exceptions/AppExceptions.js";
+import { IDecodedTokenUser } from "./Token.types.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 
-export class TokenService {
-  private readonly jwtSecret: string;
-  private readonly jwtExpiration = "30d";
+/** The only algorithm we sign with and accept (pinned so `alg: none` / RS↔HS confusion can't happen). */
+export const JWT_ALGORITHM = "HS256";
+/** Session length. The auth cookie's `maxAge` uses the same value. */
+export const JWT_TTL_MS = 30 * Time.DAY_MS;
 
-  constructor(private db: KnexSqlUtilities) {
-    this.jwtSecret = process.env.JWT_SECRET!;
+const JWT_SECRET_ENV = "JWT_SECRET";
 
-    if (!this.jwtSecret) {
-      LoggingUtilities.service.error(
-        "TokenService",
-        "JWT_SECRET is not set in environment variables"
-      );
-      throw new Error("JWT_SECRET environment variable not set");
-    }
+/**
+ * Read lazily (on call, not at import; see config/README.md), so tests can set it per case.
+ * index.ts calls this once at boot to fail fast.
+ */
+export function getJwtSecret(): string {
+  const secret = process.env[JWT_SECRET_ENV];
+  if (!secret) throw new Error(`${JWT_SECRET_ENV} environment variable not set`);
+  return secret;
+}
+
+/** Signs a session JWT. Throws `UnknownException` if signing fails. */
+export function signToken(payload: IDecodedTokenUser): string {
+  try {
+    const { id, username, system, roles, lastLoggedInDt } = payload;
+    return jwt.sign({ id, username, system, roles, lastLoggedInDt }, getJwtSecret(), {
+      algorithm: JWT_ALGORITHM,
+      expiresIn: JWT_TTL_MS / Time.SECOND_MS,
+    });
+  } catch (error) {
+    LoggingUtilities.service.error("TokenService.signToken", `Failed to sign token: ${toMessage(error)}`);
+    throw new Exceptions.Unknown();
   }
+}
 
-  async generateToken({
-    id,
-    username,
-    system,
-    roles,
-    lastLoggedInDt,
-  }: {
-    id: number;
-    username: string;
-    system: string;
-    roles: string[];
-    lastLoggedInDt: number;
-  }): Promise<string> {
-    LoggingUtilities.service.info(
-      "TokenService.generateToken",
-      `Generating token`
-    );
-    try {
-      const token = jwt.sign(
-        { id, username, system, roles, lastLoggedInDt },
-        this.jwtSecret,
-        { algorithm: "HS256", expiresIn: this.jwtExpiration }
-      );
-      LoggingUtilities.service.info(
-        "TokenService.generateToken",
-        `Token generated - [REDACTED]`
-      );
-      return token;
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "TokenService.generateToken",
-        `Something went wrong generating the token: ${error}`
-      );
-      throw new Exceptions.Unknown();
-    }
-  }
+/**
+ * Verifies signature, algorithm and expiry. Throws jsonwebtoken's errors unchanged
+ * (callers distinguish `jwt.TokenExpiredError`). Does NOT check DB revocation.
+ */
+export function verifyToken(token: string): IDecodedTokenUser {
+  return jwt.verify(token, getJwtSecret(), { algorithms: [JWT_ALGORITHM] }) as IDecodedTokenUser;
 }

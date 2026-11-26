@@ -1,9 +1,9 @@
-import dotenv from "dotenv";
 import { IRequestLogContext, IRequestLogEvent, LogStage } from "../../models/IRequestLogContext.js";
 import { appendRequestLog } from "./RequestLogFileWriter.js";
-import { redactForLog, redactTextForLog, redactUrlForLog } from "./LogRedaction.js";
-
-dotenv.config();
+import { maskEmailsInText, redactForLog, redactTextForLog, redactUrlForLog } from "./LogRedaction.js";
+import { LogEmoji } from "../../constants/LogEmoji.js";
+import { IS_PRD } from "../../config/env.js";
+import { escapeTelegramHtml } from "../TelegramUtilities.js";
 
 // `html` is Telegram HTML (parse_mode: "HTML"), already escaped.
 export interface TelegramLogMessage {
@@ -11,36 +11,37 @@ export interface TelegramLogMessage {
   logSearcherUrl?: string;
 }
 
-const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export type TelegramLogSender = (message: TelegramLogMessage, chatId: number) => void;
+
+/** HTTP status from which the response icon turns into a warning / an error. */
+const MIN_WARNING_STATUS = 400;
+const MIN_ERROR_STATUS = 500;
+
+/** " (cause: Error ER_DUP_ENTRY)" for errors that wrap a driver error (see KnexSqlUtilities), else "". */
+function describeCause(err: Error | null): string {
+  const cause = (err as { cause?: unknown } | null)?.cause;
+  if (cause === undefined || cause === null) return "";
+  if (!(cause instanceof Error)) return ` (cause: ${String(cause)})`;
+  const code = (cause as { code?: unknown }).code;
+  return ` (cause: ${cause.name}${typeof code === "string" ? ` ${code}` : ""})`;
+}
 
 export class LoggingUtilities {
-  private static readonly appEnv: string = process.env.NODE_ENV ?? "unknown";
-
   private static readonly INDENT = "│ ";
   private static readonly BRANCH = "├─";
   private static readonly END = "└─";
 
-  private static logSender: ((message: TelegramLogMessage, chatId: number) => void) | null = null;
+  private static logSender: TelegramLogSender | null = null;
 
-  static setLogSender(fn: (message: TelegramLogMessage, chatId: number) => void): void {
+  /** Registered at boot by `TelegramLogSender.ts` (only when the bot token is set). */
+  static setLogSender(fn: TelegramLogSender | null): void {
     LoggingUtilities.logSender = fn;
   }
 
   // fndom's Log Searcher page (reads ?requestId= and searches on load)
-  private static readonly LOG_SEARCHER_URL =
-    process.env.NODE_ENV === "prd"
-      ? "https://awense.com/admin/log-searcher"
-      : "http://localhost:5173/admin/log-searcher";
-
-  constructor() {
-    if (!LoggingUtilities.appEnv || LoggingUtilities.appEnv === "unknown") {
-      console.log(`Current Environment: ${LoggingUtilities.appEnv}`);
-
-      LoggingUtilities.service.error("LoggingUtilities", "App environment is not set in environment variables");
-
-      throw new Error("App environment is not set in environment variables");
-    }
-  }
+  private static readonly LOG_SEARCHER_URL = IS_PRD
+    ? "https://awense.com/admin/log-searcher"
+    : "http://localhost:5173/admin/log-searcher";
 
   // =========================================================
   // Timestamp
@@ -102,7 +103,12 @@ export class LoggingUtilities {
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.startsWith("at ") && !line.includes("node:internal"))
-      .map((line) => line.replace(/file:\/\//g, "").split(`${LoggingUtilities.PROJECT_ROOT}/`).join(""))
+      .map((line) =>
+        line
+          .replace(/file:\/\//g, "")
+          .split(`${LoggingUtilities.PROJECT_ROOT}/`)
+          .join(""),
+      )
       .slice(0, LoggingUtilities.MAX_STACK_FRAMES);
     return frames.length ? frames : undefined;
   }
@@ -111,9 +117,9 @@ export class LoggingUtilities {
   // there, unlike the Log Searcher frontend which renders its own icon.
   private static statusIcon(code?: number): string {
     if (code === undefined) return "";
-    if (code >= 500) return "❌";
-    if (code >= 400) return "⚠️";
-    return "✅";
+    if (code >= MIN_ERROR_STATUS) return LogEmoji.error;
+    if (code >= MIN_WARNING_STATUS) return LogEmoji.warning;
+    return LogEmoji.success;
   }
 
   // =========================================================
@@ -128,7 +134,6 @@ export class LoggingUtilities {
       "SQL",
       "CACHE",
       "QUEUE",
-      "DISCORD",
       "TELEGRAM",
       "SYSTEM",
       "HTTP",
@@ -155,7 +160,11 @@ export class LoggingUtilities {
      * For middlewares mounted inside a router (after the controller stage has
      * started), so their events are still attributed to the middleware stage.
      */
-    static middleware(context: IRequestLogContext, category: IRequestLogEvent["type"], message: string): IRequestLogEvent {
+    static middleware(
+      context: IRequestLogContext,
+      category: IRequestLogEvent["type"],
+      message: string,
+    ): IRequestLogEvent {
       const event = this.branch(context, category, message);
       event.stage = "middleware";
       return event;
@@ -164,6 +173,8 @@ export class LoggingUtilities {
     /**
      * Append an event into the request tree and return a reference so
      * the caller can update detail/durationMs once the result is known.
+     * With no context (service called outside a request) it records nothing
+     * and returns undefined, so callers never need a `logContext ? ... : undefined` guard.
      */
     static branch(
       context: IRequestLogContext,
@@ -171,7 +182,22 @@ export class LoggingUtilities {
       message: string,
       detail?: string,
       durationMs?: number,
-    ): IRequestLogEvent {
+    ): IRequestLogEvent;
+    static branch(
+      context: IRequestLogContext | undefined,
+      category: IRequestLogEvent["type"],
+      message: string,
+      detail?: string,
+      durationMs?: number,
+    ): IRequestLogEvent | undefined;
+    static branch(
+      context: IRequestLogContext | undefined,
+      category: IRequestLogEvent["type"],
+      message: string,
+      detail?: string,
+      durationMs?: number,
+    ): IRequestLogEvent | undefined {
+      if (!context) return undefined;
       const event: IRequestLogEvent = {
         type: category,
         message,
@@ -212,7 +238,7 @@ export class LoggingUtilities {
       context.events.push({
         type: "ERROR",
         message: `Unhandled exception in ${source}`,
-        detail: `${err?.name ?? "Error"}: ${message}`,
+        detail: `${err?.name ?? "Error"}: ${message}${LoggingUtilities.sanitise(describeCause(err))}`,
         stack: LoggingUtilities.stackFrames(err),
         children: [],
         timestamp: Date.now(),
@@ -229,7 +255,7 @@ export class LoggingUtilities {
       context.statusCode = statusCode;
       // Successful bodies are summarised (lists → "[N items]"); 4xx/5xx keep the
       // full body since that's when the detail is actually needed.
-      context.response = statusCode < 400 ? LoggingUtilities.summarise(response, 0) : response;
+      context.response = statusCode < MIN_WARNING_STATUS ? LoggingUtilities.summarise(response, 0) : response;
     }
 
     /**
@@ -248,7 +274,7 @@ export class LoggingUtilities {
       const line = `${context.ip} - - [${time}] "${context.method} ${route} HTTP/${httpVersion}" ${context.statusCode ?? "-"} -`;
 
       return {
-        html: `<code>${escapeHtml(line)}</code>`,
+        html: `<code>${escapeTelegramHtml(line)}</code>`,
         logSearcherUrl: `${LoggingUtilities.LOG_SEARCHER_URL}?requestId=${encodeURIComponent(context.requestId)}`,
       };
     }
@@ -257,7 +283,7 @@ export class LoggingUtilities {
      * Build the verbose request tree text (console + request-log file, which
      * the Log Searcher reads): payload, every event, stack traces, response body.
      */
-    private static render(context: IRequestLogContext, duration: number): string[] {
+    static render(context: IRequestLogContext, duration: number): string[] {
       const lines: string[] = [];
 
       lines.push(`\n[${LoggingUtilities.timestamp()}] ${context.protocol ?? "HTTP"} ${context.method} ${context.path}`);
@@ -310,11 +336,13 @@ export class LoggingUtilities {
         lines.push("");
       }
 
-      lines.push(`${LoggingUtilities.END} RESPONSE ${context.statusCode} ${LoggingUtilities.statusIcon(context.statusCode)}`);
+      lines.push(
+        `${LoggingUtilities.END} RESPONSE ${context.statusCode} ${LoggingUtilities.statusIcon(context.statusCode)}`,
+      );
 
       if (context.response !== undefined) {
         let respLines = JSON.stringify(context.response, null, 2).split("\n");
-        const isSuccess = (context.statusCode ?? 0) < 400;
+        const isSuccess = (context.statusCode ?? 0) < MIN_WARNING_STATUS;
         if (isSuccess && respLines.length > LoggingUtilities.MAX_SUCCESS_BODY_LINES) {
           const hidden = respLines.length - LoggingUtilities.MAX_SUCCESS_BODY_LINES;
           respLines = [...respLines.slice(0, LoggingUtilities.MAX_SUCCESS_BODY_LINES), `… (${hidden} more lines)`];
@@ -357,21 +385,26 @@ export class LoggingUtilities {
   // Generic Non-Request Logs
   // =========================================================
 
+  /** One PM2 line. Emails anywhere in the message are masked (SMTP / driver errors and debug SQL can embed them). */
+  private static serviceLine(level: string, serviceName: string, message: string): string {
+    return `${LoggingUtilities.timestamp()} | ${level.padEnd(5)} | ${LoggingUtilities.col(serviceName, 30)} | ${maskEmailsInText(message)}`;
+  }
+
   static service = class {
     static info(serviceName: string, message: string): void {
-      console.log(`${LoggingUtilities.timestamp()} | INFO  | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.log(LoggingUtilities.serviceLine("INFO", serviceName, message));
     }
 
     static warn(serviceName: string, message: string): void {
-      console.warn(`${LoggingUtilities.timestamp()} | WARN  | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.warn(LoggingUtilities.serviceLine("WARN", serviceName, message));
     }
 
     static debug(serviceName: string, message: string): void {
-      console.log(`${LoggingUtilities.timestamp()} | DEBUG | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.log(LoggingUtilities.serviceLine("DEBUG", serviceName, message));
     }
 
     static error(serviceName: string, message: string): void {
-      console.error(`${LoggingUtilities.timestamp()} | ERROR | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.error(LoggingUtilities.serviceLine("ERROR", serviceName, message));
     }
   };
 

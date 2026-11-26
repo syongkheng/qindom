@@ -1,13 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  breakpointForWidth,
-  isOriginAllowed,
-  normaliseEvent,
-  parseCollectRequest,
-  RegisteredSystem,
-  resolveScreen,
-} from "./AnalyticsContract.js";
+import { isOriginAllowed, isOriginRequiredAndAllowed, normaliseEvent, resolveScreen } from "./AnalyticsContract.js";
+import { validateCollectBody } from "./Analytics.validator.js";
+import { RegisteredSystem } from "./Analytics.types.js";
+import { BaseException } from "../exceptions/AppExceptions.js";
 import { hourlyRange, orderBuckets } from "./AnalyticsDashboard.service.js";
 import { isValidRole, userIsOwner } from "../auth/Permission.js";
 
@@ -19,7 +15,20 @@ const wedding: RegisteredSystem = {
     { key: "desktop", label: "Desktop", maxWidth: null, size: "large" },
   ],
   allowedOrigins: [],
+  active: true,
 };
+
+/** The field a rejected body names (`invalid_request_<field>`, 400). */
+function rejectedField(body: unknown): string | undefined {
+  try {
+    validateCollectBody(body);
+    return undefined;
+  } catch (err) {
+    assert.ok(err instanceof BaseException);
+    assert.equal(err.httpStatus, 400);
+    return err.fieldName;
+  }
+}
 
 const valid = {
   v: 1,
@@ -32,24 +41,20 @@ const valid = {
 };
 
 test("accepts the v1 contract and fills defaults", () => {
-  const r = parseCollectRequest(valid);
-  assert.equal(r.ok, true);
-  if (r.ok) {
-    assert.equal(r.value.referrer, "");
-    assert.deepEqual(r.value.properties, {});
-  }
+  const r = validateCollectBody(valid);
+  assert.equal(r.referrer, "");
+  assert.deepEqual(r.properties, {});
 });
 
 test("rejects wrong version, bad event names and missing session", () => {
-  assert.deepEqual(parseCollectRequest({ ...valid, v: 2 }), { ok: false, field: "v" });
-  assert.deepEqual(parseCollectRequest({ ...valid, event: "PageView" }), { ok: false, field: "event" });
+  assert.equal(rejectedField({ ...valid, v: 2 }), "v");
+  assert.equal(rejectedField({ ...valid, event: "PageView" }), "event");
   const { sessionId: _s, ...noSession } = valid;
-  assert.deepEqual(parseCollectRequest(noSession), { ok: false, field: "sessionId" });
+  assert.equal(rejectedField(noSession), "sessionId");
 });
 
 test("rejects properties over 4KB", () => {
-  const r = parseCollectRequest({ ...valid, properties: { blob: "x".repeat(5000) } });
-  assert.deepEqual(r, { ok: false, field: "properties" });
+  assert.equal(rejectedField({ ...valid, properties: { blob: "x".repeat(5000) } }), "properties");
 });
 
 test("unknown breakpoint is stored as 'unknown' but a valid client size is kept", () => {
@@ -71,11 +76,6 @@ test("size is derived from the breakpoint mapping when missing or invalid", () =
   assert.deepEqual(resolveScreen(wedding, undefined), { breakpoint: "unknown", size: "unknown" });
 });
 
-test("breakpointForWidth follows the system's own boundaries", () => {
-  assert.equal(breakpointForWidth(wedding.breakpoints, 800)?.key, "phone");
-  assert.equal(breakpointForWidth(wedding.breakpoints, 801)?.key, "desktop");
-});
-
 test("origin allowlist: empty = open, otherwise exact match; no Origin header passes", () => {
   assert.equal(isOriginAllowed(wedding, "https://evil.example"), true);
   const locked = { ...wedding, allowedOrigins: ["https://jessikheng.com"] };
@@ -84,11 +84,23 @@ test("origin allowlist: empty = open, otherwise exact match; no Origin header pa
   assert.equal(isOriginAllowed(locked, undefined), true);
 });
 
+test("strict origin check (report, pdca): Origin required and system required, then the same allowlist rule", () => {
+  const locked = { ...wedding, allowedOrigins: ["https://jessikheng.com"] };
+  assert.equal(isOriginRequiredAndAllowed(locked, "https://jessikheng.com"), true);
+  assert.equal(isOriginRequiredAndAllowed(locked, undefined), false);
+  assert.equal(isOriginRequiredAndAllowed(locked, ""), false);
+  assert.equal(isOriginRequiredAndAllowed(locked, "https://evil.example"), false);
+  assert.equal(isOriginRequiredAndAllowed(wedding, "https://any.example"), true); // empty allowlist
+  assert.equal(isOriginRequiredAndAllowed(wedding, undefined), false);
+  assert.equal(isOriginRequiredAndAllowed(null, "https://jessikheng.com"), false);
+});
+
 test("timestamps far from server time are replaced with server time", () => {
   const now = 1_700_000_000_000;
-  const parsed = parseCollectRequest({ ...valid, timestamp: now - 3 * 24 * 60 * 60 * 1000 });
-  assert.ok(parsed.ok);
-  if (parsed.ok) assert.equal(normaliseEvent(wedding, parsed.value, now).timestamp, now);
+  const parsed = validateCollectBody({ ...valid, timestamp: now - 3 * 24 * 60 * 60 * 1000 });
+  assert.equal(normaliseEvent(wedding, parsed, now).timestamp, now);
+  const recent = validateCollectBody({ ...valid, timestamp: now - 60_000 });
+  assert.equal(normaliseEvent(wedding, recent, now).timestamp, now - 60_000);
 });
 
 test("hourlyRange returns N zero-fillable hour starts ending at the current hour", () => {
@@ -101,24 +113,33 @@ test("hourlyRange returns N zero-fillable hour starts ending at the current hour
 
 test("orderBuckets keeps registry order, zero-fills, and puts 'unknown' last", () => {
   const out = orderBuckets(
-    [{ key: "phone", label: "Phone" }, { key: "desktop", label: "Desktop" }],
-    new Map([["unknown", 3], ["desktop", 5]]),
+    [
+      { key: "phone", label: "Phone" },
+      { key: "desktop", label: "Desktop" },
+    ],
+    new Map([
+      ["unknown", 3],
+      ["desktop", 5],
+    ]),
     new Map([["desktop", 2]]),
   );
-  assert.deepEqual(out.map((b) => [b.key, b.views, b.sessions]), [
-    ["phone", 0, 0],
-    ["desktop", 5, 2],
-    ["unknown", 3, 0],
-  ]);
+  assert.deepEqual(
+    out.map((b) => [b.key, b.views, b.sessions]),
+    [
+      ["phone", 0, 0],
+      ["desktop", 5, 2],
+      ["unknown", 3, 0],
+    ],
+  );
 });
 
 test("role allowlist accepts MODULE_R1-5 and legacy 'admin' only", () => {
-  for (const r of ["SYSTEM_R5", "PPHS_R4", "TRAVEL_R1", "KS_R3", "admin"]) assert.equal(isValidRole(r), true, r);
+  for (const r of ["SYSTEM_R5", "TRAVEL_R4", "TRAVEL_R1", "KS_R3", "admin"]) assert.equal(isValidRole(r), true, r);
   for (const r of ["SYSTEM_r5", "SYSTEM_R6", "", "root", 5]) assert.equal(isValidRole(r), false, String(r));
 });
 
 test("only SYSTEM_R5 is owner", () => {
   assert.equal(userIsOwner({ roles: ["SYSTEM_R5"] }), true);
-  assert.equal(userIsOwner({ roles: ["PPHS_R5", "admin"] }), false);
+  assert.equal(userIsOwner({ roles: ["TRAVEL_R5", "admin"] }), false);
   assert.equal(userIsOwner(undefined), false);
 });

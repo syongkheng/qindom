@@ -1,17 +1,18 @@
+/** Seeded from LTA DataMall; every data column is a nullable VARCHAR. */
 export interface ITB_LTA_BUS_INFO {
   id?: number;
-  service_no: string;
-  operator: string;
-  direction: string;
-  stop_sequence: string;
-  busstop_code: string;
-  distance: string;
-  wd_first_bus: string;
-  wd_last_bus: string;
-  sat_first_bus: string;
-  sat_last_bus: string;
-  sun_first_bus: string;
-  sun_last_bus: string;
+  service_no: string | null;
+  operator: string | null;
+  direction: string | null;
+  stop_sequence: string | null;
+  busstop_code: string | null;
+  distance: string | null;
+  wd_first_bus: string | null;
+  wd_last_bus: string | null;
+  sat_first_bus: string | null;
+  sat_last_bus: string | null;
+  sun_first_bus: string | null;
+  sun_last_bus: string | null;
   created_dt: number;
   created_by: string;
 }

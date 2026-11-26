@@ -3,7 +3,7 @@ export type LogStage = "middleware" | "controller" | "service";
 
 export interface IRequestLogContext {
   requestId: string;
-  /** Set to "middleware" by RestRequestLogger; flipped to "controller" once the route's middlewares pass (index.ts). */
+  /** Set to "middleware" by RestRequestLogger; flipped to "controller" once the route's middlewares pass (app.ts). */
   currentStage?: LogStage;
   startTime: number;
   protocol?: string;
@@ -19,18 +19,7 @@ export interface IRequestLogContext {
 }
 
 export type LogEventType =
-  | "HTTP"
-  | "AUTH"
-  | "SQL"
-  | "SERVICE"
-  | "CACHE"
-  | "QUEUE"
-  | "DISCORD"
-  | "TELEGRAM"
-  | "SYSTEM"
-  | "ERROR"
-  | "WARN"
-  | "VALIDATION";
+  "HTTP" | "AUTH" | "SQL" | "SERVICE" | "CACHE" | "QUEUE" | "TELEGRAM" | "SYSTEM" | "ERROR" | "WARN" | "VALIDATION";
 
 export interface IRequestLogEvent {
   /**
@@ -54,12 +43,8 @@ export interface IRequestLogEvent {
    */
   detail?: string;
 
+  /** Child lines in order (SQL timings, nested steps). */
   children: string[];
-
-  /**
-   * Optional structured metadata.
-   * Useful for debugging / JSON logs.
-   */
 
   /**
    * Time spent for this operation.

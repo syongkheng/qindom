@@ -11,65 +11,33 @@
  *   pageViews = page_view · whatsappClicks/callClicks/emailClicks/directionsClicks = *_click events
  *   formSubmits = generate_lead · rxDownloads = file_download · enquiries = whatsapp+call+email+form
  * Not measurable here (returned as 0 / []): country, searchTerm, listing* (Google Business Profile).
+ * Contract types and enums live in Analytics.types.ts.
  */
-
-export const REPORT_CONTRACT = "pdca.analytics.report/v1" as const;
-
-export const REPORT_METRICS = [
-  "visitors", "newVisitors", "pageViews", "enquiries",
-  "whatsappClicks", "callClicks", "emailClicks", "formSubmits",
-  "directionsClicks", "rxDownloads",
-  "listingViews", "listingCalls", "listingDirections", "listingWebsiteClicks",
-] as const;
-export type ReportMetric = (typeof REPORT_METRICS)[number];
-
-export const REPORT_BREAKDOWNS = ["day", "source", "page", "device", "country", "searchTerm"] as const;
-export type ReportBreakdown = (typeof REPORT_BREAKDOWNS)[number];
+import { Time } from "../constants/Time.js";
+import { APP_TIMEZONE } from "../constants/Locale.js";
+import {
+  AnalyticsReportBody,
+  AnalyticsReportDto,
+  REPORT_BREAKDOWNS,
+  REPORT_COMPARE,
+  REPORT_CONTRACT,
+  REPORT_METRICS,
+  REPORT_SITE,
+  ReportMetric,
+  ReportMetricTotal,
+  ReportPeriod,
+} from "./Analytics.types.js";
 
 /** Report `site` → analytics system key in tb_analytic_system. */
-export const REPORT_SITES: Record<string, string> = { "pdcadental.com": "dental-directory" };
-
-export interface Period {
-  start: string;
-  end: string;
-}
-
-export interface ReportRequest {
-  contract: typeof REPORT_CONTRACT;
-  site: "pdcadental.com";
-  timezone: "Asia/Singapore";
-  period: Period;
-  compare: "previous_month";
-  metrics: ReportMetric[];
-  breakdowns: ReportBreakdown[];
-  limit: number;
-}
-
-export interface MetricTotal {
-  value: number;
-  previous: number;
-}
-
-export interface ReportResponse {
-  contract: typeof REPORT_CONTRACT;
-  source: "qindom";
-  generatedAt: string;
-  period: Period;
-  comparePeriod: Period;
-  totals: Partial<Record<ReportMetric, MetricTotal>>;
-  series: { date: string; visitors: number; pageViews: number; enquiries: number }[];
-  breakdowns: {
-    source?: { key: string; visitors: number }[];
-    page?: { key: string; pageViews: number }[];
-    device?: { key: string; visitors: number }[];
-    country?: { key: string; visitors: number }[];
-    searchTerm?: { key: string; clicks: number; impressions: number }[];
-  };
-}
+export const REPORT_SITES: Record<string, string> = { [REPORT_SITE]: "dental-directory" };
 
 const REQUEST_KEYS = ["contract", "site", "timezone", "period", "compare", "metrics", "breakdowns", "limit"];
-const DAY_MS = 864e5;
-const SGT_OFFSET_MS = 8 * 3600e3;
+const DAY_MS = Time.DAY_MS;
+/** Singapore (APP_TIMEZONE) is UTC+8 all year (no DST), so a fixed offset gives its calendar dates. */
+const SGT_OFFSET_MS = 8 * Time.HOUR_MS;
+const MAX_PERIOD_DAYS = 366;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 20;
 const pad = (n: number) => String(n).padStart(2, "0");
 const toT = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
 const toD = (t: number) => new Date(t).toISOString().slice(0, 10);
@@ -80,13 +48,13 @@ function isValidDate(d: unknown): d is string {
   return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && toD(toT(d)) === d;
 }
 
-export function dayList(a: string, b: string): string[] {
+function dayList(a: string, b: string): string[] {
   const out: string[] = [];
   for (let t = toT(a); t <= toT(b); t += DAY_MS) out.push(toD(t));
   return out;
 }
 
-export function isFullMonth(p: Period): boolean {
+function isFullMonth(p: ReportPeriod): boolean {
   return (
     p.start.slice(0, 7) === p.end.slice(0, 7) &&
     p.start.slice(8) === "01" &&
@@ -105,7 +73,7 @@ function back1(d: string): string {
 }
 
 /** compare: "previous_month" — full month → full previous month; otherwise same dates one month earlier (clamped). */
-export function comparePeriod(p: Period): Period {
+export function comparePeriod(p: ReportPeriod): ReportPeriod {
   if (isFullMonth(p)) {
     const s = back1(p.start);
     return { start: s, end: `${s.slice(0, 7)}-${pad(lastDay(Number(s.slice(0, 4)), Number(s.slice(5, 7))))}` };
@@ -126,8 +94,8 @@ export function reportRequestProblems(q: unknown): string[] {
     if (!REQUEST_KEYS.includes(k)) errs.push(`unknown key: ${k}`);
   });
   if (r.contract !== REPORT_CONTRACT) errs.push(`contract must be ${REPORT_CONTRACT}`);
-  if (r.site !== "pdcadental.com") errs.push("site must be pdcadental.com");
-  if (r.timezone !== "Asia/Singapore") errs.push("timezone must be Asia/Singapore");
+  if (r.site !== REPORT_SITE) errs.push(`site must be ${REPORT_SITE}`);
+  if (r.timezone !== APP_TIMEZONE) errs.push(`timezone must be ${APP_TIMEZONE}`);
   const p = r.period as Record<string, unknown> | undefined;
   if (!p || typeof p !== "object" || Array.isArray(p) || Object.keys(p).sort().join(",") !== "end,start") {
     errs.push("period must hold exactly start and end");
@@ -135,10 +103,10 @@ export function reportRequestProblems(q: unknown): string[] {
     errs.push("period dates must be YYYY-MM-DD");
   } else if (p.start > p.end) {
     errs.push("period start is after its end");
-  } else if (span(p.start, p.end) > 366) {
-    errs.push("period is longer than 366 days");
+  } else if (span(p.start, p.end) > MAX_PERIOD_DAYS) {
+    errs.push(`period is longer than ${MAX_PERIOD_DAYS} days`);
   }
-  if (r.compare !== "previous_month") errs.push("compare must be previous_month");
+  if (r.compare !== REPORT_COMPARE) errs.push(`compare must be ${REPORT_COMPARE}`);
   if (!Array.isArray(r.metrics) || r.metrics.length === 0) {
     errs.push("metrics must be a non-empty list");
   } else {
@@ -154,19 +122,19 @@ export function reportRequestProblems(q: unknown): string[] {
       if (!(REPORT_BREAKDOWNS as readonly unknown[]).includes(b)) errs.push(`unknown breakdown: ${String(b)}`);
     });
   }
-  if (!Number.isInteger(r.limit) || (r.limit as number) < 1 || (r.limit as number) > 20) {
-    errs.push("limit must be a whole number from 1 to 20");
+  if (!Number.isInteger(r.limit) || (r.limit as number) < MIN_LIMIT || (r.limit as number) > MAX_LIMIT) {
+    errs.push(`limit must be a whole number from ${MIN_LIMIT} to ${MAX_LIMIT}`);
   }
   return errs;
 }
 
 /** [from, to) epoch ms for an inclusive Singapore-date period. */
-export function periodRangeMs(p: Period): { from: number; to: number } {
+export function periodRangeMs(p: ReportPeriod): { from: number; to: number } {
   return { from: toT(p.start) - SGT_OFFSET_MS, to: toT(p.end) + DAY_MS - SGT_OFFSET_MS };
 }
 
 export const sgDate = (ms: number) => toD(ms + SGT_OFFSET_MS);
-export const sgIsoNow = (now = Date.now()) => `${new Date(now + SGT_OFFSET_MS).toISOString().slice(0, 19)}+08:00`;
+const sgIsoNow = (now = Date.now()) => `${new Date(now + SGT_OFFSET_MS).toISOString().slice(0, 19)}+08:00`;
 
 /* ---------- aggregation ---------- */
 
@@ -206,12 +174,17 @@ export function classifySource(referrer: string | null | undefined, ownHosts: st
     return "Other sites";
   }
   if (ownHosts.includes(host)) return "Direct";
-  if (host === "maps.google.com" || host === "maps.app.goo.gl" || (/^google\./.test(host) && path.startsWith("/maps"))) {
+  if (
+    host === "maps.google.com" ||
+    host === "maps.app.goo.gl" ||
+    (/^google\./.test(host) && path.startsWith("/maps"))
+  ) {
     return "Google Maps";
   }
   if (/^google\.[a-z.]+$/.test(host)) return "Google search";
   if (host.endsWith("instagram.com")) return "Instagram";
-  if (host.endsWith("facebook.com") || host === "fb.me" || host === "l.facebook.com" || host === "m.facebook.com") return "Facebook";
+  if (host.endsWith("facebook.com") || host === "fb.me" || host === "l.facebook.com" || host === "m.facebook.com")
+    return "Facebook";
   if (host.endsWith("linkedin.com") || host === "lnkd.in") return "LinkedIn";
   if (host.endsWith("tiktok.com")) return "TikTok";
   return "Other sites";
@@ -245,7 +218,7 @@ function collapse<F extends string>(
   return rows;
 }
 
-function totalsFor(rows: EventRow[], period: Period, firstSeen: Map<string, number>) {
+function totalsFor(rows: EventRow[], period: ReportPeriod, firstSeen: Map<string, number>) {
   const { from, to } = periodRangeMs(period);
   const inRange = rows.filter((r) => r.created_at >= from && r.created_at < to);
   const visitors = new Set(inRange.map(visitorOf));
@@ -267,19 +240,19 @@ function totalsFor(rows: EventRow[], period: Period, firstSeen: Map<string, numb
  * `firstSeen` maps visitor id → earliest event time ever (for newVisitors).
  */
 export function aggregateReport(
-  req: ReportRequest,
+  req: AnalyticsReportBody,
   rows: EventRow[],
   firstSeen: Map<string, number>,
   opts: { now?: number; ownHosts?: string[] } = {},
-): ReportResponse {
+): AnalyticsReportDto {
   const cp = comparePeriod(req.period);
   const cur = totalsFor(rows, req.period, firstSeen);
   const prev = totalsFor(rows, cp, firstSeen);
 
-  const totals: Partial<Record<ReportMetric, MetricTotal>> = {};
+  const totals: Partial<Record<ReportMetric, ReportMetricTotal>> = {};
   for (const m of req.metrics) totals[m] = { value: cur.counts[m], previous: prev.counts[m] };
 
-  const res: ReportResponse = {
+  const res: AnalyticsReportDto = {
     contract: REPORT_CONTRACT,
     source: "qindom",
     generatedAt: sgIsoNow(opts.now),

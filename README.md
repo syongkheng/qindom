@@ -4,7 +4,7 @@ Express 5 + TypeScript REST API backend for the Finderium platform.
 
 - **Runtime:** Node 22
 - **Database:** MySQL via Knex.js
-- **Auth:** JWT (Bearer tokens)
+- **Auth:** JWT in an httpOnly cookie + CSRF header
 - **Process manager:** PM2
 - **Deployment:** AWS EC2 ap-southeast-1, port 3000
 
@@ -14,72 +14,37 @@ Express 5 + TypeScript REST API backend for the Finderium platform.
 
 ```bash
 npm install
-npm run dev       # development (uses .env.dev)
-npm run build     # compile TypeScript
+npm run dev       # development: NODE_ENV=dev, loads .env.dev
+npm test          # node:test suites, no env file loaded, no DB needed
+npm run build     # compile TypeScript into dist/
 ```
 
-Set `NODE_ENV=prd` to load `.env` (production). Any other value loads `.env.dev`.
+PM2 on EC2 runs with `NODE_ENV=prd`, which loads `.env`. **`npm run migrate` always targets `.env` (the prod database)**, on purpose. Details: [src/config/README.md](src/config/README.md).
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `NODE_ENV` | `prd` for production, anything else for dev |
-| `DB_HOST` | MySQL host |
-| `DB_PORT` | MySQL port |
-| `DB_USER` | MySQL user |
-| `DB_PASSWORD` | MySQL password |
-| `DB_NAME` | MySQL database name |
-| `JWT_SECRET` | Secret used to sign/verify JWT tokens |
-| `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins |
+| Variable          | Description                                                               |
+| ----------------- | ------------------------------------------------------------------------- |
+| `NODE_ENV`        | Set by the npm script / PM2: `prd` loads `.env`, anything else `.env.dev` |
+| `DB_URL`          | MySQL host (required)                                                     |
+| `DB_USER`         | MySQL user                                                                |
+| `DB_PW`           | MySQL password                                                            |
+| `DB_NAME`         | MySQL database name                                                       |
+| `JWT_SECRET`      | Secret used to sign/verify JWT cookies (required; boot fails without it)  |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins                              |
+| `PORT`            | Optional, default 3000                                                    |
+| `RUN_MIGRATIONS`  | Optional; `true` applies pending migrations at boot                       |
+
+Module-specific keys (SMTP, Telegram, LTA DataMall, wedding URL, PDCA recipient) are documented in each module's README.
 
 ---
 
-## Route Mounts
+## Route Mounts, Middleware, Rate Limits
 
-| Path | Controller | Middlewares |
-|------|-----------|-------------|
-| `/connectivity` | Connectivity | RestRequestLogger, RequestHeaderFilter |
-| `/api/hdb` | HDB | RestRequestLogger, RequestHeaderFilter |
-| `/api/lta` | LTA | RestRequestLogger, RequestHeaderFilter |
-| `/api/auth` | Auth | RestRequestLogger, RequestHeaderFilter |
-| `/api/pfp` | Profile | RestRequestLogger, RequestHeaderFilter |
-| `/api/analytics` | Heartbeat | RestRequestLogger, RequestHeaderFilter |
-| `/api/itinerary` | Itinerary | RestRequestLogger, RequestHeaderFilter |
-| `/api/file` | File | RestRequestLogger, RequestHeaderFilter |
-| `/api/feature` | Feature | RestRequestLogger, RequestHeaderFilter, featureLimiter |
-| `/api/meal` | Meal | RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter |
-| `/api/geocode` | Geocode | RestRequestLogger, RequestHeaderFilter |
-| `/api/expense` | Expense | RestRequestLogger, RequestHeaderFilter, MandatoryTokenFilter |
-
----
-
-## Rate Limits
-
-| Limiter | Window | Max Requests | Applied To |
-|---------|--------|-------------|------------|
-| `globalLimiter` | 1 min | 100 | All routes |
-| `loginLimiter` | 15 min | 10 | `POST /api/auth/login` |
-| `registerLimiter` | 1 hour | 5 | `POST /api/auth/register` |
-| `verifyEmailLimiter` | 15 min | 10 | `POST /api/auth/verify-email` |
-| `resendVerifyLimiter` | 15 min | 3 | `POST /api/auth/resend-verify` |
-| `identityLimiter` | 15 min | 20 | `POST /api/fnd/identity` |
-| `apptLimiter` | 1 hour | 5 | `POST /api/fnd/appt` |
-| `featureLimiter` | 1 min | 60 | `GET /api/feature`, `POST /api/feature/:key/toggle` |
-
----
-
-## Middleware
-
-| Middleware | Description |
-|-----------|-------------|
-| `RestRequestLogger` | Logs all HTTP requests with method, path, and response status. Redacts `password`, `blob`, `blobString`, and `token` fields from log output. |
-| `RequestHeaderFilter` | Rejects POST requests without `Content-Type: application/json` with HTTP 415. |
-| `MandatoryTokenFilter` | Requires a valid JWT in `Authorization: Bearer <token>`. Returns 401 if missing or expired. Attaches decoded payload to `req.user`. |
-| `OptionalTokenFilter` | Attaches `req.user` if a valid JWT is present, but allows requests through without one. |
-| `globalLimiter` | Hard cap of 100 requests per IP per minute across all routes. |
+- Route table (`[prefix, preset, router]`): `src/app.ts`, summarised in [MINDMAP.md](MINDMAP.md).
+- Middleware presets and rate limiters: [src/middlewares/README.md](src/middlewares/README.md).
 
 ---
 
@@ -89,9 +54,9 @@ All endpoints return a consistent JSON envelope:
 
 ```json
 {
-    "code": 200,
-    "status": "Ok",
-    "data": { }
+  "code": 200,
+  "status": "Ok",
+  "data": {}
 }
 ```
 
@@ -101,15 +66,4 @@ Error responses use non-200 codes and a descriptive status string or error objec
 
 ## Module Documentation
 
-- [Authentication](src/auth/README.md)
-- [Connectivity](src/connectivity/README.md)
-- [HDB Housing](src/hdb/README.md)
-- [LTA Public Transport](src/lta/README.md)
-- [Profile](src/profile/README.md)
-- [Analytics](src/analytics/README.md)
-- [Itinerary / Travel Planner](src/itinerary/README.md)
-- [File Upload](src/file/README.md)
-- [Feature Flags](src/feature/README.md)
-- [Meal Tracker](src/meal/README.md)
-- [Geocode](src/geocode/README.md)
-- [Expense Tracker](src/expense/README.md)
+Each module folder under `src/` has a `README.md` (endpoints, auth, request and response shapes); start with [src/config/README.md](src/config/README.md) for env loading.

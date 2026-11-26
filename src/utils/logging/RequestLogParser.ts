@@ -1,5 +1,5 @@
 import { STATUS_CODES } from "http";
-import { RequestLogEntryDto, RequestLogEventDto } from "../../models/dtos/RequestLogDto.js";
+import { RequestLogEntryDto, RequestLogEventDto } from "./RequestLog.types.js";
 
 // Parses the verbose text written by LoggingUtilities.request.render() back
 // into structure for the Log Searcher. Lives next to the writer so the two

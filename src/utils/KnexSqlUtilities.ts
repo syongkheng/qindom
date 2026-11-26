@@ -1,26 +1,39 @@
 import { Knex } from "knex";
 import { LoggingUtilities } from "./logging/LoggingUtilities.js";
-import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { ITB_LTA_BUSSTOP } from "../models/databases/tb_lta_busstop.js";
-import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info.js";
-import { ITB_LTA_MRT_STATION } from "../models/databases/tb_lta_mrt_station.js";
-import { toMessage } from "./errorUtils.js";
+import { IRequestLogEvent } from "../models/IRequestLogContext.js";
+import { BaseException } from "../exceptions/AppExceptions.js";
+import { toMessage } from "./ErrorUtilities.js";
 
+const LOG_LABEL = "KnexSqlUtilities";
+
+export interface FindOptions {
+  limit?: number;
+  offset?: number;
+  orderBy?: string;
+  orderDirection?: "asc" | "desc";
+  columns?: readonly string[];
+  extraWhere?: (queryBuilder: Knex.QueryBuilder) => void;
+}
+
+/**
+ * Wraps a driver error in a plain `Error` (→ generic 500 via `route()`), keeping the original as
+ * `cause` so the request tree's exception event still shows what the driver said.
+ */
+function wrapDbError(method: string, operation: string, error: unknown): Error {
+  LoggingUtilities.service.error(`${LOG_LABEL}.${method}`, `${operation} error: ${toMessage(error)}`);
+  return Object.assign(new Error(`${operation} failed: ${toMessage(error)}`), { cause: error });
+}
+
+/**
+ * The only way services talk to MySQL. Every method takes an optional request-log event (last
+ * parameter) and adds a timed line to it; without one it writes a console debug line instead.
+ * Driver errors become plain `Error`s (500); module SQL lives in the owning service, never here.
+ */
 class KnexSqlUtilities {
-  constructor(private knex: Knex) {
-    this.pphs = {
-      findBusStopsWithinRadiusOfLatLng: this._findBusStopsWithinRadiusOfLatLng.bind(this),
-      findMrtStationsWithinRadiusOfLatLng: this._findMrtStationsWithinRadiusOfLatLng.bind(this),
-    };
-    this.lta = {
-      findBusServicesByBusStopCode: this._findBusServicesByBusStopCode.bind(this),
-    };
-  }
+  constructor(private knex: Knex) {}
 
   private sqlEvent(logEvent: IRequestLogEvent | undefined, label: string, durationMs: number): void {
-    if (logEvent) {
-      logEvent.children.push(`${label} - ${durationMs}ms`);
-    }
+    logEvent?.children.push(`${label} - ${durationMs}ms`);
   }
 
   // CREATE
@@ -32,12 +45,44 @@ class KnexSqlUtilities {
       if (logEvent) {
         this.sqlEvent(logEvent, `${table}.insert()`, Date.now() - t0);
       } else {
-        LoggingUtilities.service.debug("KnexSqlUtilities.insert", `Inserted into ${table} id=${id}`);
+        LoggingUtilities.service.debug(`${LOG_LABEL}.insert`, `Inserted into ${table} id=${id}`);
       }
       return row as R;
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.insert", `Insert error: ${toMessage(error)}`);
-      throw new Error(`Insert failed: ${toMessage(error)}`);
+      throw wrapDbError("insert", "Insert", error);
+    }
+  }
+
+  /** INSERT one row without re-reading it: returns the new auto-increment id. */
+  async insertId<T = any>(table: string, data: Partial<T>, logEvent?: IRequestLogEvent): Promise<number> {
+    try {
+      const t0 = Date.now();
+      const [id] = await this.knex(table).insert(data);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.insertId()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.insertId`, `Inserted into ${table} id=${id}`);
+      }
+      return Number(id);
+    } catch (error) {
+      throw wrapDbError("insertId", "Insert", error);
+    }
+  }
+
+  /** One multi-row INSERT (no re-read). An empty list sends no statement. Returns the number of rows sent. */
+  async insertMany<T = any>(table: string, rows: Partial<T>[], logEvent?: IRequestLogEvent): Promise<number> {
+    if (!rows.length) return 0;
+    try {
+      const t0 = Date.now();
+      await this.knex(table).insert(rows);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.insertMany(${rows.length})`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.insertMany`, `Inserted ${rows.length} row(s) into ${table}`);
+      }
+      return rows.length;
+    } catch (error) {
+      throw wrapDbError("insertMany", "Insert", error);
     }
   }
 
@@ -46,21 +91,20 @@ class KnexSqlUtilities {
     table: string,
     whereClause: Partial<T> = {},
     columns: readonly string[] = ["*"],
-    logContext?: IRequestLogEvent,
+    logEvent?: IRequestLogEvent,
   ): Promise<T | undefined> {
     try {
       const query = this.knex(table).select(columns).where(whereClause).first();
       const t0 = Date.now();
       const result = await query;
-      if (logContext) {
-        this.sqlEvent(logContext, `${table}.findOne()`, Date.now() - t0);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.findOne()`, Date.now() - t0);
       } else {
-        LoggingUtilities.service.debug("KnexSqlUtilities.findOne", `Executing query - [ ${query.toQuery()} ]`);
+        LoggingUtilities.service.debug(`${LOG_LABEL}.findOne`, `Executing query - [ ${query.toQuery()} ]`);
       }
       return result as T | undefined;
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.findOne", `Find one error: ${toMessage(error)}`);
-      throw new Error(`Find one failed: ${toMessage(error)}`);
+      throw wrapDbError("findOne", "Find one", error);
     }
   }
 
@@ -68,14 +112,7 @@ class KnexSqlUtilities {
   async find<T = any>(
     table: string,
     whereClause: Partial<T> = {},
-    options: {
-      limit?: number;
-      offset?: number;
-      orderBy?: string;
-      orderDirection?: "asc" | "desc";
-      columns?: readonly string[];
-      extraWhere?: (queryBuilder: Knex.QueryBuilder) => void;
-    } = {},
+    options: FindOptions = {},
     logEvent?: IRequestLogEvent,
   ): Promise<T[]> {
     try {
@@ -90,19 +127,22 @@ class KnexSqlUtilities {
       const t0 = Date.now();
       const result = await query;
       if (logEvent) {
-        this.sqlEvent(logEvent, `${table}.find(${JSON.stringify(LoggingUtilities.redact(whereClause))})`, Date.now() - t0);
+        this.sqlEvent(
+          logEvent,
+          `${table}.find(${JSON.stringify(LoggingUtilities.redact(whereClause))})`,
+          Date.now() - t0,
+        );
       } else {
-        LoggingUtilities.service.debug("KnexSqlUtilities.find", `Executing query - [ ${query.toQuery()} ]`);
+        LoggingUtilities.service.debug(`${LOG_LABEL}.find`, `Executing query - [ ${query.toQuery()} ]`);
       }
 
       return result as T[];
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.find", `Find error: ${toMessage(error)}`);
-      throw new Error(`Find failed: ${toMessage(error)}`);
+      throw wrapDbError("find", "Find", error);
     }
   }
 
-  // UPDATE
+  // UPDATE (returns the matching rows re-read after the update)
   async update<T = any, R = T>(
     table: string,
     whereClause: Partial<T>,
@@ -116,12 +156,59 @@ class KnexSqlUtilities {
       if (logEvent) {
         this.sqlEvent(logEvent, `${table}.update()`, Date.now() - t0);
       } else {
-        LoggingUtilities.service.debug("KnexSqlUtilities.update", `Updated ${table}`);
+        LoggingUtilities.service.debug(`${LOG_LABEL}.update`, `Updated ${table}`);
       }
       return rows as R[];
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.update", `Update error: ${toMessage(error)}`);
-      throw new Error(`Update failed: ${toMessage(error)}`);
+      throw wrapDbError("update", "Update", error);
+    }
+  }
+
+  /** UPDATE without re-reading the rows: returns how many rows the DB reports as affected. */
+  async updateCount<T = any>(
+    table: string,
+    whereClause: Partial<T>,
+    data: Partial<T>,
+    logEvent?: IRequestLogEvent,
+  ): Promise<number> {
+    try {
+      const t0 = Date.now();
+      const affected = await this.knex(table).where(whereClause).update(data);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.updateCount()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.updateCount`, `Updated ${affected} row(s) in ${table}`);
+      }
+      return affected;
+    } catch (error) {
+      throw wrapDbError("updateCount", "Update", error);
+    }
+  }
+
+  /**
+   * `UPDATE table SET … WHERE whereClause AND column IN (values)` without re-reading; returns the
+   * affected row count. An empty `values` list sends no statement and returns 0.
+   */
+  async updateCountIn<T = any>(
+    table: string,
+    whereClause: Partial<T>,
+    column: string,
+    values: readonly (string | number)[],
+    data: Partial<T>,
+    logEvent?: IRequestLogEvent,
+  ): Promise<number> {
+    if (!values.length) return 0;
+    try {
+      const t0 = Date.now();
+      const affected = await this.knex(table).where(whereClause).whereIn(column, values).update(data);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.updateCountIn(${column} ×${values.length})`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.updateCountIn`, `Updated ${affected} row(s) in ${table}`);
+      }
+      return affected;
+    } catch (error) {
+      throw wrapDbError("updateCountIn", "Update", error);
     }
   }
 
@@ -133,25 +220,27 @@ class KnexSqlUtilities {
       if (logEvent) {
         this.sqlEvent(logEvent, `${table}.delete()`, Date.now() - t0);
       } else {
-        LoggingUtilities.service.debug("KnexSqlUtilities.delete", `Deleted from ${table}`);
+        LoggingUtilities.service.debug(`${LOG_LABEL}.delete`, `Deleted from ${table}`);
       }
       return result;
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.delete", `Delete error: ${toMessage(error)}`);
-      throw new Error(`Delete failed: ${toMessage(error)}`);
+      throw wrapDbError("delete", "Delete", error);
     }
   }
 
-  // RAW
-  async raw<T = any>(sql: string, bindings: any[] = []): Promise<T> {
+  // RAW (always use bindings)
+  async raw<T = any>(sql: string, bindings: readonly unknown[] = [], logEvent?: IRequestLogEvent): Promise<T> {
     try {
-      const query = this.knex.raw(sql, bindings);
-      LoggingUtilities.service.debug("KnexSqlUtilities.raw", `Executing raw query - [ ${query.toQuery()} ]`);
+      const query = this.knex.raw(sql, bindings as readonly Knex.RawBinding[]);
+      const t0 = Date.now();
+      if (!logEvent) {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.raw`, `Executing raw query - [ ${query.toQuery()} ]`);
+      }
       const [rows] = await query;
+      this.sqlEvent(logEvent, "raw()", Date.now() - t0);
       return rows as T;
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.raw", `Raw query error: ${toMessage(error)}`);
-      throw new Error(`Raw query failed: ${toMessage(error)}`);
+      throw wrapDbError("raw", "Raw query", error);
     }
   }
 
@@ -164,196 +253,40 @@ class KnexSqlUtilities {
       if (logEvent) {
         this.sqlEvent(logEvent, `${table}.count()`, Date.now() - t0);
       } else {
-        LoggingUtilities.service.debug("KnexSqlUtilities.count", `Executing query - [ ${query.toQuery()} ]`);
+        LoggingUtilities.service.debug(`${LOG_LABEL}.count`, `Executing query - [ ${query.toQuery()} ]`);
       }
       return Number(result[0]?.count || 0);
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.count", `Count error: ${toMessage(error)}`);
-      throw new Error(`Count failed: ${toMessage(error)}`);
+      throw wrapDbError("count", "Count", error);
     }
   }
 
-  async transaction<T>(callback: (trx: Knex.Transaction) => Promise<T>): Promise<T> {
+  /**
+   * Runs `callback` in one transaction (commit on success, rollback on any throw).
+   *
+   * The callback gets the raw knex `trx` and `tx`, a `KnexSqlUtilities` bound to the same
+   * transaction: prefer `tx.insert/insertId/insertMany/update/updateCount/updateCountIn/find/...(…, event)`
+   * so each statement is timed in the request tree. A typed exception (`BaseException`) thrown inside is
+   * rethrown unchanged (keeps its 4xx); anything else becomes a plain `Error` (500) with the cause kept.
+   */
+  async transaction<T>(
+    callback: (trx: Knex.Transaction, tx: KnexSqlUtilities) => Promise<T>,
+    logEvent?: IRequestLogEvent,
+  ): Promise<T> {
+    const t0 = Date.now();
     try {
-      LoggingUtilities.service.debug("KnexSqlUtilities.transaction", `Starting transaction`);
-
-      const result = await this.knex.transaction(async (trx) => {
-        const output = await callback(trx);
-        return output;
-      });
-
-      LoggingUtilities.service.debug("KnexSqlUtilities.transaction", `Transaction committed successfully`);
-
+      if (!logEvent) LoggingUtilities.service.debug(`${LOG_LABEL}.transaction`, "Starting transaction");
+      const result = await this.knex.transaction((trx) => callback(trx, new KnexSqlUtilities(trx)));
+      if (logEvent) {
+        this.sqlEvent(logEvent, "transaction() committed", Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.transaction`, "Transaction committed successfully");
+      }
       return result;
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.transaction", `Transaction failed: ${toMessage(error)}`);
-      throw new Error(`Transaction failed: ${toMessage(error)}`);
-    }
-  }
-
-  pphs: {
-    findBusStopsWithinRadiusOfLatLng: (
-      pphsLat: string,
-      pphsLng: string,
-      radiusInMeters: number,
-    ) => Promise<{
-      rows: (ITB_LTA_BUSSTOP & { distance_m: number })[];
-      count: number;
-    }>;
-    findMrtStationsWithinRadiusOfLatLng: (
-      pphsLat: string,
-      pphsLng: string,
-      numberOfStations: number,
-    ) => Promise<{
-      rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
-      count: number;
-    }>;
-  };
-
-  private async _findBusStopsWithinRadiusOfLatLng(
-    pphsLat: string,
-    pphsLng: string,
-    radiusInMeters: number,
-  ): Promise<{
-    rows: (ITB_LTA_BUSSTOP & { distance_m: number })[];
-    count: number;
-  }> {
-    try {
-      const sql = `
-      SELECT 
-        b.busstop_code,
-        b.road_name,
-        b.desc,
-        b.lat,
-        b.lng,
-        ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) AS distance_m
-      FROM tb_lta_busstop b
-      WHERE ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) <= ?
-      ORDER BY distance_m ASC
-    `;
-
-      const bindings = [pphsLng, pphsLat, pphsLng, pphsLat, radiusInMeters];
-      const query = this.knex.raw(sql, bindings);
-
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Executing raw query - [ ${query.toQuery()} ]`,
-      );
-
-      const [rows] = await query;
-
-      // ✅ Normalize and count
-      const allRows = rows as (ITB_LTA_BUSSTOP & { distance_m: number })[];
-      const count = allRows.length;
-
-      const resultRows = allRows.slice(0, 10);
-
-      return { rows: resultRows, count };
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Query error: ${toMessage(error)}`,
-      );
-      throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
-    }
-  }
-
-  private async _findMrtStationsWithinRadiusOfLatLng(
-    pphsLat: string,
-    pphsLng: string,
-    numberOfStations: number,
-  ): Promise<{
-    rows: (ITB_LTA_MRT_STATION & { distance_m: number })[];
-    count: number;
-  }> {
-    try {
-      const sql = `
-        SELECT 
-            e.station,
-            e.type,
-            MIN(ST_Distance_Sphere(POINT(e.lat, e.lng), POINT(?, ?))) AS distance_m
-        FROM tb_lrt_mrt_station e
-        GROUP BY e.station, e.type
-        ORDER BY distance_m ASC
-        LIMIT ?;
-    `;
-
-      const bindings = [pphsLng, pphsLat, numberOfStations ?? 3];
-      const query = this.knex.raw(sql, bindings);
-
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Executing raw query - [ ${query.toQuery()} ]`,
-      );
-
-      const [rows] = await query;
-
-      // ✅ Normalize and count
-      const allRows = rows as (ITB_LTA_MRT_STATION & { distance_m: number })[];
-      const count = allRows.length;
-
-      return { rows: allRows, count };
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusStopsWithinRadius",
-        `Query error: ${toMessage(error)}`,
-      );
-      throw new Error(`Failed to find nearby bus stops: ${toMessage(error)}`);
-    }
-  }
-
-  lta: {
-    findBusServicesByBusStopCode(busstopCode: string): Promise<{
-      rows: ITB_LTA_BUS_INFO[];
-      count: number;
-    }>;
-  };
-
-  private async _findBusServicesByBusStopCode(busstopCode: string): Promise<{
-    rows: ITB_LTA_BUS_INFO[];
-    count: number;
-  }> {
-    try {
-      const sql = `
-      SELECT 
-        service_no,
-        operator,
-        direction,
-        stop_sequence,
-        distance,
-        wd_first_bus,
-        wd_last_bus,
-        sat_first_bus,
-        sat_last_bus,
-        sun_first_bus,
-        sun_last_bus
-      FROM tb_lta_bus_info
-      WHERE busstop_code = ?
-      ORDER BY CAST(service_no AS UNSIGNED), service_no
-    `;
-
-      const bindings = [busstopCode];
-      const query = this.knex.raw(sql, bindings);
-
-      LoggingUtilities.service.debug(
-        "KnexSqlUtilities.lta.findBusServicesByBusStopCode",
-        `Executing raw query - [ ${query.toQuery()} ]`,
-      );
-
-      const [rows] = await query;
-
-      const allRows = rows as ITB_LTA_BUS_INFO[];
-      const count = allRows.length;
-
-      const resultRows = allRows;
-
-      return { rows: resultRows, count };
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "KnexSqlUtilities.lta.findBusServicesByBusStopCode",
-        `Query error: ${toMessage(error)}`,
-      );
-      throw new Error(`Failed to find bus services: ${toMessage(error)}`);
+      this.sqlEvent(logEvent, "transaction() rolled back", Date.now() - t0);
+      if (error instanceof BaseException) throw error;
+      throw wrapDbError("transaction", "Transaction", error);
     }
   }
 
@@ -374,11 +307,10 @@ class KnexSqlUtilities {
       if (logEvent) {
         this.sqlEvent(logEvent, `${table}.upsert()`, Date.now() - t0);
       } else {
-        LoggingUtilities.service.debug("KnexSqlUtilities.upsert", `Executing query - [ ${query.toQuery()} ]`);
+        LoggingUtilities.service.debug(`${LOG_LABEL}.upsert`, `Executing query - [ ${query.toQuery()} ]`);
       }
     } catch (error) {
-      LoggingUtilities.service.error("KnexSqlUtilities.upsert", `Upsert error: ${toMessage(error)}`);
-      throw new Error(`Upsert failed: ${toMessage(error)}`);
+      throw wrapDbError("upsert", "Upsert", error);
     }
   }
 }

@@ -6,17 +6,15 @@ import {
   comparePeriod,
   EventRow,
   periodRangeMs,
-  REPORT_BREAKDOWNS,
-  REPORT_CONTRACT,
-  REPORT_METRICS,
-  ReportRequest,
   reportRequestProblems,
   sgDate,
   visitorOf,
 } from "./AnalyticsReport.js";
-import { hashReadKey, readKeyMatches } from "./AnalyticsReport.service.js";
+import { readKeyMatches } from "./AnalyticsReport.service.js";
+import { AnalyticsReportBody, REPORT_BREAKDOWNS, REPORT_CONTRACT, REPORT_METRICS } from "./Analytics.types.js";
+import { sha256Hex } from "../utils/HashUtilities.js";
 
-const req = (start = "2026-10-01", end = "2026-10-31"): ReportRequest => ({
+const req = (start = "2026-10-01", end = "2026-10-31"): AnalyticsReportBody => ({
   contract: REPORT_CONTRACT,
   site: "pdcadental.com",
   timezone: "Asia/Singapore",
@@ -32,7 +30,10 @@ test("accepts the canonical request", () => {
 });
 
 test("rejects every problem at once", () => {
-  const bad = { ...req(), metrics: ["visitors", "visitors", "revenue"], range: "x", limit: 2.5 } as Record<string, unknown>;
+  const bad = { ...req(), metrics: ["visitors", "visitors", "revenue"], range: "x", limit: 2.5 } as Record<
+    string,
+    unknown
+  >;
   delete bad.compare;
   const p = reportRequestProblems(bad);
   for (const msg of [
@@ -48,19 +49,43 @@ test("rejects every problem at once", () => {
 });
 
 test("rejects bad periods", () => {
-  assert.ok(reportRequestProblems({ ...req(), period: { start: "2026-02-30", end: "2026-03-01" } }).includes("period dates must be YYYY-MM-DD"));
-  assert.ok(reportRequestProblems({ ...req(), period: { start: "2026-10-31", end: "2026-10-01" } }).includes("period start is after its end"));
-  assert.ok(reportRequestProblems({ ...req(), period: { start: "2025-01-01", end: "2026-01-02" } }).includes("period is longer than 366 days"));
+  assert.ok(
+    reportRequestProblems({ ...req(), period: { start: "2026-02-30", end: "2026-03-01" } }).includes(
+      "period dates must be YYYY-MM-DD",
+    ),
+  );
+  assert.ok(
+    reportRequestProblems({ ...req(), period: { start: "2026-10-31", end: "2026-10-01" } }).includes(
+      "period start is after its end",
+    ),
+  );
+  assert.ok(
+    reportRequestProblems({ ...req(), period: { start: "2025-01-01", end: "2026-01-02" } }).includes(
+      "period is longer than 366 days",
+    ),
+  );
   for (const limit of [0, 21]) {
     assert.ok(reportRequestProblems({ ...req(), limit }).includes("limit must be a whole number from 1 to 20"));
   }
 });
 
 test("comparePeriod follows previous_month", () => {
-  assert.deepEqual(comparePeriod({ start: "2026-10-01", end: "2026-10-31" }), { start: "2026-09-01", end: "2026-09-30" });
-  assert.deepEqual(comparePeriod({ start: "2026-03-01", end: "2026-03-31" }), { start: "2026-02-01", end: "2026-02-28" });
-  assert.deepEqual(comparePeriod({ start: "2026-11-01", end: "2026-11-24" }), { start: "2026-10-01", end: "2026-10-24" });
-  assert.deepEqual(comparePeriod({ start: "2026-01-01", end: "2026-01-31" }), { start: "2025-12-01", end: "2025-12-31" });
+  assert.deepEqual(comparePeriod({ start: "2026-10-01", end: "2026-10-31" }), {
+    start: "2026-09-01",
+    end: "2026-09-30",
+  });
+  assert.deepEqual(comparePeriod({ start: "2026-03-01", end: "2026-03-31" }), {
+    start: "2026-02-01",
+    end: "2026-02-28",
+  });
+  assert.deepEqual(comparePeriod({ start: "2026-11-01", end: "2026-11-24" }), {
+    start: "2026-10-01",
+    end: "2026-10-24",
+  });
+  assert.deepEqual(comparePeriod({ start: "2026-01-01", end: "2026-01-31" }), {
+    start: "2025-12-01",
+    end: "2025-12-31",
+  });
 });
 
 test("periods are Singapore dates", () => {
@@ -91,7 +116,7 @@ test("visitor id prefers properties.visitorId", () => {
 });
 
 test("read keys are compared by hash", () => {
-  const h = hashReadKey("rk_secret");
+  const h = sha256Hex("rk_secret");
   assert.equal(h.length, 64);
   assert.equal(readKeyMatches("rk_secret", h), true);
   assert.equal(readKeyMatches("rk_other", h), false);
@@ -99,7 +124,8 @@ test("read keys are compared by hash", () => {
   assert.equal(readKeyMatches("rk_secret", null), false);
 });
 
-const at = (date: string, hourSgt = 10) => Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)), hourSgt - 8);
+const at = (date: string, hourSgt = 10) =>
+  Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)), hourSgt - 8);
 const ev = (event: string, vid: string, date: string, extra: Partial<EventRow> = {}): EventRow => ({
   event,
   session_id: `s-${vid}`,

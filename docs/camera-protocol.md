@@ -1,8 +1,9 @@
 # Camera relay protocol (v1)
 
-Source of truth: `qindom/docs/camera-protocol.md`. Copies live in
-`fndom/docs/camera-protocol.md` and `fndom-react-native/docs/camera-protocol.md`;
-change all three together.
+Master copy: `qindom/docs/camera-protocol.md`. The fndom and fndom-react-native
+copies are being removed in favour of this file; treat any other copy as stale.
+A protocol change still needs the server, the dashboard and the phone app updated
+together.
 
 ```
 phone ──ws──▶ qindom relay ──ws──▶ fndom dashboard
@@ -44,9 +45,22 @@ device ↔ user binding is stored (`tb_camera_device`).
 | `/camera/ws/phone` | phone | `Authorization: Bearer <device token>` header |
 | `/camera/ws/dashboard` | browser | `jwt_token` cookie (same check as `MandatoryTokenFilter`) and `Origin` ∈ `ALLOWED_ORIGINS` |
 
+A refused upgrade gets a plain HTTP status instead of `101`: `401` bad or unknown
+credentials, `403` dashboard `Origin` not allowed, `404` unknown path, `400`
+unparseable path, `429` more than 60 phone upgrades in 15 minutes from one IP
+(checked before the token is looked up), `500` server error during the check.
+
 The server pings every 25 s and drops sockets that miss a pong. Close codes:
-`4000` replaced by a newer connection of the same device, `4401` credentials no
-longer valid (re-register). Any other close: reconnect with backoff.
+
+| Code | Meaning | Client action |
+|---|---|---|
+| `4000` | replaced by a newer connection of the same device | don't reconnect this socket |
+| `4401` | credentials no longer valid | re-register |
+| `1011` | internal error: the server failed while setting up or handling this socket | reconnect with backoff |
+| `1009` | message too big (a binary frame over the frame limit) | reconnect with backoff |
+| `1007` | a text message that isn't valid UTF-8 | reconnect with backoff |
+
+Any other close: reconnect with backoff.
 
 ### Binary messages
 
@@ -60,7 +74,9 @@ one, and nothing is sent to a dashboard whose socket buffer exceeds 1 MB.
 
 ### JSON text messages
 
-All have a `type`. Unknown types are ignored. `target` is a `deviceId` or `"all"`
+All have a `type`. Unknown types are ignored. A text message larger than
+**8 KB** (8192 bytes, UTF-8) is dropped unread, from either side; the socket stays
+open. Malformed JSON is ignored the same way. `target` is a `deviceId` or `"all"`
 (all of the user's devices). `requestId` is an optional client string, echoed
 back in the matching `ack`.
 

@@ -1,308 +1,174 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
-import { AuthService } from "./Auth.service.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import {
+  countAsFailedAttempt,
   loginLimiter,
+  passwordCheckLimiter,
+  preflightLimiter,
   registerLimiter,
-  verifyEmailLimiter,
   resendVerifyLimiter,
-  adminLimiter,
+  verifyEmailLimiter,
 } from "../middlewares/RateLimiter.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { AuthValidator } from "./Auth.validator.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
-import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
-import { isValidRole, Roles } from "./Permission.js";
+import { getUser, route } from "../utils/RequestUtilities.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { RequestLogSearch } from "../utils/logging/RequestLogSearch.js";
-import { RecentRequestLogDto } from "../models/dtos/RequestLogDto.js";
-import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
-import { TELEGRAM_LOG_MODULE_KEYS } from "../utils/logging/TelegramLogModules.js";
-import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { setAuthCookies, clearAuthCookies, JWT_COOKIE } from "../utils/AuthCookieUtilities.js";
+import { AuthRegistrationService } from "./AuthRegistration.service.js";
+import { AuthSessionService } from "./AuthSession.service.js";
+import createAuthAdminController from "./AuthAdmin.controller.js";
+import {
+  validateEmailBody,
+  validateLoginBody,
+  validatePasswordUpdateBody,
+  validatePasswordValidateBody,
+  validateRegisterBody,
+  validateVerifyEmailBody,
+} from "./Auth.validator.js";
+import {
+  AuthLoggedOutDto,
+  AuthPasswordValidityDto,
+  AuthPreflightDto,
+  AuthRegisteredDto,
+  AuthSessionDto,
+  AuthUpdatedDto,
+  AuthVerificationDto,
+  AuthVerifyCodeSentDto,
+} from "./Auth.types.js";
 
-export default function createAuthController(db: KnexSqlUtilities) {
+/**
+ * `/auth` (mounted with `mw.std`): registration, login, session and password routes; the
+ * OWNER-only `/auth/admin/*` routes live in `AuthAdmin.controller.ts`.
+ * A JWT only ever leaves through `setAuthCookies` (httpOnly cookie), never in a response body.
+ */
+export default function createAuthController(db: KnexSqlUtilities): Router {
   const router = Router();
-  const svc = new AuthService(db);
-  const telegramLogSubscriptionSvc = new TelegramLogSubscriptionService(db);
+  const sessions = new AuthSessionService(db);
+  const registration = new AuthRegistrationService(db, sessions);
 
-  // GET /admin/users — list all users (SYSTEM_R5 only)
-  router.get("/admin/users", [MandatoryTokenFilter, adminLimiter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-      return cr.ok(await svc.listUsers());
-    } catch (err) {
-      return handleException(err, cr, "AuthController.GET /admin/users", "Failed to load users");
-    }
-  });
+  router.use("/admin", createAuthAdminController(db));
 
-  // POST /admin/users/:id/roles — update a user's roles (SYSTEM_R5 only)
+  // Tells the login form whether to show register or login next.
   router.post(
-    "/admin/users/:id/roles",
-    [MandatoryTokenFilter, adminLimiter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const cr = new ControllerResponse(req, res);
-      try {
-        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-        const id = Number(req.params.id);
-        if (!Number.isInteger(id) || id <= 0) return cr.result(400, "Bad Request", "Invalid ID");
-        const { roles } = req.body;
-        if (!Array.isArray(roles) || !roles.every(isValidRole)) throw new Exceptions.InvalidRequest("roles");
-        return cr.ok(await svc.updateUserRoles(id, roles));
-      } catch (err) {
-        return handleException(err, cr, "AuthController.POST /admin/users/:id/roles", "Failed to update roles");
-      }
-    },
+    "/preflight",
+    preflightLimiter,
+    route("AuthController.POST /preflight", "Failed to check email", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const body = validateEmailBody(req.body, event);
+      return cr.ok<AuthPreflightDto>(await registration.preflight(body, req.logContext));
+    }),
   );
 
-  // GET /admin/recent-request-logs — newest N requests overall, for the dashboard's
-  // compact log widget (SYSTEM_R5 only). Registered before /admin/request-logs/:requestId
-  // as a distinct path segment so there's no route-matching ambiguity between them.
-  router.get(
-    "/admin/recent-request-logs",
-    [MandatoryTokenFilter, adminLimiter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const cr = new ControllerResponse(req, res);
-      try {
-        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-        const limit = Math.min(Math.max(Number(req.query.limit) || 3, 1), 20);
-        const matches: RecentRequestLogDto[] = RequestLogSearch.recent(limit).map(
-          ({ requestId, timestamp, method, path, statusCode }) => ({ requestId, timestamp, method, path, statusCode }),
-        );
-        return cr.ok(matches);
-      } catch (err) {
-        return handleException(err, cr, "AuthController.GET /admin/recent-request-logs", "Failed to load recent logs");
-      }
-    },
-  );
-
-  // GET /admin/request-logs/:requestId — search PM2 log files for a request's rendered tree (SYSTEM_R5 only)
-  router.get(
-    "/admin/request-logs/:requestId",
-    [MandatoryTokenFilter, adminLimiter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const cr = new ControllerResponse(req, res);
-      try {
-        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-        const requestId = req.params.requestId;
-        // 12 hex = current ids; 5 hex = ids already in older log files
-        if (!/^req_([0-9a-f]{12}|[0-9a-f]{5})$/i.test(requestId)) return cr.result(400, "Bad Request", "Invalid Request ID format");
-        const matches = RequestLogSearch.find(requestId);
-        if (!matches.length) return cr.result(404, "Not Found", "No log entries found for that Request ID");
-        return cr.ok(matches);
-      } catch (err) {
-        return handleException(err, cr, "AuthController.GET /admin/request-logs/:requestId", "Failed to search logs");
-      }
-    },
-  );
-
-  // GET /admin/telegram-log-subscriptions — full chat × module matrix
-  // (every whitelisted admin who has an active telegram_chat_id, not just one) (SYSTEM_R5 only)
-  router.get(
-    "/admin/telegram-log-subscriptions",
-    [MandatoryTokenFilter, adminLimiter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const cr = new ControllerResponse(req, res);
-      try {
-        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-        return cr.ok(await telegramLogSubscriptionSvc.listMatrix());
-      } catch (err) {
-        return handleException(
-          err,
-          cr,
-          "AuthController.GET /admin/telegram-log-subscriptions",
-          "Failed to load Telegram log subscriptions",
-        );
-      }
-    },
-  );
-
-  // POST /admin/telegram-log-subscriptions/:chatId/:moduleKey — toggle one chat's
-  // alerts for one module on/off (SYSTEM_R5 only)
   router.post(
-    "/admin/telegram-log-subscriptions/:chatId/:moduleKey",
-    [MandatoryTokenFilter, adminLimiter],
-    async (req: RequestWithUserInfo, res: Response) => {
-      const cr = new ControllerResponse(req, res);
-      try {
-        if (!hasRole(req, Roles.OWNER)) return cr.result(403, "Forbidden", "Insufficient permissions");
-        const { moduleKey } = req.params;
-        if (!TELEGRAM_LOG_MODULE_KEYS.some((m) => m.key === moduleKey)) {
-          return cr.result(400, "Bad Request", "Unknown module key");
-        }
-        const chatId = Number(req.params.chatId);
-        if (!Number.isInteger(chatId) || chatId <= 0) return cr.result(400, "Bad Request", "Invalid chat ID");
-        const { enabled } = req.body;
-        if (typeof enabled !== "boolean") throw new Exceptions.InvalidRequest("enabled");
-        await telegramLogSubscriptionSvc.setEnabled(chatId, moduleKey, enabled);
-        return cr.ok(await telegramLogSubscriptionSvc.listMatrix());
-      } catch (err) {
-        return handleException(
-          err,
-          cr,
-          "AuthController.POST /admin/telegram-log-subscriptions/:chatId/:moduleKey",
-          "Failed to update Telegram log subscription",
-        );
-      }
-    },
+    "/login",
+    loginLimiter,
+    route("AuthController.POST /login", "Failed to login", async (req, cr, res) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { token, session } = await sessions.login(validateLoginBody(req.body, event), req.logContext);
+      setAuthCookies(res, token);
+      return cr.ok<AuthSessionDto>(session);
+    }),
   );
 
-  // POST /preflight — check if email exists (routes to login or register)
-  router.post("/preflight", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { email, system } = AuthValidator.validatePreflightRequest(req.body, validationEvent);
-      return cr.ok(await svc.checkIfEmailExistsWithinSystem({ email, system, logContext }));
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /preflight", "Failed to check email");
-    }
-  });
+  // Creates an unverified account and emails a 6-digit code.
+  router.post(
+    "/register",
+    registerLimiter,
+    route("AuthController.POST /register", "Failed to register", async (req, cr) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const body = validateRegisterBody(req.body, event);
+      return cr.ok<AuthRegisteredDto>(await registration.register(body, req.logContext));
+    }),
+  );
 
-  // POST /login — authenticate with email + password
-  router.post("/login", [loginLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { email, password, system } = AuthValidator.validateLoginRequest(req.body, validationEvent);
-      const { token, ...rest } = await svc.login({ email, password, system, logContext });
+  // Code + password → verified account and a session cookie.
+  router.post(
+    "/verify-email",
+    verifyEmailLimiter,
+    route("AuthController.POST /verify-email", "Failed to verify email", async (req, cr, res) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const body = validateVerifyEmailBody(req.body, event);
+      const { token, session } = await registration.verifyEmail(body, req.logContext);
       setAuthCookies(res, token);
-      return cr.ok(rest);
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /login", "Failed to login");
-    }
-  });
+      return cr.ok<AuthSessionDto>(session);
+    }),
+  );
 
-  // POST /register — create account and send verification email
-  router.post("/register", [registerLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { username, email, password, system } = AuthValidator.validateRegisterRequest(req.body, validationEvent);
-      return cr.ok(await svc.createNewUser({ username, email, password, system, logContext }));
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /register", "Failed to register");
-    }
-  });
+  // Always answers 200 { sent: true }, whatever happened (bad body, unknown email, mail failure),
+  // so the response never reveals whether an email is registered. Failures go to the request tree.
+  router.post(
+    "/resend-verify",
+    resendVerifyLimiter,
+    route("AuthController.POST /resend-verify", "Failed to resend code", async (req, cr) => {
+      try {
+        const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+        await registration.resendVerifyCode(validateEmailBody(req.body, event), req.logContext);
+      } catch (err) {
+        LoggingUtilities.request.branch(
+          req.logContext,
+          "WARN",
+          "Resend failed (hidden from the client)",
+          LoggingUtilities.sanitise(toMessage(err)),
+        );
+      }
+      return cr.ok<AuthVerifyCodeSentDto>({ sent: true });
+    }),
+  );
 
-  // POST /verify-email — submit 6-digit OTP, returns JWT on success
-  router.post("/verify-email", [verifyEmailLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { email, system, code, password } = AuthValidator.validateEmailVerifyRequest(req.body, validationEvent);
-      const { token, ...rest } = await svc.verifyEmail({ email, system, code, password, logContext });
-      setAuthCookies(res, token);
-      return cr.ok(rest);
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /verify-email", "Failed to verify email");
-    }
-  });
-
-  // POST /resend-verify — resend a new verification code
-  router.post("/resend-verify", [resendVerifyLimiter], async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { email, system } = AuthValidator.validatePreflightRequest(req.body, validationEvent);
-      await svc.resendVerifyCode({ email, system, logContext });
-      return cr.ok({ sent: true }); // Always respond 200 to avoid leaking whether the email is registered
-    } catch {
-      return cr.ok({ sent: true }); // intentionally swallow errors
-    }
-  });
-
-  // POST /verification — validate the session cookie (MandatoryTokenFilter already verified it)
-  router.post("/verification", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
+  // Validates the session cookie (MandatoryTokenFilter already checked it; roles come from the DB row).
+  router.post(
+    "/verification",
+    MandatoryTokenFilter,
+    route("AuthController.POST /verification", "Failed to verify token", async (req, cr) => {
       const { username, roles } = getUser(req);
-      return cr.ok({ username, roles, exist: true });
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /verification", "Failed to verify token");
-    }
-  });
+      return cr.ok<AuthVerificationDto>({ username, roles, exist: true });
+    }),
+  );
 
-  // POST /logout — clear the auth + CSRF cookies. Deliberately not gated behind
-  // MandatoryTokenFilter: logout's whole job is to reset a broken/expired
-  // session to a clean slate, so it must succeed even when the token or CSRF
-  // check would otherwise fail — gating it meant the frontend's best-effort
-  // logout-on-401 silently no-op'd exactly when cookies most needed clearing.
-  router.post("/logout", async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    // If a valid JWT is present, also revoke it server-side so a copied cookie
-    // can't keep being replayed after logout. Best-effort and never blocks the
-    // cookie clear below (the route stays open to everyone by design).
-    const token = req.cookies?.[JWT_COOKIE];
-    if (token) {
-      await svc.invalidateSession(token);
-    }
-    clearAuthCookies(res);
-    return cr.ok({ loggedOut: true });
-  });
+  // Clears the auth + CSRF cookies and, when the cookie holds a valid JWT, revokes it server-side
+  // (best-effort, never fails). Deliberately not behind MandatoryTokenFilter: logout's job is to
+  // reset a broken/expired session, so it must succeed even when the token or CSRF check would
+  // fail (fndom's logout-on-401 depends on it).
+  router.post(
+    "/logout",
+    route("AuthController.POST /logout", "Failed to log out", async (req, cr, res) => {
+      const token = req.cookies?.[JWT_COOKIE];
+      if (token) await sessions.invalidateSession(token, req.logContext);
+      clearAuthCookies(res);
+      return cr.ok<AuthLoggedOutDto>({ loggedOut: true });
+    }),
+  );
 
-  router.post("/password/validate", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { username, system } = getUser(req);
-      const { password } = AuthValidator.validatePasswordValidateRequest(req.body, validationEvent);
-      const validatePasswordLoggingEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "SERVICE", "Validating password")
-        : undefined;
-      return cr.ok(await svc.validatePassword(`${username}_${system}`, password, validatePasswordLoggingEvent));
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /password/validate", "Failed to validate password");
-    }
-  });
+  // Re-checks the session user's password. A wrong one still answers 200 { isValid: false } but counts
+  // toward passwordCheckLimiter (shared with /password/update).
+  router.post(
+    "/password/validate",
+    MandatoryTokenFilter,
+    passwordCheckLimiter,
+    route("AuthController.POST /password/validate", "Failed to validate password", async (req, cr, res) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const { password } = validatePasswordValidateBody(req.body, event);
+      const validity = await sessions.validatePassword(getUser(req).id, password, req.logContext);
+      if (!validity.isValid) countAsFailedAttempt(res);
+      return cr.ok<AuthPasswordValidityDto>(validity);
+    }),
+  );
 
-  router.post("/password/update", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const logContext: IRequestLogContext = req.logContext;
-      const validationEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "VALIDATION", "Request body")
-        : undefined;
-      const { username, system } = getUser(req);
-      const { currentPassword, newPassword } = AuthValidator.validatePasswordUpdateRequest(req.body, validationEvent);
-      const updatePasswordLoggingEvent = logContext
-        ? LoggingUtilities.request.branch(logContext, "SERVICE", "Updating password")
-        : undefined;
-      const { token } = await svc.updatePassword(
-        `${username}_${system}`,
-        currentPassword,
-        newPassword,
-        updatePasswordLoggingEvent,
-      );
-      // Password change rotates the token; refresh this session's cookie so the
-      // user who just changed it stays logged in while all other sessions drop.
+  // A wrong current password is a 401, so it counts toward passwordCheckLimiter.
+  router.post(
+    "/password/update",
+    MandatoryTokenFilter,
+    passwordCheckLimiter,
+    route("AuthController.POST /password/update", "Failed to update password", async (req, cr, res) => {
+      const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
+      const body = validatePasswordUpdateBody(req.body, event);
+      const { token } = await sessions.updatePassword(getUser(req).id, body, req.logContext);
+      // The change rotated the token: refresh this session's cookie so the user who just changed
+      // it stays logged in while every other session drops.
       setAuthCookies(res, token);
-      return cr.ok({ updated: true });
-    } catch (err) {
-      return handleException(err, cr, "AuthController.POST /password/update", "Failed to update password");
-    }
-  });
+      return cr.ok<AuthUpdatedDto>({ updated: true });
+    }),
+  );
 
   return router;
 }

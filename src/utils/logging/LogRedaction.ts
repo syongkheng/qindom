@@ -31,6 +31,8 @@ const ALWAYS_REDACT = new Set([
   "verifycode",
   "otp",
   "pin",
+  // Itinerary share access code (POST /itinerary/challenge, update bodies, owner GET responses).
+  "challenge",
   "captchacode",
   "smsbody",
   "authorization",
@@ -51,9 +53,19 @@ const isOtpLike = (value: unknown) => typeof value === "string" && /^\d{4,8}$/.t
 const isApiKeyLike = (value: unknown) =>
   typeof value === "string" && (/^(ss|iot|sk|pk)_/i.test(value) || value.length >= 16);
 
-function maskEmail(value: string): string {
+/** "alice@example.com" → "a***@example.com". Anything without a local part is returned unchanged. */
+export function maskEmail(value: string): string {
   const at = value.indexOf("@");
   return at <= 0 ? value : `${value.charAt(0)}***${value.slice(at)}`;
+}
+
+// Address-shaped runs inside free text (SMTP / driver errors, SQL in debug lines). Doesn't match an
+// already-masked "a***@x.y" (no word character right before the "@"), so masking twice is a no-op.
+const EMAIL_IN_TEXT = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/** Masks every email address inside a free-text log line. */
+export function maskEmailsInText(text: string): string {
+  return text.replace(EMAIL_IN_TEXT, maskEmail);
 }
 
 /** Replacement for a field's value, or undefined if the field isn't sensitive. */
@@ -114,7 +126,7 @@ export function redactUrlForLog(url: string): string {
 export function redactTextForLog(text: string): string {
   return text
     .replace(
-      /"(password|token|secret|api_?key|apiKey|blob|blobString|smsBody|verify_code|pin|authorization|cookie)"\s*:\s*"[^"]*"/gi,
+      /"(password|token|secret|api_?key|apiKey|blob|blobString|smsBody|verify_code|pin|challenge|authorization|cookie)"\s*:\s*"[^"]*"/gi,
       '"$1":"[REDACTED]"',
     )
     .replace(/"code"\s*:\s*"(\d{4,8})"/gi, '"code":"[REDACTED]"')

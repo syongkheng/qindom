@@ -1,24 +1,24 @@
+/**
+ * Standalone migration runner for EC2 deploys: deploy.sh runs `node src/migrate.js` (compiled) from the
+ * project root before restarting PM2. Applies every pending migration, then exits (non-zero on failure).
+ *
+ * Env: plain `dotenv.config()` = `.env` in the working directory, never `.env.dev`, and without override
+ * (variables already set in the shell win). On EC2 that `.env` is the prod one deploy.sh copies over.
+ * Deliberate; see config/README.md. Extension is always "js": this only runs as compiled output.
+ */
 import knex from "knex";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { DB_CLIENT, readDbConnection } from "./config/db/connection.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config();
 
-// Standalone migration runner — used during EC2 deploys.
-// Runs all pending migrations then exits. Extension is always 'js' here
-// because this script only runs as compiled output on the server.
 const k = knex({
-  client: "mysql2",
-  connection: {
-    host: process.env.DB_URL,
-    user: process.env.DB_USER,
-    password: process.env.DB_PW,
-    database: process.env.DB_NAME,
-    port: 3306,
-  },
+  client: DB_CLIENT,
+  connection: readDbConnection(), // after dotenv.config() above
   migrations: {
     directory: path.join(__dirname, "migrations"),
     extension: "js",
