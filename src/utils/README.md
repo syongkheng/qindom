@@ -1,8 +1,7 @@
 ## Shared helpers (`src/utils`)
 
 No routes. Helpers used by several modules; files are named `XyzUtilities.ts`. Nothing here loads dotenv:
-values from the env file are read lazily inside functions (dotenv runs in `index.ts` after ESM imports are
-evaluated); environment flags come from `src/config/env.ts` (`IS_PRD`).
+values from the env file are read lazily inside functions (see `src/config/README.md`); environment flags come from `src/config/env.ts` (`IS_PRD`).
 
 | File                               | Exports                                                                                                                                      | Notes                                                                                                                                                                                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -40,7 +39,7 @@ await this.db.transaction(async (trx, tx) => {
 | `RequestLogParser.ts`               | Parses one rendered entry into `RequestLogEntryDto` for the Log Searcher. Must keep matching `render()`; `Logging.test.ts` round-trips render → parse.                                            |
 | `RequestLog.types.ts`               | `RequestLogEntryDto` / `RequestLogEventDto` / `RequestLogMatchDto` / `RecentRequestLogDto`: the parsed log shapes (moved from `models/dtos/`; auth's admin routes return them).                   |
 | `RequestLogSearch.ts`               | Finds entries by request id / newest N across the log files (`GET /auth/admin/request-logs…`).                                                                                                    |
-| `TelegramLogModules.ts`             | Path prefix → module key for per-chat muting. Must cover every Express prefix in `index.ts` (test-enforced). fndom's admin matrix shows whatever the server lists.                                |
+| `TelegramLogModules.ts`             | Path prefix → module key for per-chat muting. Must cover every Express prefix in `app.ts`'s route table (test-enforced). fndom's admin matrix shows whatever the server lists.                                |
 | `TelegramLogSubscriptionService.ts` | Owns `tb_telegram_log_subscription`; reads subscribed chats from `tb_tg_stats_whitelist`. 30 s caches (a toggle refreshes its entry at once). Modules without an override are on.                 |
 | `TelegramLogSender.ts`              | Registered at boot (`setupTelegramLogSender`, only with a bot token): compact access line + Log Searcher link → `sendTelegramHtml`. A failed send is a console warning, never a throw.            |
 

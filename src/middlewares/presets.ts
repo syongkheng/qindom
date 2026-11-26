@@ -6,7 +6,7 @@ import { MandatoryTokenFilter } from "./TokenFilter.js";
 import { houseViewLimiter } from "./RateLimiter.js";
 import { stripPersonalDataFromLog } from "../pdca/PdcaEnquiry.middleware.js";
 
-/** The middleware chains route groups are mounted with in index.ts. Every chain starts with RestRequestLogger. */
+/** The middleware chains route groups are mounted with in app.ts. Every chain starts with RestRequestLogger. */
 export const mw = {
   pub: [RestRequestLogger],
   std: [RestRequestLogger, RequestHeaderFilter],

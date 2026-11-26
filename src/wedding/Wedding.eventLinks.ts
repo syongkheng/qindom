@@ -28,7 +28,7 @@ export interface EventLinks {
   website: string | null;
 }
 
-// WEDDING_WEBSITE_URL (e.g. https://yoursite.com), read lazily (dotenv loads after imports).
+// WEDDING_WEBSITE_URL (e.g. https://yoursite.com), read lazily, on call (see config/README.md).
 // Any `q` already on it is overridden. Unset or invalid → the website links are left out.
 function websiteLink(mode: WebsiteMode): string | null {
   const base = process.env[WEBSITE_URL_ENV]?.trim();

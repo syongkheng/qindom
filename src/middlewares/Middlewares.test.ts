@@ -148,7 +148,7 @@ function buildApp() {
   const app = express();
   app.use(cookieParser());
 
-  // Express apps for the route presets, as index.ts mounts them.
+  // Express apps for the route presets, as app.ts mounts them.
   const json = express.json();
   const echo = Router();
   echo.all("/", echoUser);
@@ -744,10 +744,8 @@ describe("ErrorHandler", () => {
       typed: new Exceptions.NotFound("Nope"),
       multerSize: Object.assign(new Error("File too large"), { name: "MulterError", code: "LIMIT_FILE_SIZE" }),
       multerOther: Object.assign(new Error("Unexpected field"), { name: "MulterError", code: "LIMIT_UNEXPECTED_FILE" }),
-      exposed: Object.assign(new Error("CORS: origin 'https://evil.example' not allowed"), {
-        status: 403,
-        expose: true,
-      }),
+      // The CORS rejection used to take this path; it is a registry ForbiddenAccess now (app.test.ts).
+      exposed: Object.assign(new Error("Client-safe detail"), { status: 403, expose: true }),
       hidden: Object.assign(new Error("secret detail"), { status: 413, expose: false }),
       serverHttpError: Object.assign(new Error("upstream"), { status: 503, expose: true }),
       plain: new Error("boom at /home/ubuntu/qindom/src/x.ts"),
@@ -808,7 +806,7 @@ describe("ErrorHandler", () => {
       assert.deepEqual(exposed.json, {
         code: 403,
         status: "Forbidden",
-        data: "CORS: origin 'https://evil.example' not allowed",
+        data: "Client-safe detail",
       });
       const hidden = await get(`/${prefix}/hidden`);
       assert.deepEqual(hidden.json, { code: 413, status: "Payload Too Large", data: "Payload Too Large" });

@@ -13,8 +13,8 @@ export const JWT_TTL_MS = 30 * Time.DAY_MS;
 const JWT_SECRET_ENV = "JWT_SECRET";
 
 /**
- * Read lazily: dotenv runs in index.ts after all imports are evaluated (ESM hoisting),
- * so the env var isn't there yet at import time. index.ts calls this once at boot to fail fast.
+ * Read lazily (on call, not at import; see config/README.md), so tests can set it per case.
+ * index.ts calls this once at boot to fail fast.
  */
 export function getJwtSecret(): string {
   const secret = process.env[JWT_SECRET_ENV];

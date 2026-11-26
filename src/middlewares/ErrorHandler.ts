@@ -29,8 +29,8 @@ function toClientError(err: unknown): { status: number; message: unknown } | nul
   if (m?.name === MULTER_ERROR_NAME && typeof m.code === "string") {
     return { status: m.code === MULTER_FILE_TOO_LARGE ? PAYLOAD_TOO_LARGE : BAD_REQUEST, message: String(m.message) };
   }
-  // http-errors shape: body-parser (malformed JSON, payload too large) and the
-  // CORS rejection in index.ts. `expose` marks the message as safe for clients.
+  // http-errors shape: body-parser (malformed JSON, payload too large).
+  // `expose` marks the message as safe for clients.
   const e = err as { status?: unknown; expose?: unknown; type?: unknown; message?: unknown };
   if (typeof e?.status === "number" && e.status >= MIN_CLIENT_ERROR && e.status < MIN_SERVER_ERROR) {
     if (e.type === JSON_PARSE_FAILED) return { status: BAD_REQUEST, message: "Malformed JSON body" };
@@ -45,7 +45,7 @@ function toClientError(err: unknown): { status: number; message: unknown } | nul
  * "production" — and prod runs as "prd" — so every uncaught error leaked
  * absolute paths and library versions. Responds with the usual JSON envelope.
  *
- * Errors raised before RestRequestLogger (CORS, express.json) have no
+ * Errors raised before RestRequestLogger (CORS → ForbiddenAccess, express.json) have no
  * req.logContext, which the request-log helpers require, so those are answered
  * directly instead of through ControllerResponse (the one deliberate `req.logContext` check).
  */

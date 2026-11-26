@@ -1,183 +1,53 @@
-// Environment File
-
-import dotenv from "dotenv";
-
-const envFile = process.env.NODE_ENV === "prd" ? ".env" : ".env.dev";
-
-dotenv.config({ path: envFile, override: true });
-
-import express, { Application, RequestHandler, Router } from "express";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
+// Must stay the first import: loads .env / .env.dev before any other module is evaluated (see config/README.md).
+import { ENV_FILE } from "./config/loadEnv.js";
+import { APP_ENV } from "./config/env.js";
+import { parseAllowedOrigins } from "./config/cors.js";
 import { initializeDatabase } from "./config/db/mysql.js";
-import { globalLimiter } from "./middlewares/RateLimiter.js";
-import { mw } from "./middlewares/presets.js";
-import { ErrorHandler } from "./middlewares/ErrorHandler.js";
-
-// Controllers
-import createConnectivityController from "./connectivity/Connectivity.controller.js";
-import createAnalyticsLegacyController from "./analytics/AnalyticsLegacy.controller.js";
-import createAnalyticsController from "./analytics/Analytics.controller.js";
-import createHdbController from "./hdb/Hdb.controller.js";
-import createLtaController from "./lta/Lta.controller.js";
-import createAuthController from "./auth/Auth.controller.js";
-import createProfileController from "./profile/Profile.controller.js";
-import createItineraryController from "./itinerary/Itinerary.controller.js";
-import createBudgetController from "./budget/Budget.controller.js";
-import createTodoController from "./todo/Todo.controller.js";
-import createHouseLayoutController from "./house/HouseLayout.controller.js";
-import { createHouseShareController, createHouseShareViewController } from "./house/HouseShare.controller.js";
-import createSsTodoControllerV1 from "./siri-shortcut/Todo.v1.controller.js";
-import createApplePayController from "./applepay/ApplePay.controller.js";
-import createFileController from "./file/File.controller.js";
-import createGeocodeController from "./geocode/Geocode.controller.js";
-import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
-import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
-import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
-import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
+import { createApp } from "./app.js";
+import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
+import { toMessage } from "./utils/ErrorUtilities.js";
+import { getJwtSecret } from "./token/Token.service.js";
 import { setupTelegramLogSender } from "./utils/logging/TelegramLogSender.js";
 import { initTgImageBot } from "./tgimage/TgImage.bot.js";
-
-// Wedding
-import createWeddingController from "./wedding/Wedding.controller.js";
-
-// Debug (status-code test endpoint)
-import createDebugController from "./debug/Debug.controller.js";
-
-// Suggestion
-import createSuggestionController from "./suggestion/Suggestion.controller.js";
-
-// Camera relay (phones ↔ dashboards)
-import createCameraController from "./camera/Camera.controller.js";
-
-// PDCA website (dental-directory) contact form
-import createPdcaEnquiryController from "./pdca/PdcaEnquiry.controller.js";
 import { CameraService } from "./camera/Camera.service.js";
 import { CameraRelay } from "./camera/Camera.relay.js";
 import { PairingCodeStore } from "./camera/Camera.pairing.js";
 import { attachCameraWebSockets } from "./camera/Camera.ws.js";
-import { getJwtSecret } from "./token/Token.service.js";
 
+const DEFAULT_PORT = 3000;
+const LOG_TAG = "server";
+
+/** Boot order: env (first import) → JWT secret → DB → app (routes, 404, ErrorHandler) → listen → camera WS → Telegram. */
 async function startServer() {
   getJwtSecret(); // fail fast at boot (PM2 restart loop → deploy health check fails) if JWT_SECRET is missing
-  const app: Application = express();
-  const port: number = Number(process.env.PORT) || 3000;
+  const port = Number(process.env.PORT) || DEFAULT_PORT;
+  const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 
-  // CORS — must come before rate limiter so preflight OPTIONS requests are not blocked
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
-
-  const corsOptions = {
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      // status/expose: ErrorHandler answers it as a JSON 403 with this message
-      callback(Object.assign(new Error(`CORS: origin '${origin}' not allowed`), { status: 403, expose: true }));
-    },
-    methods: "GET,POST,DELETE,OPTIONS",
-    credentials: true,
-    optionsSuccessStatus: 204,
-  };
-  app.use(cors(corsOptions));
-  app.options("/{*path}", cors(corsOptions)); // handle preflight for all routes
-
-  // Security headers
-  app.use((_req, res, next) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("Referrer-Policy", "no-referrer");
-    if (process.env.NODE_ENV === "prd") {
-      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-    }
-    next();
-  });
-
-  // Middleware
-  app.use(globalLimiter);
-  app.use(cookieParser());
-  app.use(express.json({ limit: "5mb" }));
-  app.use(express.urlencoded({ limit: "5mb", extended: true, parameterLimit: 5000 }));
-  app.disable("x-powered-by");
-
-  // Initialize database
-  const db = await initializeDatabase();
+  const db = await initializeDatabase(); // exits the process if the DB is unreachable
 
   // Camera relay state is in memory (single PM2 process); device bindings are in tb_camera_device.
   const cameraRelay = new CameraRelay();
   const cameraService = new CameraService(db, cameraRelay, new PairingCodeStore());
 
-  // Route table — [path, middlewares, router]
-  const routes: [string, RequestHandler[], Router][] = [
-    ["/connectivity", mw.std, createConnectivityController(db)],
-    ["/analytics", mw.std, createAnalyticsLegacyController(db)], // legacy POST / and /heartbeat
-    ["/analytics", mw.std, createAnalyticsController(db)], // v1: /collect, /systems, /admin/*
-    ["/hdb", mw.std, createHdbController(db)],
-    ["/lta", mw.std, createLtaController(db)],
-    ["/auth", mw.std, createAuthController(db)],
-    ["/pfp", mw.auth, createProfileController(db)],
-    ["/itinerary", mw.std, createItineraryController(db)],
-    ["/budget", mw.auth, createBudgetController(db)],
-    ["/todo", mw.auth, createTodoController(db)],
-    ["/house-layout", mw.auth, createHouseLayoutController(db)],
-    ["/house/share", mw.auth, createHouseShareController(db)],
-    ["/house/view", mw.housePublic, createHouseShareViewController(db)],
-    ["/applepay", mw.auth, createApplePayController(db)],
-    ["/file", mw.auth, createFileController(db)],
-    ["/img", mw.pub, createTgImageGetController(db)],
-    ["/img", mw.authUpload, createTgImageController(db)], // no RHF — multipart upload
-    ["/geocode", mw.std, createGeocodeController(db)],
-    ["/v1/ss", mw.ssKey, createSsApplePayControllerV1(db)],
-    ["/v1/ss", mw.ssKey, createSsTodoControllerV1(db)],
-    ["/v2/ss", mw.ssKey, createSsApplePayControllerV2(db)],
-    ["/ss-key", mw.auth, createSsApiKeyController(db)],
-    ["/wedding", mw.std, createWeddingController(db)],
-    ["/suggestion", mw.std, createSuggestionController(db)],
-    ["/camera", mw.std, createCameraController(cameraService)], // auth per route
-    // Public contact form; body logged as field lengths only (personal data)
-    ["/pdca", mw.pdcaPublic, createPdcaEnquiryController(db)],
-    // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
-    ["/debug", process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController()],
-  ];
-  // Marks the request log's pipeline stage: events after the route's middlewares
-  // belong to the controller (or the service layer, by event type).
-  const enterController: RequestHandler = (req, _res, next) => {
-    if (req.logContext) req.logContext.currentStage = "controller";
-    next();
-  };
-  routes.forEach(([path, mws, router]) => app.use(path, [...mws, enterController], router));
+  const app = createApp({ db, cameraService, allowedOrigins });
 
-  // Unmatched routes: JSON envelope instead of Express's default "Cannot GET /…" HTML page
-  app.use((_req, res) => {
-    res.status(404).json({ code: 404, status: "Not Found", data: "Not Found" });
-  });
-
-  // Must stay last — replaces Express's default handler, which leaks stack traces
-  app.use(ErrorHandler);
-
-  // Start server
   const server = app.listen(port, () => {
-    LoggingUtilities.service.info("server", `Server started on port: ${port}`);
-    LoggingUtilities.service.info("server", `Environment: ${process.env.NODE_ENV}`);
-    // TgImage.bot.ts's polling loop was previously left off — it isn't needed
-    // for the CDN upload/serve path (TgImageService talks to Telegram's HTTP
-    // API directly) and it used to produce periodic "EFATAL: fetch failed"
-    // polling-error log noise — but it's also the only place a new admin's
-    // chat_id gets captured (via /start) for tb_tg_stats_whitelist, so it's
-    // started here to unblock Telegram log alert onboarding. polling_error
-    // is caught and logged (see TgImage.bot.ts) rather than crashing the server.
-    // The Telegram-based error-log sender doesn't depend on the bot/polling
-    // at all, so it starts independently regardless.
+    LoggingUtilities.service.info(LOG_TAG, `Server started on port: ${port}`);
+    LoggingUtilities.service.info(LOG_TAG, `Environment: ${APP_ENV} (env file: ${ENV_FILE})`);
+    // The Telegram error-log sender doesn't need the bot, so it starts on its own.
     setupTelegramLogSender();
-    initTgImageBot(db).catch((err) => LoggingUtilities.service.error("TgImageBot", err?.message ?? String(err)));
+    // TgImage bot polling is the only place a new admin's chat_id is captured (/start, for
+    // tb_tg_stats_whitelist). The CDN upload/serve path doesn't need it. polling_error is caught and
+    // logged in TgImage.bot.ts, and a failed start is logged here, so neither can crash the server.
+    initTgImageBot(db).catch((err) => LoggingUtilities.service.error("TgImageBot", toMessage(err)));
   });
 
   // WebSocket upgrades bypass Express middleware; auth happens in the upgrade handler.
   attachCameraWebSockets(server, { service: cameraService, relay: cameraRelay, allowedOrigins });
 }
 
-// Start the application
-startServer();
+// A boot failure (e.g. missing JWT_SECRET) exits non-zero, as the unhandled rejection used to.
+startServer().catch((err) => {
+  LoggingUtilities.service.error(LOG_TAG, `Startup failed: ${toMessage(err)}`);
+  process.exit(1);
+});

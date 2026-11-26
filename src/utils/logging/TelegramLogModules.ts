@@ -1,6 +1,6 @@
 // Shared module registry for per-module Telegram log subscriptions. Mirrors the
-// route table in src/index.ts, so request routing and the subscription lookup use
-// one taxonomy. When a router is mounted in index.ts, add its prefix here too
+// route table in src/app.ts, so request routing and the subscription lookup use
+// one taxonomy. When a router is mounted in app.ts, add its prefix here too
 // (TelegramLogModules.test.ts fails for an Express prefix that is missing).
 // fndom's admin matrix (/admin/telegram-log-subscriptions) lists whatever the server sends.
 export interface TelegramLogModule {

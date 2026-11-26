@@ -14,7 +14,7 @@ export function loggablePayload(body: unknown): Record<string, unknown> {
 /**
  * Replaces the request-log payload (captured by RestRequestLogger, which also feeds Telegram alerts)
  * with field lengths, so names, phone numbers and messages never reach the logs. Mounted right after
- * RestRequestLogger for `/pdca` in index.ts.
+ * RestRequestLogger for `/pdca` in app.ts.
  */
 export function stripPersonalDataFromLog(req: Request, _res: Response, next: NextFunction): void {
   req.logContext.payload = loggablePayload(req.body);

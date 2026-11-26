@@ -1,6 +1,6 @@
 # Analytics `/analytics`
 
-Page-view analytics for every frontend (fndom, jessikheng, the PDCA website), a per-system dashboard in fndom, and the private report the PDCA site's `/insights` page reads. Two routers share the prefix (both `mw.std` in `index.ts`): the deprecated legacy ingest first, then v1.
+Page-view analytics for every frontend (fndom, jessikheng, the PDCA website), a per-system dashboard in fndom, and the private report the PDCA site's `/insights` page reads. Two routers share the prefix (both `mw.std` in `app.ts`): the deprecated legacy ingest first, then v1.
 
 | File | Role |
 |---|---|

@@ -1,6 +1,6 @@
 import nodemailer, { Transporter } from "nodemailer";
 
-/** Gmail account + app password, from .env (`SMTP_USER`, `SMTP_PASS`). Read lazily: dotenv runs after imports. */
+/** Gmail account + app password, from .env (`SMTP_USER`, `SMTP_PASS`). Read lazily, on call (see config/README.md). */
 const SMTP_SERVICE = "gmail";
 const DEFAULT_FROM_NAME = "no-reply";
 /** Characters that would break out of the quoted From display name (or inject a header). */

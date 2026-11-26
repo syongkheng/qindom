@@ -44,7 +44,8 @@ Each feature folder `src/<module>/` holds:
 - Client IPs for display/storage always come from `clientIp(req)` (`utils/requestUtils`); limiter keys use their own IPv6-collapsed key.
 - `logContext.metadata` holds only what code reads (e.g. `userId`); never secrets.
 - Rate limiters are built with the `limiter({...})` factory in `RateLimiter.ts`, windows via `Time`; route-group middleware chains live only in `presets.ts` (`mw.*`).
-- Auth goes on the mount in `index.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
+- The app is built by `createApp()` in `src/app.ts` (route table: `createRoutes`); `index.ts` only boots. Mount changes go in `app.ts`.
+- Auth goes on the mount in `app.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
 - Binary/raw responses use `route(label, fallback, async (req, _cr, res) => …)`: finish every lookup and upstream call **before** the first `setHeader` so failures still get the JSON error; send with `res.end(buffer)`.
 - Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
 - Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
@@ -133,7 +134,7 @@ Each feature folder `src/<module>/` holds:
 - Logic duplicated across repos on purpose (e.g. PPHS batch rule in qindom + fndom) carries a comment in both places pointing at the other.
 - Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
-- Env vars loaded by dotenv (secrets, URLs) must be read **lazily** inside a function (`getJwtSecret()`), never in a top-level `const`: ESM evaluates imports before `index.ts` runs `dotenv.config`. Required ones are checked once at boot in `index.ts`.
+- The env file is loaded only by `config/loadEnv.ts`, the first import of `index.ts`; no other module imports dotenv (test-enforced; `migrate.ts`/`knexfile.ts` deliberately load `.env`). Still read env values lazily inside functions, so modules don't depend on import order and tests can set values per case. Tests never load an env file; shared DB clients fail without config (`DB_URL is not set`) instead of falling back to localhost.
 - Environment checks use `APP_ENV` / `IS_PRD` / `IS_DEV` from `src/config/env.ts`. Never compare `process.env.NODE_ENV` inline or keep a local `isPrd` copy.
 - Name HTTP status thresholds and limits (`MIN_STATUS = 200`), even when the meaning seems obvious.
 
@@ -200,6 +201,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | config/index: `config/loadEnv.ts` first import (dev → `.env.dev`, prd → `.env`), no dotenv in mysql.ts (knex reads env on first connect), tests load no env file, `app.ts` / `createApp()` split from `index.ts`, CORS rejection → registry `ForbiddenAccess`. Questions G1–G4. |
 | 2026-11-26 | User decision: dev must use `.env.dev`. `mysql.ts` loaded `.env` (prod) at import before index.ts's `.env.dev` override (ESM hoisting), so dev was using `.env`'s DB. Folder 30: env loaded by a first-imported `config/loadEnv.ts`, no dotenv in mysql.ts. `npm run migrate` keeps targeting `.env` deliberately. |
 | 2026-11-26 | models: `models/dtos` + `models/requests` emptied (types moved to owners or deleted), `IDecodedTokenUser` → `token/Token.types.ts`, row types renamed `ITB_<TABLE>` + nullable/RecordStatus typing (test-enforced), 7 row types for never-created tables deleted. Questions D1–D3. |
 | 2026-11-26 | utils: `requestUtils`/`errorUtils`/`Structual…` renamed to `*Utilities`; transactions keep typed exceptions and expose a logged `tx`; dotenv removed from utils; lazy mail transporter; Telegram transport moved to utils/logging with one shared sender; mute matrix covers every mount; code-point length caps. |

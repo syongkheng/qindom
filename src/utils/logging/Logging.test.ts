@@ -1,8 +1,5 @@
 import { describe, test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { LoggingUtilities, TelegramLogMessage } from "./LoggingUtilities.js";
 import { parseRequestLogEntry } from "./RequestLogParser.js";
 import { TELEGRAM_LOG_MODULES, TELEGRAM_LOG_MODULE_KEYS, resolveModuleKey } from "./TelegramLogModules.js";
@@ -13,8 +10,9 @@ import {
 import { buildLogAlertHtml, setupTelegramLogSender } from "./TelegramLogSender.js";
 import { TELEGRAM_BOT_TOKEN_ENV } from "../TelegramUtilities.js";
 import { IRequestLogContext } from "../../models/IRequestLogContext.js";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
+import { createRoutes } from "../../app.js";
+import type KnexSqlUtilities from "../KnexSqlUtilities.js";
+import type { CameraService } from "../../camera/Camera.service.js";
 
 function context(extra: Partial<IRequestLogContext> = {}): IRequestLogContext {
   return {
@@ -107,10 +105,9 @@ describe("LoggingUtilities.request.exception", () => {
 // ── Module registry ──
 
 describe("TelegramLogModules", () => {
-  test("every Express prefix mounted in index.ts maps to a module key", () => {
-    const indexTs = fs.readFileSync(path.join(here, "../../index.ts"), "utf8");
-    const prefixes = [...indexTs.matchAll(/^\s*\["(\/[^"]*)",/gm)].map((m) => m[1]);
-    assert.ok(prefixes.length > 20, "route table not found in index.ts");
+  test("every Express prefix in the route table (app.ts) maps to a module key", () => {
+    const prefixes = createRoutes({} as KnexSqlUtilities, {} as CameraService).map(([prefix]) => prefix);
+    assert.ok(prefixes.length > 20, "route table not found");
     for (const prefix of prefixes) assert.ok(resolveModuleKey(prefix), `no Telegram log module for ${prefix}`);
   });
 

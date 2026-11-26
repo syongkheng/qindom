@@ -3,7 +3,7 @@ export type LogStage = "middleware" | "controller" | "service";
 
 export interface IRequestLogContext {
   requestId: string;
-  /** Set to "middleware" by RestRequestLogger; flipped to "controller" once the route's middlewares pass (index.ts). */
+  /** Set to "middleware" by RestRequestLogger; flipped to "controller" once the route's middlewares pass (app.ts). */
   currentStage?: LogStage;
   startTime: number;
   protocol?: string;

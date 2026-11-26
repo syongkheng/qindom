@@ -31,7 +31,7 @@ const CONSENT_LINE = "The sender agreed to PDCA using these details to reply.";
 const esc = MailerUtilities.escapeHtml;
 const nl2br = (s: string) => esc(s).replace(/\r?\n/g, "<br>");
 
-/** Read lazily (dotenv loads after imports). */
+/** Read lazily, on call (see config/README.md). */
 export function getLabEmail(): string {
   return process.env[LAB_EMAIL_ENV] || LAB_EMAIL_DEFAULT;
 }

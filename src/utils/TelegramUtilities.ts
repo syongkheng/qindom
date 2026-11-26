@@ -7,7 +7,7 @@
 export const TELEGRAM_API_URL = "https://api.telegram.org";
 export const TELEGRAM_BOT_TOKEN_ENV = "AWENSE_CDN_TELEGRAM_BOT_TOKEN";
 
-/** Read lazily: dotenv runs in index.ts after ESM imports are evaluated. Blank counts as unset. */
+/** Read lazily, on call (see config/README.md). Blank counts as unset. */
 export function getTelegramBotToken(): string | undefined {
   return process.env[TELEGRAM_BOT_TOKEN_ENV] || undefined;
 }

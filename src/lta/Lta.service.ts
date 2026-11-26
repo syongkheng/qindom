@@ -27,7 +27,7 @@ export const NEARBY_BUS_STOPS_MAX_ROWS = 10;
 
 type BusInfoRow = Omit<ITB_LTA_BUS_INFO, "id" | "busstop_code" | "created_dt" | "created_by">;
 
-/** Read lazily: dotenv runs in index.ts after ESM imports are evaluated. Missing key = our misconfiguration (500). */
+/** Read lazily, on call (see config/README.md). Missing key = our misconfiguration (500). */
 function getDataMallApiKey(): string {
   const apiKey = process.env.LTA_DATAMALL_API_KEY;
   if (!apiKey) {

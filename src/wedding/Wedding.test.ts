@@ -27,7 +27,7 @@ import { MailerUtilities, MailOptions } from "../utils/MailerUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 // ── Nothing leaves the machine ────────────────────────────────────────────────
-// Importing the controller pulls in config/db/mysql.ts, which runs dotenv; override what it may have loaded.
+// Tests load no env file; pin these so a value exported in the shell can't trigger a real send.
 process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN = "";
 process.env.WEDDING_WEBSITE_URL = "https://wedding.example/?q=0&x=<y>";
 

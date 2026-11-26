@@ -21,7 +21,7 @@ function simulateUnhandledFailure(): never {
 /**
  * Test-only endpoint for exercising the response/logging pipeline (request tree,
  * Telegram compact alerts, Log Searcher). Open in dev; in prd it's mounted behind
- * MandatoryTokenFilter (see index.ts) and limited to OWNER.
+ * MandatoryTokenFilter (see app.ts) and limited to OWNER.
  */
 export default function createDebugController(): Router {
   const router = Router();

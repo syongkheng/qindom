@@ -1,6 +1,6 @@
 ## Middlewares
 
-The request pipeline. Global order (see `src/index.ts` and MINDMAP "Middleware stack"): CORS → security headers → `globalLimiter` → cookieParser / body parsers → the route's preset chain → router → 404 catch-all → `ErrorHandler`.
+The request pipeline. Global order (see `src/app.ts` and MINDMAP "Middleware stack"): CORS → security headers → `globalLimiter` → cookieParser / body parsers → the route's preset chain → router → 404 catch-all → `ErrorHandler`.
 
 Route groups get their chain **only** from `presets.ts` (`mw.*`); routers add per-route `MandatoryTokenFilter` / `OptionalTokenFilter` / limiters only when some of their routes need them.
 
