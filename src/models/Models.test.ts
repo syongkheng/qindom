@@ -11,6 +11,11 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, requireRole, route } from "../utils/RequestUtilities.js";
 import type { IRequestLogContext } from "./IRequestLogContext.js";
 import * as publicUuidMigration from "../migrations/20261126000400_make_public_uuids_not_null.js";
+import * as dropMcpMigration from "../migrations/20261126000000_drop_mcp_api_key.js";
+import * as dropHdbMigration from "../migrations/20261126000100_drop_hdb_pphs_tables.js";
+import * as tgImageOwnerMigration from "../migrations/20261126000200_add_created_by_id_to_tg_image.js";
+import * as stripPphsMigration from "../migrations/20261126000300_strip_pphs_roles.js";
+import * as analyticsReadKeyMigration from "../migrations/20261125000000_add_analytics_read_key.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATABASES_DIR = join(HERE, "databases");
@@ -107,6 +112,163 @@ describe("migration 20261126000400_make_public_uuids_not_null", () => {
       assert.match(source, /ADD COLUMN uuid VARCHAR\(36\) NULL AFTER id/, file);
       assert.match(source, new RegExp(`ADD UNIQUE KEY ${key} \\(uuid\\)`), file);
     }
+  });
+});
+
+// ── Nov 2026 cleanup migrations (SQL recorded against a fake knex, no database) ──
+
+/** A fake knex that records `raw()` SQL + bindings and `schema.dropTableIfExists()` calls. */
+function recordingKnex() {
+  const raw: { sql: string; bindings?: unknown[] }[] = [];
+  const dropped: string[] = [];
+  const knex = {
+    raw: async (sql: string, bindings?: unknown[]) => void raw.push({ sql, bindings }),
+    schema: { dropTableIfExists: async (table: string) => void dropped.push(table) },
+  };
+  return { knex: knex as never, raw, dropped, sql: () => raw.map((r) => r.sql.replace(/\s+/g, " ").trim()) };
+}
+
+describe("migration 20261126000000_drop_mcp_api_key", () => {
+  test("up drops tb_mcp_api_key only", async () => {
+    const rec = recordingKnex();
+    await dropMcpMigration.up(rec.knex);
+    assert.deepEqual(rec.dropped, ["tb_mcp_api_key"]);
+    assert.equal(rec.raw.length, 0);
+  });
+
+  test("down recreates it with the same columns as the original create migration", async () => {
+    const rec = recordingKnex();
+    await dropMcpMigration.down(rec.knex);
+    assert.equal(rec.raw.length, 1);
+    const [sql] = rec.sql();
+    assert.match(sql, /^CREATE TABLE IF NOT EXISTS tb_mcp_api_key/);
+    const original = readFileSync(join(MIGRATIONS_DIR, "20261107000000_create_mcp_api_key.ts"), "utf8");
+    for (const column of [
+      "user_id",
+      "api_key_hash",
+      "key_hint",
+      "name",
+      "record_status",
+      "created_dt",
+      "created_by_id",
+    ]) {
+      assert.match(sql, new RegExp(`\\b${column}\\b`), column);
+      assert.match(original, new RegExp(`\\b${column}\\b`), column);
+    }
+  });
+});
+
+describe("migration 20261126000100_drop_hdb_pphs_tables", () => {
+  test("up drops the coordinate cache first, then tb_hdb_pphs, then clears the 'hdb' log toggles", async () => {
+    const rec = recordingKnex();
+    await dropHdbMigration.up(rec.knex);
+    assert.deepEqual(rec.sql(), [
+      "DROP TABLE IF EXISTS tb_hdb_pphs_coordinate",
+      "DROP TABLE IF EXISTS tb_hdb_pphs",
+      "DELETE FROM tb_telegram_log_subscription WHERE module_key = 'hdb'",
+    ]);
+  });
+
+  test("down recreates both (empty) tables", async () => {
+    const rec = recordingKnex();
+    await dropHdbMigration.down(rec.knex);
+    const sql = rec.sql();
+    assert.equal(sql.length, 2);
+    assert.match(sql[0], /^CREATE TABLE IF NOT EXISTS tb_hdb_pphs \(/);
+    assert.match(sql[1], /^CREATE TABLE IF NOT EXISTS tb_hdb_pphs_coordinate \(/);
+  });
+});
+
+describe("migration 20261126000200_add_created_by_id_to_tg_image", () => {
+  test("up adds a nullable created_by_id with an index; down removes both", async () => {
+    const up = recordingKnex();
+    await tgImageOwnerMigration.up(up.knex);
+    assert.deepEqual(up.sql(), [
+      "ALTER TABLE tb_tg_image ADD COLUMN created_by_id BIGINT NULL AFTER size_in_bytes, ADD KEY idx_tg_image_created_by_id (created_by_id)",
+    ]);
+    const down = recordingKnex();
+    await tgImageOwnerMigration.down(down.knex);
+    assert.deepEqual(down.sql(), [
+      "ALTER TABLE tb_tg_image DROP KEY idx_tg_image_created_by_id, DROP COLUMN created_by_id",
+    ]);
+  });
+});
+
+describe("migration 20261126000300_strip_pphs_roles up()", () => {
+  test("selects candidate rows by LIKE and updates only the rows whose roles actually change", async () => {
+    const rows = [
+      { id: 1, roles: '["SYSTEM_R5","PPHS_R5"]' },
+      { id: 2, roles: '["NOT_PPHS_R5_LOOKALIKE"]' },
+      { id: 3, roles: "not json PPHS_R4" },
+      { id: 4, roles: '["PPHS_R4","PPHS_R5"]' },
+    ];
+    const selects: unknown[][] = [];
+    const updates: { where: unknown; patch: unknown }[] = [];
+    const knex = (table: string) => {
+      assert.equal(table, "tb_aa_user");
+      return {
+        select: (...cols: string[]) => ({
+          where: async (...args: unknown[]) => {
+            selects.push([cols, ...args]);
+            return rows;
+          },
+        }),
+        where: (where: unknown) => ({
+          update: async (patch: unknown) => void updates.push({ where, patch }),
+        }),
+      };
+    };
+    await stripPphsMigration.up(knex as never);
+    assert.deepEqual(selects, [[["id", "roles"], "roles", "like", "%PPHS_R%"]]);
+    assert.deepEqual(updates, [
+      { where: { id: 1 }, patch: { roles: '["SYSTEM_R5"]' } },
+      { where: { id: 4 }, patch: { roles: "[]" } },
+    ]);
+  });
+
+  test("down is a no-op", async () => {
+    await stripPphsMigration.down();
+  });
+});
+
+describe("migration 20261125000000_add_analytics_read_key", () => {
+  type Breakpoint = { key: string; maxWidth: number | null };
+  const breakpointsOf = (rec: ReturnType<typeof recordingKnex>) =>
+    JSON.parse(String(rec.raw.find((r) => r.sql.includes("breakpoints"))?.bindings?.[0])) as Breakpoint[];
+
+  test("up adds read_key_hash CHAR(64) NULL and sets the dental-directory breakpoints to 460/820/1024", async () => {
+    const rec = recordingKnex();
+    await analyticsReadKeyMigration.up(rec.knex);
+    assert.equal(
+      rec.sql()[0],
+      "ALTER TABLE tb_analytic_system ADD COLUMN read_key_hash CHAR(64) NULL AFTER allowed_origins",
+    );
+    assert.match(rec.sql()[1], /WHERE system_key = 'dental-directory'$/);
+    assert.deepEqual(
+      breakpointsOf(rec).map((b) => [b.key, b.maxWidth]),
+      [
+        ["sm", 460],
+        ["md", 820],
+        ["lg", 1024],
+        ["xl", null],
+      ],
+    );
+    assert.equal(typeof rec.raw[1].bindings?.[1], "number");
+  });
+
+  test("down restores the old breakpoints before dropping the column", async () => {
+    const rec = recordingKnex();
+    await analyticsReadKeyMigration.down(rec.knex);
+    assert.deepEqual(
+      breakpointsOf(rec).map((b) => [b.key, b.maxWidth]),
+      [
+        ["sm", 560],
+        ["md", 860],
+        ["lg", 1024],
+        ["xl", null],
+      ],
+    );
+    assert.equal(rec.sql()[1], "ALTER TABLE tb_analytic_system DROP COLUMN read_key_hash");
   });
 });
 
