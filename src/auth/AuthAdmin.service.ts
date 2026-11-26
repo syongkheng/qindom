@@ -10,6 +10,7 @@ import { parseRoles } from "./Permission.js";
 import { AA_USER_TABLE } from "./AuthSession.service.js";
 import { AuthAdminUserDto, AuthUpdatedDto } from "./Auth.types.js";
 
+const USER_NOT_FOUND = "User not found";
 const ADMIN_USER_COLUMNS = ["id", "username", "email", "system", "roles", "state", "last_logged_in_dt", "created_dt"];
 
 export function toAdminUserDto(user: ITB_AA_USER): AuthAdminUserDto {
@@ -45,9 +46,13 @@ export class AuthAdminService {
     return rows.map(toAdminUserDto);
   }
 
+  /** A missing or soft-deleted user → 404 (soft-deleted = gone). */
   async updateUserRoles(userId: number, roles: string[], logContext?: IRequestLogContext): Promise<AuthUpdatedDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Update user roles");
-    await this.db.update<ITB_AA_USER>(AA_USER_TABLE, { id: userId }, { roles: JSON.stringify(roles) }, event);
+    const activeUser = { id: userId, record_status: RecordStatus.ACTIVE };
+    const user = await this.db.findOne<ITB_AA_USER>(AA_USER_TABLE, activeUser, ["id"], event);
+    if (!user) throw new Exceptions.NotFound(USER_NOT_FOUND);
+    await this.db.update<ITB_AA_USER>(AA_USER_TABLE, activeUser, { roles: JSON.stringify(roles) }, event);
     return { updated: true };
   }
 

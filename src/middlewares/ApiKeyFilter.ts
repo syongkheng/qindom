@@ -23,7 +23,10 @@ const API_KEY_TABLES: Record<ApiKeyPrefix, string> = { ss: "tb_ss_api_key" };
  */
 const INVALID_API_KEY_MESSAGE = "Unauthorized. Missing or invalid API key.";
 
-/** The key owner's user id, or null when the key is missing, has the wrong prefix, is unknown/revoked, or its user row is gone. */
+/**
+ * The key owner's user id, or null when the key is missing, has the wrong prefix, is unknown/revoked,
+ * or its owner has no active user row (soft-deleted = gone, CODING_STYLE §7).
+ */
 async function resolveApiKeyUserId(
   apiKey: string | undefined,
   allowedPrefixes: readonly ApiKeyPrefix[],
@@ -59,8 +62,12 @@ async function resolveApiKeyUserId(
   }
   event.children.push(`Key Validity: ${LogEmoji.success} `);
 
-  // Only existence is checked, not the user's record_status (open question).
-  const user = await db.findOne<ITB_AA_USER>(USER_TABLE, { id: key.user_id }, ["id"], event);
+  const user = await db.findOne<ITB_AA_USER>(
+    USER_TABLE,
+    { id: key.user_id, record_status: RecordStatus.ACTIVE },
+    ["id"],
+    event,
+  );
   if (!user) {
     event.children.push(`User Exists: ${LogEmoji.error} `);
     return null;

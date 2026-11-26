@@ -100,6 +100,7 @@ export class PermissionService {
     return rows.map((r) => r.resource_key);
   }
 
+  /** Active grants of active users (a soft-deleted user's grant is gone). */
   async listGrants(type: ResourceTypeValue, key: string): Promise<ResourceGrant[]> {
     const rows = await this.db.raw<
       {
@@ -113,10 +114,10 @@ export class PermissionService {
     >(
       `SELECT ra.user_id, u.username, u.email, u.\`system\`, ra.access_level, ra.updated_dt
          FROM tb_aa_resource_access ra
-         JOIN tb_aa_user u ON u.id = ra.user_id
+         JOIN tb_aa_user u ON u.id = ra.user_id AND u.record_status = ?
         WHERE ra.resource_type = ? AND ra.resource_key = ? AND ra.record_status = ?
         ORDER BY ra.updated_dt DESC`,
-      [type, key, RecordStatus.ACTIVE],
+      [RecordStatus.ACTIVE, type, key, RecordStatus.ACTIVE],
     );
     return rows.map((r) => ({
       userId: Number(r.user_id),

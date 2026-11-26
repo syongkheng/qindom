@@ -146,6 +146,8 @@ Each feature folder `src/<module>/` holds:
 
 ## 7. Database
 - Soft delete via `record_status` `'A'`/`'D'`; timestamps are ms epoch (`Date.now()`).
+- **Soft-deleted = gone.** In code, a row with `record_status = 'D'` (above all a user in `tb_aa_user`) behaves exactly as if it didn't exist: lookups, joins, access checks, counts and lists filter on `RecordStatus.ACTIVE`, and every write targets `{ id, record_status: ACTIVE }`. A deleted user's sessions, API keys, collaborations and grants stop working.
+- Anti-enumeration: when an action looks up an account by a user-supplied identifier (e.g. inviting by email), every "no usable account" case (unknown, unverified, deleted) returns one identical error.
 - Module SQL never lives in `KnexSqlUtilities`; it goes in the service that owns the table, and other modules call that service (e.g. hdb → `LtaService`).
 - Raw SQL goes through `this.db.raw(sql, bindings, event)` so it's timed in the request tree.
 - Typed exceptions thrown inside `db.transaction` keep their status. Still check ownership before opening it when you can (so nothing is written). Inside the callback use `tx.*(…, event)` (the `KnexSqlUtilities` bound to the trx) rather than the raw `trx`, and pass `event` as `transaction`'s second argument.
@@ -201,6 +203,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | User: soft-deleted rows are treated as hard-deleted in code (applied to budget collaborators, API-key owners, role updates, session writes). Budget invite: unknown/unverified/deleted email → one identical error; invitees must be verified; collaborators may leave (`POST /budget/:id/leave`); collaborators keep seeing each other's emails. |
 | 2026-11-26 | config/index: `config/loadEnv.ts` first import (dev → `.env.dev`, prd → `.env`), no dotenv in mysql.ts (knex reads env on first connect), tests load no env file, `app.ts` / `createApp()` split from `index.ts`, CORS rejection → registry `ForbiddenAccess`. Questions G1–G4. |
 | 2026-11-26 | User decision: dev must use `.env.dev`. `mysql.ts` loaded `.env` (prod) at import before index.ts's `.env.dev` override (ESM hoisting), so dev was using `.env`'s DB. Folder 30: env loaded by a first-imported `config/loadEnv.ts`, no dotenv in mysql.ts. `npm run migrate` keeps targeting `.env` deliberately. |
 | 2026-11-26 | models: `models/dtos` + `models/requests` emptied (types moved to owners or deleted), `IDecodedTokenUser` → `token/Token.types.ts`, row types renamed `ITB_<TABLE>` + nullable/RecordStatus typing (test-enforced), 7 row types for never-created tables deleted. Questions D1–D3. |

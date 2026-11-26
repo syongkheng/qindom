@@ -16,6 +16,7 @@ import {
   BudgetCollaboratorRemovedDto,
   BudgetDeletedDto,
   BudgetItemDto,
+  BudgetLeftDto,
   BudgetRenamedDto,
   BudgetTableCreatedDto,
   BudgetTableDto,
@@ -126,6 +127,13 @@ export default function createBudgetController(db: KnexSqlUtilities): Router {
           await svc.removeCollaborator(getUser(req).id, req.params.sessionId, userId, req.logContext),
         );
       },
+    ),
+  );
+
+  router.post(
+    "/:sessionId/leave",
+    route("BudgetController.POST /:sessionId/leave", "Failed to leave budget table", async (req, cr) =>
+      cr.ok<BudgetLeftDto>(await svc.leaveTable(getUser(req).id, req.params.sessionId, req.logContext)),
     ),
   );
 

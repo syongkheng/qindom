@@ -28,7 +28,7 @@
 
 `CameraDeviceDto` = `{ deviceId, name, online, pairedAt: number | null, lastSeenAt: number | null }` (`online` = has a live socket now).
 
-- **register**: `name` required, control characters removed, trimmed, 1–60 chars (`tb_camera_device.name` VARCHAR(60)). `deviceId` (UUID) + `token` (base64url, 20–100 chars) are all-or-nothing; malformed or unknown credentials are ignored and the phone gets a **new** device. A new device gets a fresh 32-byte token, returned **once** (only its SHA-256, `sha256Hex`, is stored); a known one gets `token: null`. An unbound device also gets a new 6-digit `pairingCode` (replacing its previous one, 10 min TTL); a bound one gets `paired: true` and no code. Each new registration first retires unclaimed devices older than 24 h.
+- **register**: `name` required, control characters removed, trimmed, 1–60 chars (`tb_camera_device.name` VARCHAR(60)). `deviceId` (UUID) + `token` (base64url, 20–100 chars) are all-or-nothing; malformed or unknown credentials, or those of a bound device whose owner's account is soft-deleted, are ignored and the phone gets a **new** device. A new device gets a fresh 32-byte token, returned **once** (only its SHA-256, `sha256Hex`, is stored); a known one gets `token: null`. An unbound device also gets a new 6-digit `pairingCode` (replacing its previous one, 10 min TTL); a bound one gets `paired: true` and no code. Each new registration first retires unclaimed devices older than 24 h.
 - **claim**: `code` = 6 digits (spaces ignored, the phone shows `123 456`). The code is consumed on the first attempt. Unknown/expired code, or a device that was bound/removed meanwhile → 400 `invalid_request_code`. Optional `name` (same rules as register; blank keeps the phone's name) renames the device. On success the phone (if connected) gets `{ type: "paired", name }` and the user's dashboards get `device_online`.
 - **delete**: owner only; soft delete, revokes its pairing code, tells dashboards `device_removed` and closes the phone's socket with `4401` (the phone re-registers as a new device).
 
@@ -49,7 +49,7 @@ fndom reads: `data` of list/claim (`CameraDevice`), and only the HTTP status of 
 
 | Path                   | Who     | Auth                                                                                                                                                             |
 | ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/camera/ws/phone`     | phone   | `Authorization: Bearer <device token>` → active device (else 401)                                                                                                |
+| `/camera/ws/phone`     | phone   | `Authorization: Bearer <device token>` → active device whose owner (if bound) has an active user row (else 401; a soft-deleted owner = unknown token)            |
 | `/camera/ws/dashboard` | browser | `Origin` ∈ `ALLOWED_ORIGINS` (else 403; stands in for CSRF) and the `jwt_token` cookie via `resolveSessionUser` (same check as `MandatoryTokenFilter`; else 401) |
 
 Any other upgrade path → 404; an unparseable one (`//`) → 400; a failing lookup (DB down) → 500.

@@ -19,10 +19,14 @@ const OWNER = 1;
 const COLLAB = 2;
 const STRANGER = 3;
 const FORMER = 4;
+/** Verified email but the account is soft-deleted, while still holding an active collaborator row on s1. */
+const DELETED_COLLAB = 6;
+const UNVERIFIED = 7;
 
 /**
- * In-memory stand-in for the KnexSqlUtilities calls BudgetService makes.
- * `raw` only answers the collaborator join; `extraWhere` only supports `whereIn`.
+ * In-memory stand-in for the KnexSqlUtilities calls BudgetService makes. Honours `columns`;
+ * `raw` only answers the active-collaborator join (INNER JOIN on an active user row);
+ * `extraWhere` only supports `whereIn`. Every call is recorded in `calls`.
  */
 function fakeDb(seed: Record<string, Row[]>) {
   const tables: Record<string, Row[]> = {
@@ -33,13 +37,23 @@ function fakeDb(seed: Record<string, Row[]>) {
     ...structuredClone(seed),
   };
   const matches = (row: Row, where: Row) => Object.entries(where).every(([k, v]) => row[k] === v);
+  const project = (row: Row, columns?: readonly string[]) =>
+    !columns || columns.includes("*") ? { ...row } : Object.fromEntries(columns.map((c) => [c, row[c]]));
+  const calls: { op: string; table: string; where?: Row; sql?: string }[] = [];
   let nextId = 1000;
   const db = {
     async find(
       t: string,
       where: Row,
-      opts: { orderBy?: string; orderDirection?: string; limit?: number; extraWhere?: (qb: unknown) => void } = {},
+      opts: {
+        orderBy?: string;
+        orderDirection?: string;
+        limit?: number;
+        columns?: readonly string[];
+        extraWhere?: (qb: unknown) => void;
+      } = {},
     ) {
+      calls.push({ op: "find", table: t, where });
       let found = tables[t].filter((r) => matches(r, where));
       if (opts.extraWhere) {
         opts.extraWhere({
@@ -52,37 +66,53 @@ function fakeDb(seed: Record<string, Row[]>) {
         const k = opts.orderBy;
         found.sort((a, b) => (a[k] - b[k]) * (opts.orderDirection === "desc" ? -1 : 1));
       }
-      return opts.limit ? found.slice(0, opts.limit) : found;
+      return (opts.limit ? found.slice(0, opts.limit) : found).map((r) => project(r, opts.columns));
     },
-    async findOne(t: string, where: Row) {
-      return tables[t].find((r) => matches(r, where));
+    async findOne(t: string, where: Row, columns?: readonly string[]) {
+      calls.push({ op: "findOne", table: t, where });
+      const row = tables[t].find((r) => matches(r, where));
+      return row ? project(row, columns) : undefined;
     },
     async insert(t: string, data: Row) {
+      calls.push({ op: "insert", table: t });
       const row = { id: nextId++, ...data };
       tables[t].push(row);
       return row;
     },
     async update(t: string, where: Row, data: Row) {
+      calls.push({ op: "update", table: t, where });
       const hit = tables[t].filter((r) => matches(r, where));
       hit.forEach((r) => Object.assign(r, data));
       return hit;
     },
-    async raw(_sql: string, [tableId, status]: unknown[]) {
+    async raw(sql: string, bindings: unknown[]) {
+      calls.push({ op: "raw", table: "", sql });
+      const [userStatus, collaboratorStatus, ...rest] = bindings;
+      const tableId = sql.includes("c.table_id = ?") ? rest.shift() : undefined;
+      const userId = sql.includes("c.user_id = ?") ? rest.shift() : undefined;
       return tables.tb_budget_collaborator
-        .filter((c) => c.table_id === tableId && c.record_status === status)
-        .map((c) => {
-          const u = tables.tb_aa_user.find((x) => x.id === c.user_id)!;
-          return { user_id: c.user_id, username: u.username, email: u.email };
+        .filter(
+          (c) =>
+            c.record_status === collaboratorStatus &&
+            (tableId === undefined || c.table_id === tableId) &&
+            (userId === undefined || c.user_id === userId),
+        )
+        .flatMap((c) => {
+          const u = tables.tb_aa_user.find((x) => x.id === c.user_id && x.record_status === userStatus);
+          return u
+            ? [{ id: c.id, table_id: c.table_id, user_id: c.user_id, username: u.username, email: u.email }]
+            : [];
         });
     },
   };
-  return { db: db as never, tables };
+  return { db: db as never, tables, calls };
 }
 
 const user = (id: number, extra: Row = {}): Row => ({
   id,
   username: `user${id}`,
   email: `user${id}@example.com`,
+  email_verified: 1,
   record_status: "A",
   ...extra,
 });
@@ -104,10 +134,22 @@ const item = (uuid: string, tableId: number, extra: Row = {}): Row => ({
   ...extra,
 });
 
-/** Table 10 ("s1") owned by OWNER with COLLAB active and FORMER removed; table 20 ("s2") owned by STRANGER. */
+/**
+ * Table 10 ("s1") owned by OWNER with COLLAB active, FORMER removed and DELETED_COLLAB active on a
+ * soft-deleted account; table 20 ("s2") owned by STRANGER. User 9 is soft-deleted, UNVERIFIED never
+ * confirmed their email.
+ */
 function seed(): Record<string, Row[]> {
   return {
-    tb_aa_user: [user(OWNER), user(COLLAB), user(STRANGER), user(FORMER), user(9, { record_status: "D" })],
+    tb_aa_user: [
+      user(OWNER),
+      user(COLLAB),
+      user(STRANGER),
+      user(FORMER),
+      user(DELETED_COLLAB, { record_status: "D" }),
+      user(UNVERIFIED, { email_verified: 0 }),
+      user(9, { record_status: "D" }),
+    ],
     tb_budget_table: [
       {
         id: 10,
@@ -146,6 +188,7 @@ function seed(): Record<string, Row[]> {
     tb_budget_collaborator: [
       { id: 1, table_id: 10, user_id: COLLAB, added_by_id: OWNER, created_dt: 1, record_status: "A" },
       { id: 2, table_id: 10, user_id: FORMER, added_by_id: OWNER, created_dt: 1, record_status: "D" },
+      { id: 3, table_id: 10, user_id: DELETED_COLLAB, added_by_id: OWNER, created_dt: 1, record_status: "A" },
     ],
   };
 }
@@ -363,7 +406,7 @@ describe("BudgetService access control", () => {
     assert.equal((await svc.restoreItem(OWNER, "s1", "i3")).id, "i3");
   });
 
-  test("collaborators: owner only; unknown/deleted user 404; self 400; re-adding reactivates", async () => {
+  test("collaborators: owner only; no usable account 404; self 400; re-adding reactivates", async () => {
     const { db, tables } = fakeDb(seed());
     const svc = new BudgetService(db);
 
@@ -376,13 +419,13 @@ describe("BudgetService access control", () => {
     const readded = await svc.addCollaborator(OWNER, "s1", "user4@example.com");
     assert.deepEqual(readded, { userId: FORMER, username: "user4", email: "user4@example.com" });
     assert.equal(tables.tb_budget_collaborator.find((c) => c.user_id === FORMER)!.record_status, "A");
-    assert.equal(tables.tb_budget_collaborator.length, 2);
+    assert.equal(tables.tb_budget_collaborator.length, 3);
 
     await svc.addCollaborator(OWNER, "s1", "user3@example.com");
-    assert.equal(tables.tb_budget_collaborator.length, 3);
+    assert.equal(tables.tb_budget_collaborator.length, 4);
     // Adding an already-active collaborator is a no-op.
     await svc.addCollaborator(OWNER, "s1", "user3@example.com");
-    assert.equal(tables.tb_budget_collaborator.length, 3);
+    assert.equal(tables.tb_budget_collaborator.length, 4);
 
     assert.deepEqual(await svc.removeCollaborator(OWNER, "s1", COLLAB), { removed: true });
     await rejectsWith(svc.getBySessionId(COLLAB, "s1"), "forbidden_access", 403);
@@ -394,6 +437,128 @@ describe("BudgetService access control", () => {
     await svc.deleteTable(OWNER, "s1");
     await rejectsWith(svc.createItem(COLLAB, "s1", validateItemBody({ name: "x" })), "entity_not_found", 404);
     assert.deepEqual((await svc.listTables(COLLAB)).sharedTables, []);
+  });
+});
+
+// ─── Service: soft-deleted users, invite anti-enumeration, leaving ────────────
+
+describe("BudgetService: soft-deleted = gone (B4)", () => {
+  test("a soft-deleted collaborator is hidden from the list and loses all access", async () => {
+    const { db } = fakeDb(seed());
+    const svc = new BudgetService(db);
+
+    const asOwner = await svc.getBySessionId(OWNER, "s1");
+    assert.deepEqual(
+      asOwner.collaborators.map((c) => c.userId),
+      [COLLAB],
+    );
+
+    await rejectsWith(svc.getBySessionId(DELETED_COLLAB, "s1"), "forbidden_access", 403);
+    await rejectsWith(svc.createItem(DELETED_COLLAB, "s1", validateItemBody({ name: "x" })), "forbidden_access", 403);
+    await rejectsWith(svc.editItem(DELETED_COLLAB, "s1", "i1", { name: "x" }), "forbidden_access", 403);
+    await rejectsWith(svc.deleteItem(DELETED_COLLAB, "s1", "i1"), "forbidden_access", 403);
+    await rejectsWith(svc.restoreItem(DELETED_COLLAB, "s1", "i3"), "forbidden_access", 403);
+    assert.deepEqual(await svc.listTables(DELETED_COLLAB), { myTables: [], sharedTables: [] });
+    await rejectsWith(svc.leaveTable(DELETED_COLLAB, "s1"), "entity_not_found", 404);
+  });
+
+  test("every collaborator query joins on an active user row", async () => {
+    const { db, calls } = fakeDb(seed());
+    const svc = new BudgetService(db);
+    await svc.listTables(COLLAB);
+    await svc.getBySessionId(COLLAB, "s1");
+    const raws = calls.filter((c) => c.op === "raw");
+    assert.ok(raws.length >= 3);
+    for (const call of raws)
+      assert.match(call.sql!, /JOIN tb_aa_user u ON u\.id = c\.user_id AND u\.record_status = \?/);
+    // No collaborator lookup bypasses the join.
+    assert.ok(!calls.some((c) => c.table === "tb_budget_collaborator" && (c.op === "find" || c.op === "findOne")));
+  });
+});
+
+describe("BudgetService.addCollaborator: one answer for every unusable account (B1/B2)", () => {
+  const NO_ACCOUNT = { code: "entity_not_found", httpStatus: 404, message: "No account available for that email" };
+
+  async function attempt(email: string) {
+    const { db, calls, tables } = fakeDb(seed());
+    const err = await new BudgetService(db).addCollaborator(OWNER, "s1", email).then(
+      () => assert.fail("expected a rejection"),
+      (e: { code: string; httpStatus: number; message: string }) => e,
+    );
+    return {
+      error: { code: err.code, httpStatus: err.httpStatus, message: err.message },
+      path: calls.map((c) => `${c.op} ${c.table} ${Object.keys(c.where ?? {}).join(",")}`),
+      collaborators: tables.tb_budget_collaborator.length,
+    };
+  }
+
+  test("unknown, unverified and soft-deleted emails: same error, same queries, nothing written", async () => {
+    const unknown = await attempt("nobody@example.com");
+    const unverified = await attempt(`user${UNVERIFIED}@example.com`);
+    const deleted = await attempt("user9@example.com");
+    const deletedCollaborator = await attempt(`user${DELETED_COLLAB}@example.com`);
+
+    for (const result of [unknown, unverified, deleted, deletedCollaborator]) {
+      assert.deepEqual(result.error, NO_ACCOUNT);
+      assert.deepEqual(result.path, unknown.path);
+      assert.equal(result.collaborators, 3);
+    }
+    // One user lookup carrying every condition, so the three cases can't branch apart.
+    assert.deepEqual(
+      unknown.path.filter((p) => p.includes("tb_aa_user")),
+      ["findOne tb_aa_user email,email_verified,record_status"],
+    );
+  });
+
+  test("the lookup requires a verified, active account", async () => {
+    const { db, calls } = fakeDb(seed());
+    await new BudgetService(db).addCollaborator(OWNER, "s1", "user3@example.com");
+    const lookup = calls.find((c) => c.table === "tb_aa_user")!;
+    assert.deepEqual(lookup.where, { email: "user3@example.com", email_verified: 1, record_status: "A" });
+  });
+
+  test("inviting yourself stays its own 400", async () => {
+    const { db } = fakeDb(seed());
+    await rejectsWith(
+      new BudgetService(db).addCollaborator(OWNER, "s1", "user1@example.com"),
+      "invalid_request_email",
+      400,
+    );
+  });
+});
+
+describe("BudgetService.leaveTable (B5)", () => {
+  test("a collaborator leaves: own row soft-deleted, access and listing gone; re-invite reactivates", async () => {
+    const { db, tables } = fakeDb(seed());
+    const svc = new BudgetService(db);
+
+    assert.deepEqual(await svc.leaveTable(COLLAB, "s1"), { left: true });
+    assert.equal(tables.tb_budget_collaborator.find((c) => c.user_id === COLLAB)!.record_status, "D");
+    // Nobody else's row is touched.
+    assert.equal(tables.tb_budget_collaborator.find((c) => c.user_id === DELETED_COLLAB)!.record_status, "A");
+    await rejectsWith(svc.getBySessionId(COLLAB, "s1"), "forbidden_access", 403);
+    assert.deepEqual((await svc.listTables(COLLAB)).sharedTables, []);
+    assert.deepEqual((await svc.getBySessionId(OWNER, "s1")).collaborators, []);
+    // Leaving twice: no longer a member.
+    await rejectsWith(svc.leaveTable(COLLAB, "s1"), "entity_not_found", 404);
+
+    await svc.addCollaborator(OWNER, "s1", "user2@example.com");
+    assert.equal((await svc.getBySessionId(COLLAB, "s1")).isOwner, false);
+  });
+
+  test("owner → 403 with its own message; non-member / removed / missing table → 404", async () => {
+    const { db, tables } = fakeDb(seed());
+    const svc = new BudgetService(db);
+    await assert.rejects(svc.leaveTable(OWNER, "s1"), {
+      code: "forbidden_access",
+      httpStatus: 403,
+      message: "The owner can't leave their own table",
+    });
+    await rejectsWith(svc.leaveTable(STRANGER, "s1"), "entity_not_found", 404);
+    await rejectsWith(svc.leaveTable(FORMER, "s1"), "entity_not_found", 404);
+    await rejectsWith(svc.leaveTable(COLLAB, "s3"), "entity_not_found", 404);
+    await rejectsWith(svc.leaveTable(COLLAB, "nope"), "entity_not_found", 404);
+    assert.ok(tables.tb_budget_collaborator.filter((c) => c.user_id === COLLAB).every((c) => c.record_status === "A"));
   });
 });
 
@@ -550,6 +715,45 @@ describe("HTTP /budget", () => {
     assert.equal((await call("POST", `/s1/collaborator/${STRANGER}/delete`, COLLAB)).status, 403);
     const removed = await call("POST", `/s1/collaborator/${STRANGER}/delete`, OWNER);
     assert.deepEqual(removed.json.data, { removed: true });
+  });
+
+  test("invite: unknown / unverified / soft-deleted emails get an identical 404 body", async () => {
+    const bodies = [];
+    for (const email of ["nobody@example.com", `user${UNVERIFIED}@example.com`, "user9@example.com"]) {
+      const { status, json } = await call("POST", "/s1/collaborator", OWNER, { email });
+      assert.equal(status, 404, email);
+      // Everything but the timestamp must be byte-for-byte the same.
+      const { timestamp, ...rest } = json.data;
+      assert.equal(typeof timestamp, "number");
+      bodies.push({ code: json.code, status: json.status, data: rest });
+    }
+    assert.deepEqual(bodies[0].data, { code: "entity_not_found", message: "No account available for that email" });
+    assert.deepEqual(bodies[1], bodies[0]);
+    assert.deepEqual(bodies[2], bodies[0]);
+    const self = await call("POST", "/s1/collaborator", OWNER, { email: "user1@example.com" });
+    assert.equal(self.status, 400);
+    assert.equal(self.json.data.code, "invalid_request_email");
+  });
+
+  test("POST /:sessionId/leave: 401 / owner 403 / stranger 404 / collaborator 200, then no access", async () => {
+    assert.equal((await call("POST", "/s1/leave")).status, 401);
+
+    const owner = await call("POST", "/s1/leave", OWNER);
+    assert.equal(owner.status, 403);
+    assert.equal(owner.json.data.code, "forbidden_access");
+    assert.equal(owner.json.data.message, "The owner can't leave their own table");
+
+    const stranger = await call("POST", "/s1/leave", STRANGER);
+    assert.equal(stranger.status, 404);
+    assert.equal(stranger.json.data.code, "entity_not_found");
+    assert.equal((await call("POST", "/nope/leave", COLLAB)).status, 404);
+
+    const left = await call("POST", "/s1/leave", COLLAB);
+    assert.equal(left.status, 200);
+    assert.deepEqual(left.json, { code: 200, status: "Ok", data: { left: true } });
+    assert.equal((await call("GET", "/s1", COLLAB)).status, 403);
+    assert.deepEqual((await call("GET", "/", COLLAB)).json.data.sharedTables, []);
+    assert.deepEqual((await call("GET", "/s1", OWNER)).json.data.collaborators, []);
   });
 
   test("POST /:sessionId/delete → owner deletes; then 404", async () => {

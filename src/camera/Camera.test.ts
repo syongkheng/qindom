@@ -323,6 +323,7 @@ describe("CameraService", () => {
   test("register of a bound device answers paired with no code", async () => {
     const { db, service, pairing } = setup();
     db.tables[DEVICE_TABLE].push(device({ user_id: 7 }));
+    db.tables[USER_TABLE].push({ id: 7, record_status: RecordStatus.ACTIVE });
     const res = await service.register({ name: "x", deviceId: DEVICE_A, token: TOKEN });
     assert.deepEqual(res, { deviceId: DEVICE_A, token: null, paired: true, pairingCode: null, pairingExpiresAt: null });
     assert.equal(pairing.size, 0);
@@ -362,7 +363,46 @@ describe("CameraService", () => {
     assert.equal(lookups, 0);
     assert.equal(await service.authenticateDevice("u".repeat(43)), null);
     db.tables[DEVICE_TABLE].push(device({ user_id: 3 }));
+    db.tables[USER_TABLE].push({ id: 3, record_status: RecordStatus.ACTIVE });
     assert.deepEqual(await service.authenticateDevice(TOKEN), { deviceId: DEVICE_A, userId: 3, name: "iPhone 13" });
+  });
+
+  test("authenticateDevice: a claimed device whose owner is soft-deleted or missing is null (soft-deleted = gone)", async () => {
+    const { db, service } = setup();
+    const lookups: { table: string; where: Row; columns?: readonly string[] }[] = [];
+    const findOne = db.findOne;
+    db.findOne = async (table: string, where: Row, columns?: readonly string[]) => {
+      lookups.push({ table, where, columns });
+      return findOne(table, where, columns);
+    };
+    db.tables[DEVICE_TABLE].push(device({ user_id: 3 }));
+    db.tables[USER_TABLE].push({ id: 3, record_status: RecordStatus.DELETED });
+    assert.equal(await service.authenticateDevice(TOKEN), null);
+    assert.deepEqual(lookups[1], {
+      table: USER_TABLE,
+      where: { id: 3, record_status: RecordStatus.ACTIVE },
+      columns: ["id"],
+    });
+
+    db.tables[USER_TABLE].length = 0; // owner row gone entirely
+    assert.equal(await service.authenticateDevice(TOKEN), null);
+
+    // An unclaimed device has no owner to check and still authenticates (it needs to pair).
+    db.tables[DEVICE_TABLE][0].user_id = null;
+    lookups.length = 0;
+    assert.deepEqual(await service.authenticateDevice(TOKEN), { deviceId: DEVICE_A, userId: null, name: "iPhone 13" });
+    assert.equal(lookups.length, 1);
+  });
+
+  test("register with the token of a device whose owner is soft-deleted gets a brand-new unpaired device", async () => {
+    const { db, service } = setup();
+    db.tables[DEVICE_TABLE].push(device({ user_id: 3 }));
+    db.tables[USER_TABLE].push({ id: 3, record_status: RecordStatus.DELETED });
+    const res = await service.register({ name: "x", deviceId: DEVICE_A, token: TOKEN });
+    assert.notEqual(res.deviceId, DEVICE_A);
+    assert.equal(res.paired, false);
+    assert.equal(res.token, TOKEN); // the injected token source
+    assert.equal(db.tables[DEVICE_TABLE][0].user_id, 3); // the old row is left as it is
   });
 
   test("claim binds the device, renames it, tells the relay and consumes the code", async () => {

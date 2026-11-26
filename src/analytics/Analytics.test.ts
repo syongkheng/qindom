@@ -88,12 +88,12 @@ function fakeDb() {
     async raw(sql: string, bindings: unknown[]) {
       calls.push({ op: "raw", table: "" });
       if (sql.includes(`FROM ${GRANT_TABLE} ra`)) {
-        const [type, key, status] = bindings;
-        return tables[GRANT_TABLE].filter(
-          (g) => g.resource_type === type && g.resource_key === key && g.record_status === status,
-        ).map((g) => {
-          const u = tables[USER_TABLE].find((x) => x.id === g.user_id)!;
-          return { ...g, username: u.username, email: u.email, system: u.system };
+        const [userStatus, type, key, status] = bindings;
+        return tables[GRANT_TABLE].flatMap((g) => {
+          if (g.resource_type !== type || g.resource_key !== key || g.record_status !== status) return [];
+          // INNER JOIN on an active user row: a soft-deleted user's grant drops out.
+          const u = tables[USER_TABLE].find((x) => x.id === g.user_id && x.record_status === userStatus);
+          return u ? [{ ...g, username: u.username, email: u.email, system: u.system }] : [];
         });
       }
       if (sql.includes("SELECT event, session_id")) {
@@ -320,6 +320,22 @@ describe("AnalyticsAccessService", () => {
       [[7, "viewer", "viewer"]],
     );
     assert.deepEqual(await access.revoke("fndom", 7), []);
+  });
+
+  test("a grant held by a soft-deleted user isn't listed (soft-deleted = gone)", async () => {
+    const db = withViewer();
+    const { access } = services(db);
+    await access.grant("fndom", "viewer", 1);
+    // Granted while active, then the account was soft-deleted.
+    db.tables[GRANT_TABLE].push({
+      ...db.tables[GRANT_TABLE][0],
+      id: 99,
+      user_id: 8,
+    });
+    assert.deepEqual(
+      (await access.listGrants("fndom")).map((g) => g.userId),
+      [7],
+    );
   });
 });
 

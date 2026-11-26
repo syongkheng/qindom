@@ -528,14 +528,17 @@ describe("RequestApiKeyFilter", () => {
     const keyLookup = findOneCalls.find((c) => c.table === SS_KEY_TABLE)!;
     assert.deepEqual(keyLookup.where, { api_key_prefix: "ss", api_key_hash: sha256Hex(RAW), record_status: "A" });
     const userLookup = findOneCalls.find((c) => c.table === USER_TABLE)!;
-    // Pinned (QUESTION): the owner's record_status is not checked.
-    assert.deepEqual(userLookup.where, { id: 9 });
+    // Soft-deleted = gone (M1): only an active owner row counts.
+    assert.deepEqual(userLookup.where, { id: 9, record_status: "A" });
   });
 
-  test("pinned: a soft-deleted owner's key still works (owner record_status not checked)", async () => {
+  test("a soft-deleted owner's key → the same 401 as an invalid key (M1)", async () => {
     tables[USER_TABLE].push({ id: 9, username: "amy", record_status: "D" });
     addSsKey(9, RAW);
-    assert.equal((await withKey(`ss_${RAW}`)).status, 200);
+    const deletedOwner = await withKey(`ss_${RAW}`);
+    unauthorized(deletedOwner);
+    const unknownKey = await withKey(`ss_${"b".repeat(64)}`);
+    assert.deepEqual(deletedOwner.json, unknownKey.json);
   });
 
   test("pinned: only the segment after the first '_' is hashed (trailing '_…' ignored)", async () => {

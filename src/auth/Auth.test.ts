@@ -513,6 +513,17 @@ describe("POST /auth/login", () => {
     assert.ok(user.last_logged_in_dt > 0);
   });
 
+  test("the session token is written to the active row by id, never to a soft-deleted twin (A4)", async () => {
+    // Same username_system as the live account, but soft-deleted (e.g. a lapsed unverified row).
+    const twin = await seedUser({ username: "twin", email: "twin-old@example.com", record_status: "D" });
+    const live = await seedUser({ username: "twin" });
+    const res = await post("/login", { email: "twin@example.com", password: PASSWORD, system: SYSTEM });
+    assert.equal(res.status, 200);
+    assert.equal(live.token, cookieValue(res.cookies, "jwt_token"));
+    assert.equal(twin.token, undefined);
+    assert.equal(twin.last_logged_in_dt, 0);
+  });
+
   test("unparseable roles → []", async () => {
     await seedUser({ username: "loginroles", roles: "not json" });
     const res = await post("/login", { email: "loginroles@example.com", password: PASSWORD, system: SYSTEM });
@@ -701,6 +712,17 @@ describe("/auth/admin (OWNER only)", () => {
     assert.equal(ok.status, 200);
     assert.deepEqual(ok.json.data, { updated: true });
     assert.equal(target.roles, JSON.stringify(["PPHS_R4", "admin"]));
+  });
+
+  test("POST /admin/users/:id/roles on a soft-deleted or unknown user → 404, nothing written (A3)", async () => {
+    const deleted = await seedUser({ username: "deletedrole", record_status: "D" });
+    for (const id of [deleted.id, 999_999]) {
+      const res = await post(`/admin/users/${id}/roles`, { roles: ["PPHS_R4"] }, ownerToken);
+      assert.equal(res.status, 404, String(id));
+      assert.equal(res.json.data.code, "entity_not_found");
+      assert.equal(res.json.data.message, "User not found");
+    }
+    assert.equal(deleted.roles, "[]");
   });
 
   test("GET /admin/recent-request-logs clamps limit to 1..20 (default 3) and trims fields", async (t) => {
@@ -945,7 +967,9 @@ describe("Auth helpers and mappers", () => {
     } as never);
     await svc.listGrants(ResourceType.ANALYTICS_SYSTEM, "fndom");
     assert.ok(!String(calls[0][0]).includes("'A'"));
-    assert.deepEqual(calls[0][1], ["analytics_system", "fndom", "A"]);
+    // The user join filters on the active status too: a soft-deleted user's grant isn't listed.
+    assert.match(String(calls[0][0]), /JOIN tb_aa_user u ON u\.id = ra\.user_id AND u\.record_status = \?/);
+    assert.deepEqual(calls[0][1], ["A", "analytics_system", "fndom", "A"]);
   });
 });
 

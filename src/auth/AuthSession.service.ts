@@ -22,7 +22,7 @@ export const AA_USER_TABLE = "tb_aa_user";
 export const BCRYPT_SALT_ROUNDS = 10;
 
 /** Columns `issueSession` needs. */
-export const SESSION_COLUMNS = ["id", "username", "system", "username_system", "roles", "last_logged_in_dt"] as const;
+export const SESSION_COLUMNS = ["id", "username", "system", "roles", "last_logged_in_dt"] as const;
 const LOGIN_COLUMNS = [...SESSION_COLUMNS, "password", "email_verified"];
 const PASSWORD_UPDATE_COLUMNS = [...SESSION_COLUMNS, "password", "email"];
 
@@ -60,6 +60,7 @@ export class AuthSessionService {
   /**
    * Signs a new JWT and stores it as the user's only valid token (MandatoryTokenFilter rejects any
    * cookie whose token != tb_aa_user.token), so issuing a session revokes every other one.
+   * Written by `{ id, record_status: ACTIVE }`: soft-deleted rows sharing the `username_system` never get it.
    */
   async issueSession(user: SessionUser, event?: IRequestLogEvent): Promise<AuthIssuedSession> {
     const roles = parseRoles(user.roles);
@@ -72,7 +73,7 @@ export class AuthSessionService {
     });
     await this.db.update<ITB_AA_USER>(
       AA_USER_TABLE,
-      { username_system: user.username_system },
+      { id: user.id, record_status: RecordStatus.ACTIVE },
       { token, last_logged_in_dt: Date.now(), state: UserState.ACTIVE },
       event,
     );
@@ -151,7 +152,12 @@ export class AuthSessionService {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
-    await this.db.update<ITB_AA_USER>(AA_USER_TABLE, { id: user.id }, { password: hashedPassword }, event);
+    await this.db.update<ITB_AA_USER>(
+      AA_USER_TABLE,
+      { id: user.id, record_status: RecordStatus.ACTIVE },
+      { password: hashedPassword },
+      event,
+    );
     const { token } = await this.issueSession(user, event);
     if (event) event.detail = "password updated, token rotated";
 

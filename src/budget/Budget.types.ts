@@ -62,7 +62,7 @@ export interface BudgetTableDto {
   isOwner: boolean;
   /** Active items by `sortOrder`. */
   items: BudgetItemDto[];
-  /** Active collaborators (never the owner). */
+  /** Active collaborators with an active account (never the owner; soft-deleted users are left out). */
   collaborators: BudgetCollaboratorDto[];
 }
 
@@ -80,6 +80,10 @@ export interface BudgetDeletedDto {
 
 export interface BudgetCollaboratorRemovedDto {
   removed: true;
+}
+
+export interface BudgetLeftDto {
+  left: true;
 }
 
 export interface BudgetTableBody {

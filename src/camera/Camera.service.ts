@@ -7,6 +7,7 @@ import { sha256Hex } from "../utils/HashUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { ITB_CAMERA_DEVICE } from "../models/databases/tb_camera_device.js";
+import { ITB_AA_USER } from "../models/databases/tb_aa_user.js";
 import { CameraRelay } from "./Camera.relay.js";
 import { PairingCodeStore } from "./Camera.pairing.js";
 import { isWellFormedDeviceToken } from "./Camera.validator.js";
@@ -20,6 +21,7 @@ import {
 } from "./Camera.types.js";
 
 const CAMERA_DEVICE_TABLE = "tb_camera_device";
+const USER_TABLE = "tb_aa_user";
 /** Registered-but-never-claimed devices older than this are retired on the next registration. */
 export const UNCLAIMED_RETENTION_MS = Time.DAY_MS;
 const DEVICE_TOKEN_BYTES = 32;
@@ -58,7 +60,12 @@ export class CameraService {
     private readonly newDeviceToken: () => string = randomDeviceToken,
   ) {}
 
-  /** Device token → the active device, or null. Used by the phone WebSocket upgrade. */
+  /**
+   * Device token → the active device, or null. Used by the phone WebSocket upgrade and by `register`.
+   * A claimed device also needs its owner's user row to be active: a soft-deleted owner counts as
+   * gone (CODING_STYLE §7), so the token is treated exactly like an unknown one. Unclaimed devices
+   * (`user_id` NULL) have no owner to check and stay valid so they can pair.
+   */
   async authenticateDevice(token: string, logContext?: IRequestLogContext): Promise<CameraDeviceIdentity | null> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Authenticate camera device");
     if (!isWellFormedDeviceToken(token)) return null;
@@ -68,7 +75,20 @@ export class CameraService {
       IDENTITY_COLUMNS,
       event,
     );
-    return row ? toIdentity(row) : null;
+    if (!row) return null;
+    if (row.user_id != null) {
+      const owner = await this.db.findOne<ITB_AA_USER>(
+        USER_TABLE,
+        { id: row.user_id, record_status: RecordStatus.ACTIVE },
+        ["id"],
+        event,
+      );
+      if (!owner) {
+        if (event) event.detail = "owner not active";
+        return null;
+      }
+    }
+    return toIdentity(row);
   }
 
   /** Stamps `last_seen_dt` (phone socket connect / disconnect). */

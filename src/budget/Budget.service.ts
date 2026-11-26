@@ -15,6 +15,7 @@ import {
   BudgetItemBody,
   BudgetItemDto,
   BudgetItemUpdateBody,
+  BudgetLeftDto,
   BudgetRenamedDto,
   BudgetTableCreatedDto,
   BudgetTableDto,
@@ -29,8 +30,25 @@ const BUDGET_COLLABORATOR_TABLE = "tb_budget_collaborator";
 const USER_TABLE = "tb_aa_user";
 
 const SUMMARY_ITEM_COLUMNS = ["table_id", "budget_amount", "actual_amount"] as const;
+const INVITEE_COLUMNS = ["id", "username", "email"];
+/** `tb_aa_user.email_verified` of an account that confirmed its email. */
+const EMAIL_VERIFIED = 1;
 
-type CollaboratorRow = Pick<ITB_BUDGET_COLLABORATOR, "user_id"> & Pick<ITB_AA_USER, "username" | "email">;
+/** One message for every "no usable account" case (unknown, unverified, soft-deleted): no email enumeration. */
+const NO_INVITABLE_ACCOUNT = "No account available for that email";
+const OWNER_CANNOT_LEAVE = "The owner can't leave their own table";
+
+/**
+ * Active collaborator rows whose user row is active too: a soft-deleted user counts as gone
+ * (CODING_STYLE §7). Bindings: user status, collaborator status, then the optional filters.
+ */
+const ACTIVE_COLLABORATORS_SQL = `SELECT c.id, c.table_id, c.user_id, u.username, u.email
+       FROM ${BUDGET_COLLABORATOR_TABLE} c
+       JOIN ${USER_TABLE} u ON u.id = c.user_id AND u.record_status = ?
+       WHERE c.record_status = ?`;
+
+type CollaboratorRow = Pick<ITB_BUDGET_COLLABORATOR, "id" | "table_id" | "user_id"> &
+  Pick<ITB_AA_USER, "username" | "email">;
 type SummaryItemRow = Pick<ITB_BUDGET_ITEM, "table_id" | "budget_amount" | "actual_amount">;
 
 /** DECIMAL columns come back from mysql2 as strings. */
@@ -50,7 +68,9 @@ export function toBudgetItemDto(item: ITB_BUDGET_ITEM): BudgetItemDto {
   };
 }
 
-export function toBudgetCollaboratorDto(row: CollaboratorRow): BudgetCollaboratorDto {
+export function toBudgetCollaboratorDto(
+  row: Pick<CollaboratorRow, "user_id" | "username" | "email">,
+): BudgetCollaboratorDto {
   return { userId: Number(row.user_id), username: row.username, email: row.email };
 }
 
@@ -69,9 +89,11 @@ export function toBudgetTableSummaryDto(table: ITB_BUDGET_TABLE, items: SummaryI
 /**
  * Shared budget tables. Access rules:
  * - owner (`created_by_id`): everything;
- * - active collaborator: read the table and create/edit/delete/restore its items;
+ * - active collaborator (collaborator row and user row both active): read the table, create/edit/
+ *   delete/restore its items, and leave it;
  * - only the owner renames/deletes the table and adds/removes collaborators;
  * - anyone else: 403 (404 if the table doesn't exist or was deleted).
+ * A soft-deleted user is treated as nonexistent everywhere: not listed, no access, not invitable.
  * Items are always looked up inside the table they were addressed through.
  */
 export class BudgetService {
@@ -88,12 +110,7 @@ export class BudgetService {
       event,
     );
 
-    const collaborations = await this.db.find<ITB_BUDGET_COLLABORATOR>(
-      BUDGET_COLLABORATOR_TABLE,
-      { user_id: userId, record_status: RecordStatus.ACTIVE },
-      { columns: ["table_id"] },
-      event,
-    );
+    const collaborations = await this.activeCollaborators({ userId }, event);
     const sharedTableIds = collaborations.map((c) => c.table_id);
     const shared = sharedTableIds.length
       ? await this.db.find<ITB_BUDGET_TABLE>(
@@ -173,14 +190,7 @@ export class BudgetService {
       { orderBy: "sort_order", orderDirection: "asc" },
       event,
     );
-    const collaborators = await this.db.raw<CollaboratorRow[]>(
-      `SELECT c.user_id, u.username, u.email
-       FROM ${BUDGET_COLLABORATOR_TABLE} c
-       JOIN ${USER_TABLE} u ON u.id = c.user_id
-       WHERE c.table_id = ? AND c.record_status = ?`,
-      [table.id, RecordStatus.ACTIVE],
-      event,
-    );
+    const collaborators = await this.activeCollaborators({ tableId: table.id! }, event);
 
     return {
       sessionId: table.session_id,
@@ -306,7 +316,12 @@ export class BudgetService {
 
   // ─── Collaborators ───────────────────────────────────────────────────────────
 
-  /** Owner only. The invitee must have an active account with that email; re-adding a removed collaborator reactivates them. */
+  /**
+   * Owner only. The invitee needs an active, email-verified account with that email; unknown,
+   * unverified and soft-deleted accounts all get the same 404 through the same single lookup, so
+   * the answer doesn't reveal which. Inviting yourself is a 400. Re-adding a removed collaborator
+   * reactivates them.
+   */
   async addCollaborator(
     userId: number,
     sessionId: string,
@@ -318,11 +333,11 @@ export class BudgetService {
 
     const invitee = await this.db.findOne<ITB_AA_USER>(
       USER_TABLE,
-      { email, record_status: RecordStatus.ACTIVE },
-      ["id", "username", "email"],
+      { email, email_verified: EMAIL_VERIFIED, record_status: RecordStatus.ACTIVE },
+      INVITEE_COLUMNS,
       event,
     );
-    if (!invitee) throw new Exceptions.NotFound();
+    if (!invitee) throw new Exceptions.NotFound(NO_INVITABLE_ACCOUNT);
     if (invitee.id === userId) throw new Exceptions.InvalidRequest("email", "format");
 
     const existing = await this.db.findOne<ITB_BUDGET_COLLABORATOR>(
@@ -373,6 +388,25 @@ export class BudgetService {
     return { removed: true };
   }
 
+  /**
+   * A collaborator removes themselves (soft-deletes their own collaborator row). The owner can't
+   * leave (they delete the table instead): 403. Not a member: 404.
+   */
+  async leaveTable(userId: number, sessionId: string, logContext?: IRequestLogContext): Promise<BudgetLeftDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Leave budget table");
+    const table = await this.loadTable(sessionId, event);
+    if (table.created_by_id === userId) throw new Exceptions.ForbiddenAccess(OWNER_CANNOT_LEAVE);
+    const [membership] = await this.activeCollaborators({ tableId: table.id!, userId }, event);
+    if (!membership) throw new Exceptions.NotFound();
+    await this.db.update<ITB_BUDGET_COLLABORATOR>(
+      BUDGET_COLLABORATOR_TABLE,
+      { id: membership.id, record_status: RecordStatus.ACTIVE },
+      { record_status: RecordStatus.DELETED },
+      event,
+    );
+    return { left: true };
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   /** Active table by session id, or 404. */
@@ -394,17 +428,30 @@ export class BudgetService {
     return table;
   }
 
-  /** Owner or active collaborator, else 403. Returns whether the caller is the owner. */
+  /** Owner or active collaborator (with an active user row), else 403. Returns whether the caller is the owner. */
   private async assertAccess(userId: number, table: ITB_BUDGET_TABLE, event?: IRequestLogEvent): Promise<boolean> {
     if (table.created_by_id === userId) return true;
-    const collaborator = await this.db.findOne<ITB_BUDGET_COLLABORATOR>(
-      BUDGET_COLLABORATOR_TABLE,
-      { table_id: table.id, user_id: userId, record_status: RecordStatus.ACTIVE },
-      ["id"],
-      event,
-    );
+    const [collaborator] = await this.activeCollaborators({ tableId: table.id!, userId }, event);
     if (!collaborator) throw new Exceptions.ForbiddenAccess();
     return false;
+  }
+
+  /** Active collaborations of active users in one table and/or of one user (at least one filter is required). */
+  private async activeCollaborators(
+    { tableId, userId }: { tableId: number; userId?: number } | { tableId?: undefined; userId: number },
+    event?: IRequestLogEvent,
+  ): Promise<CollaboratorRow[]> {
+    let sql = ACTIVE_COLLABORATORS_SQL;
+    const bindings: unknown[] = [RecordStatus.ACTIVE, RecordStatus.ACTIVE];
+    if (tableId !== undefined) {
+      sql += " AND c.table_id = ?";
+      bindings.push(tableId);
+    }
+    if (userId !== undefined) {
+      sql += " AND c.user_id = ?";
+      bindings.push(userId);
+    }
+    return this.db.raw<CollaboratorRow[]>(sql, bindings, event);
   }
 
   /** Item in this table with the given status, or 404. */

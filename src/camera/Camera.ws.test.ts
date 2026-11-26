@@ -8,6 +8,10 @@ import { attachCameraWebSockets, CameraWebSockets } from "./Camera.ws.js";
 import { CameraRelay, DashboardConnection, PhoneConnection, RelaySocket } from "./Camera.relay.js";
 import { CAMERA_MAX_FRAME_BYTES, CAMERA_MAX_TEXT_BYTES, WS_CLOSE_INTERNAL_ERROR } from "./Camera.protocol.js";
 import { CameraDeviceIdentity } from "./Camera.types.js";
+import { CameraService } from "./Camera.service.js";
+import { PairingCodeStore } from "./Camera.pairing.js";
+import { sha256Hex } from "../utils/HashUtilities.js";
+import { RecordStatus } from "../constants/RecordStatus.js";
 
 // Real `ws` sockets against attachCameraWebSockets on an ephemeral local port, with a fake
 // device/user lookup. Feeds malformed upgrades, frames and messages, and handlers that throw,
@@ -300,5 +304,92 @@ describe("heartbeat", () => {
     (silent.ws as unknown as { _socket: net.Socket })._socket.resume();
     await silent.closed;
     assert.equal(live.ws.readyState, WebSocket.OPEN);
+  });
+});
+
+describe("phone upgrade with the real CameraService (soft-deleted owner = unknown token)", () => {
+  const ACTIVE_OWNER_TOKEN = "a".repeat(43);
+  const DELETED_OWNER_TOKEN = "d".repeat(43);
+  const UNCLAIMED_TOKEN = "n".repeat(43);
+  type Row = Record<string, unknown>;
+  const tables: Record<string, Row[]> = {
+    tb_camera_device: [
+      { uuid: "dev-active", token_hash: sha256Hex(ACTIVE_OWNER_TOKEN), user_id: 1, name: "A", record_status: "A" },
+      { uuid: "dev-deleted", token_hash: sha256Hex(DELETED_OWNER_TOKEN), user_id: 2, name: "D", record_status: "A" },
+      { uuid: "dev-free", token_hash: sha256Hex(UNCLAIMED_TOKEN), user_id: null, name: "N", record_status: "A" },
+    ],
+    tb_aa_user: [
+      { id: 1, record_status: RecordStatus.ACTIVE },
+      { id: 2, record_status: RecordStatus.DELETED },
+    ],
+  };
+  const matches = (row: Row, where: Row) => Object.entries(where).every(([k, v]) => row[k] === v);
+  const fakeDb = {
+    async findOne(table: string, where: Row, columns: readonly string[] = ["*"]) {
+      const row = tables[table].find((r) => matches(r, where));
+      if (!row) return undefined;
+      return columns.includes("*") ? { ...row } : Object.fromEntries(columns.map((c) => [c, row[c]]));
+    },
+    async update() {
+      return [];
+    },
+  };
+  let realServer: http.Server;
+  let realSockets: CameraWebSockets;
+  let realPort: number;
+
+  before(async () => {
+    const relay = new CameraRelay();
+    realServer = http.createServer();
+    realSockets = attachCameraWebSockets(realServer, {
+      service: new CameraService(fakeDb as never, relay, new PairingCodeStore()),
+      relay,
+      allowedOrigins: [ORIGIN],
+      resolveUser: async () => null,
+      heartbeatMs: HEARTBEAT_MS,
+    });
+    await new Promise<void>((resolve) => realServer.listen(0, "127.0.0.1", resolve));
+    realPort = (realServer.address() as AddressInfo).port;
+  });
+
+  after(async () => {
+    realSockets.close();
+    await new Promise<void>((resolve) => realServer.close(() => resolve()));
+  });
+
+  /** Like `rawUpgrade`, against the real-service server. */
+  function upgradeStatus(token: string): Promise<number | "closed"> {
+    return new Promise((resolve) => {
+      const socket = net.connect(realPort, "127.0.0.1", () => {
+        socket.write(
+          [
+            "GET /camera/ws/phone HTTP/1.1",
+            "Host: localhost",
+            "Connection: Upgrade",
+            "Upgrade: websocket",
+            "Sec-WebSocket-Version: 13",
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+            `Authorization: Bearer ${token}`,
+          ].join("\r\n") + "\r\n\r\n",
+        );
+      });
+      let settled = false;
+      socket.on("data", (data) => {
+        if (settled) return;
+        settled = true;
+        resolve(Number(data.toString().split(" ")[1]));
+        socket.destroy();
+      });
+      socket.on("close", () => !settled && resolve("closed"));
+      socket.on("error", () => {});
+    });
+  }
+
+  test("owner soft-deleted → 401, the same as an unknown token; active owner and unclaimed → 101", async () => {
+    const unknown = await upgradeStatus("u".repeat(43));
+    assert.equal(unknown, 401);
+    assert.equal(await upgradeStatus(DELETED_OWNER_TOKEN), unknown);
+    assert.equal(await upgradeStatus(ACTIVE_OWNER_TOKEN), 101);
+    assert.equal(await upgradeStatus(UNCLAIMED_TOKEN), 101);
   });
 });

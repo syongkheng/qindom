@@ -126,7 +126,12 @@ export class AuthRegistrationService {
     // frees the username unique key and discards a squatter's chosen password.
     const staleIds = new Set([...byEmail, ...byUsername].map((u) => u.id!));
     for (const id of staleIds) {
-      await this.db.update<ITB_AA_USER>(AA_USER_TABLE, { id }, { record_status: RecordStatus.DELETED }, event);
+      await this.db.update<ITB_AA_USER>(
+        AA_USER_TABLE,
+        { id, record_status: RecordStatus.ACTIVE },
+        { record_status: RecordStatus.DELETED },
+        event,
+      );
     }
 
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
