@@ -1,6 +1,6 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
+import { StructuralValidationUtilities as V, charLength } from "../utils/StructuralValidationUtilities.js";
 import {
   AgendaFileBody,
   AgendaItemBody,
@@ -186,7 +186,7 @@ export function normaliseCityRaw(value: unknown): string[] | null {
 /** The access code is compared exactly, so it is not trimmed. */
 function challengeCode(value: unknown, event?: IRequestLogEvent): string | null {
   if (isBlank(value)) return null;
-  return typeof value === "string" && value.length <= CHALLENGE_MAX_LENGTH ? value : invalid("challenge", event);
+  return typeof value === "string" && charLength(value) <= CHALLENGE_MAX_LENGTH ? value : invalid("challenge", event);
 }
 
 export function validateAgendaFileBody(value: unknown, event?: IRequestLogEvent): AgendaFileBody {
@@ -333,6 +333,6 @@ export function validateChallengeBody(body: Body, event?: IRequestLogEvent): Iti
   const shortCode = V.requiredText(body.shortCode, "shortCode", SHORT_CODE_MAX_LENGTH, event);
   V.requiredString(body.challenge, "challenge", event);
   const challenge = body.challenge as string;
-  if (!challenge || challenge.length > CHALLENGE_MAX_LENGTH) invalid("challenge", event);
+  if (!challenge || charLength(challenge) > CHALLENGE_MAX_LENGTH) invalid("challenge", event);
   return { shortCode, challenge };
 }

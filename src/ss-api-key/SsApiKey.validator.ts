@@ -8,8 +8,7 @@ const NAME_MAX_LENGTH = 100;
 
 export function validateRenameBody(body: Record<string, unknown>, event?: IRequestLogEvent): SsApiKeyRenameBody {
   V.string(body.name, "name", event);
-  const name = (body.name as string).trim();
-  if (!name) throw new Exceptions.InvalidRequest("name", "mandatory");
-  if (name.length > NAME_MAX_LENGTH) throw new Exceptions.InvalidRequest("name", "format");
-  return { name };
+  // Blank keeps its own "mandatory" error; requiredText then trims and caps in code points.
+  if (!(body.name as string).trim()) throw new Exceptions.InvalidRequest("name", "mandatory");
+  return { name: V.requiredText(body.name, "name", NAME_MAX_LENGTH, event) };
 }

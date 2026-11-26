@@ -224,6 +224,21 @@ describe("mappers", () => {
     ]);
   });
 
+  test("D3: amounts are numbers for string and number input, 0 stays 0, NULL is omitted (not 0)", () => {
+    const fromStrings = toBudgetItemDto(item("i2", 10, { budget_amount: "0.00", actual_amount: "-4.50" }) as never);
+    assert.strictEqual(fromStrings.budgetAmount, 0);
+    assert.strictEqual(fromStrings.actualAmount, -4.5);
+    const fromNumbers = toBudgetItemDto(item("i3", 10, { budget_amount: 7, actual_amount: null }) as never);
+    assert.strictEqual(fromNumbers.budgetAmount, 7);
+    assert.strictEqual(fromNumbers.actualAmount, undefined);
+    const summary = toBudgetTableSummaryDto(
+      seed().tb_budget_table[0] as never,
+      [{ table_id: 10, budget_amount: "10.10", actual_amount: "0.20" }] as never,
+    );
+    assert.strictEqual(typeof summary.sumBudget, "number");
+    assert.strictEqual(typeof summary.sumActual, "number");
+  });
+
   test("toBudgetTableSummaryDto sums only the given items, treating null as 0", () => {
     const dto = toBudgetTableSummaryDto(
       seed().tb_budget_table[0] as never,

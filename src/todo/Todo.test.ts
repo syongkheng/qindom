@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { TodoService } from "./Todo.service.js";
-import { validateReorderBody, validateUpdateBody } from "./Todo.validator.js";
+import { validateCreateBody, validateReorderBody, validateUpdateBody } from "./Todo.validator.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 type Row = Record<string, any>;
@@ -123,4 +123,23 @@ test("validators: update needs a field; reorder needs uuid strings", () => {
   assert.deepEqual(validateUpdateBody({ title: " x ", pinned: true }), { title: "x", pinned: true });
   assert.throws(() => validateReorderBody({ ids: [1] }), Exceptions.InvalidRequest);
   assert.deepEqual(validateReorderBody({ ids: [] }), { ids: [] });
+});
+
+// U2: caps count code points (utf8mb4), so an emoji counts 1, not 2 UTF-16 units.
+test("title: 500 emoji is exactly the VARCHAR(500) limit; 501 → 400 invalid_request_title", () => {
+  const emoji = "😀";
+  assert.deepEqual(validateCreateBody({ title: emoji.repeat(500) }), { title: emoji.repeat(500) });
+  assert.deepEqual(validateUpdateBody({ title: ` ${emoji.repeat(500)} ` }), { title: emoji.repeat(500) });
+  assert.throws(
+    () => validateCreateBody({ title: emoji.repeat(501) }),
+    (e: { code: string }) => e.code === "invalid_request_title",
+  );
+  assert.throws(
+    () => validateCreateBody({ title: "   " }),
+    (e: { code: string }) => e.code === "invalid_request_title",
+  );
+  assert.throws(
+    () => validateCreateBody({}),
+    (e: { code: string }) => e.code === "invalid_request_title",
+  );
 });

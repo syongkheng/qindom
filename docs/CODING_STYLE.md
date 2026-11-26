@@ -169,6 +169,9 @@ Each feature folder `src/<module>/` holds:
 - Typed exceptions thrown inside `db.transaction` keep their status. Still check ownership before opening it when you can (so nothing is written). Inside the callback use `tx.*(…, event)` (the `KnexSqlUtilities` bound to the trx) rather than the raw `trx`, and pass `event` as `transaction`'s second argument.
 - Client-addressed child rows: check every id (updates and delete lists) belongs to the parent before writing (→ 403), and still scope each child UPDATE/DELETE by the parent id.
 - Validators for round-trip payloads (client posts back what the GET returned) accept the GET's own shapes (DECIMAL strings, 0/1 flags, digit-string ids).
+- DECIMAL row types are `number | string`; mappers always go through `toDecimalNumber` (`utils/NumberUtilities`). The API never returns a DECIMAL string, and NULL never becomes 0.
+- Inside a transaction never use the raw `trx`: use `tx.insertId` / `insertMany` / `updateCount` / `updateCountIn` / `find` + `extraWhere`, so every statement is logged.
+- Deliberately untrimmed text (access codes, honeypots) is capped with `charLength`, not `.length`.
 - All raw SQL uses bindings, including status values (`SET record_status = ?` with `RecordStatus.DELETED`, never `'D'` inline).
 - Responses that report a count (`deleted`, `updated`) return what the DB actually affected, not the input length.
 - Never edit the logic of an already-applied migration; add a new one.
@@ -219,6 +222,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | data/types decisions: public uuids NOT NULL (migration 20261126000400, backfills first); both master.sql deleted (schema = migrations); shared toDecimalNumber, API returns numbers; itinerary save fully on logged tx; remaining length caps count code points. |
 | 2026-11-26 | platform decisions: crash guard (log, keep serving); phone WS upgrade limiter 60/15 min/IP; camera protocol master in qindom docs (fndom copy deleted; fndom-react-native pending); CORS without DELETE; registry 404; ALLOWED_ORIGINS fail-fast; DB failure in auth filters → 500; CSRF byte compare → 403; `ss_<key>_x` rejected; `/report` requires Origin; legacy `POST /analytics` removed; fndom login dialog stays on the email step on 429/network/other errors. |
 | 2026-11-26 | auth decisions: password check limiter 10 failures/15 min/user; preflight limiter; owner can't remove own SYSTEM_R5; OTP via randomInt; password email without timestamp; caps (email 255, system 256, password 72 bytes); emails masked in PM2 logs; PPHS roles stripped (migration 20261126000300); PermissionService logs. |
 | 2026-11-26 | itinerary decisions: image ownership via `tb_tg_image.created_by_id` (legacy NULL allowed); blank → NULL on update (absent = unchanged); public views drop internal ids, owner sessionId and challenge; fndom maxlengths. M1: no key migration. G3: unchanged (deploy.sh + health check). |

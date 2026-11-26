@@ -59,6 +59,20 @@ test("list attaches card labels and defaults currency/source for old rows", asyn
   assert.equal(b.cardLabel, null);
 });
 
+test("D3: amount is always a number (DECIMAL string or number from the driver)", async () => {
+  const db = fakeDb({
+    tb_applepay_transaction: [tx("a", { amount: "1234.05" }), tx("b", { amount: 3, occurred_dt: 1 })],
+  });
+  const rows = await new ApplePayService(db).getTransactions(7);
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.amount, typeof r.amount]),
+    [
+      ["a", 1234.05, "number"],
+      ["b", 3, "number"],
+    ],
+  );
+});
+
 test("delete then restore flips record_status; deleting twice is NotFound", async () => {
   const tables = { tb_applepay_transaction: [tx("a")] };
   const svc = new ApplePayService(fakeDb(tables));

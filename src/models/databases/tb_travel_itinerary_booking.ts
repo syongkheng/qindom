@@ -11,7 +11,7 @@ export interface ITB_TRAVEL_ITINERARY_BOOKING {
   start_date?: string | null;
   end_date?: string | null;
   nights?: number | null;
-  price?: number | null;
+  price?: number | string | null; // DECIMAL(12,2), read back as a string
   booked?: number | null; // tinyint 0/1
   free_cancellation?: string | null;
   breakfast?: number | null; // tinyint 0/1

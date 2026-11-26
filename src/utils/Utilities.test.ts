@@ -2,6 +2,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import type { Response } from "express";
 import { maskName } from "./MaskingUtilities.js";
+import { toDecimalNumber } from "./NumberUtilities.js";
 import { sha256Hex } from "./HashUtilities.js";
 import { toMessage } from "./ErrorUtilities.js";
 import { MailerUtilities, formatFromHeader } from "./MailerUtilities.js";
@@ -15,6 +16,29 @@ import {
   getTelegramBotToken,
   sendTelegramHtml,
 } from "./TelegramUtilities.js";
+
+describe("toDecimalNumber", () => {
+  test("DECIMAL strings and numbers → numbers; NULL stays null (never 0)", () => {
+    assert.equal(toDecimalNumber("12.50"), 12.5);
+    assert.equal(toDecimalNumber(12.5), 12.5);
+    assert.equal(toDecimalNumber("0"), 0);
+    assert.equal(toDecimalNumber("0.00"), 0);
+    assert.equal(toDecimalNumber("-3.25"), -3.25);
+    assert.equal(toDecimalNumber("1.30000000"), 1.3);
+    assert.equal(toDecimalNumber(0), 0);
+    assert.equal(toDecimalNumber(null), null);
+    assert.equal(toDecimalNumber(undefined), null);
+  });
+
+  test("garbage → null with one PM2 warning naming the field (never NaN, never a string)", (t) => {
+    const warn = t.mock.method(console, "warn", () => {});
+    for (const garbage of ["", " ", "abc", "12,50", "1e3", "0x10", " 12.5", "12.", NaN, Infinity]) {
+      assert.equal(toDecimalNumber(garbage, "amount"), null, String(garbage));
+    }
+    assert.equal(warn.mock.callCount(), 10);
+    assert.match(String(warn.mock.calls[2].arguments[0]), /Unreadable amount value "abc"/);
+  });
+});
 
 describe("maskName", () => {
   test("masks the last 3 / 2 / 1 characters by length; trims; short names unchanged", () => {

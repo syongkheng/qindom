@@ -2,8 +2,8 @@ import type { RecordStatus } from "../../constants/RecordStatus.js";
 
 export interface ITB_APPLEPAY_TRANSACTION {
   id?: number;
-  uuid: string; // column is NULL-able, but every insert sets it
-  amount: number;
+  uuid: string;
+  amount: number | string; // DECIMAL(10,2): mysql2 reads it back as a string
   // ISO 4217 code as reported by the bank alert (e.g. 'SGD', 'CNY'); rows
   // recorded before this column existed default to 'SGD'.
   currency?: string;

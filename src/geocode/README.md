@@ -12,7 +12,7 @@
  <summary><code>GET</code> <code>/geocode?q=</code></summary>
 
 ##### Query parameters
-- `q`: required, 1–200 characters after trimming, e.g. `Marina Bay Sands, Singapore`.
+- `q`: required, 1–200 characters (code points, so an emoji counts 1) after trimming, checked by `validateGeocodeQuery` (`Geocode.validator.ts`), e.g. `Marina Bay Sands, Singapore`.
 
 ##### Response: `NominatimPlaceDto[]` (`Geocode.types.ts`)
 Up to 10 Nominatim results, passed through unchanged. Fields fndom reads:

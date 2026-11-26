@@ -62,12 +62,12 @@ export interface ItineraryAgendaItemDto {
   /** "HH:MM"; omitted when unset. */
   start_time?: string;
   end_time?: string;
-  /** DECIMAL(6,2): mysql2 returns it as a string. */
-  duration_in_hours: string | number | null;
+  /** DECIMAL(6,2) as a number (null when unset). */
+  duration_in_hours: number | null;
   /** TINYINT 0/1. */
   unknown_time: number | null;
-  /** DECIMAL(12,2): mysql2 returns it as a string. */
-  budget: string | number | null;
+  /** DECIMAL(12,2) as a number (null when unset). */
+  budget: number | null;
   day: number | null;
   date: string | null;
   /** Omitted when the item has no coordinates. */

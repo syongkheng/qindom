@@ -1,5 +1,5 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
+import { StructuralValidationUtilities as V, charLength } from "../utils/StructuralValidationUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { TodoCreateBody, TodoReorderBody, TodoUpdateBody } from "./Todo.types.js";
@@ -9,12 +9,8 @@ const TITLE_MAX_LENGTH = 500;
 const MAX_REORDER_IDS = 1000;
 const UUID_MAX_LENGTH = 36;
 
-function cleanTitle(title: unknown, event?: IRequestLogEvent): string {
-  V.requiredString(title, "title", event);
-  const trimmed = (title as string).trim();
-  if (!trimmed || trimmed.length > TITLE_MAX_LENGTH) throw new Exceptions.InvalidRequest("title", "format");
-  return trimmed;
-}
+const cleanTitle = (title: unknown, event?: IRequestLogEvent): string =>
+  V.requiredText(title, "title", TITLE_MAX_LENGTH, event);
 
 export function validateCreateBody(body: Record<string, unknown>, event?: IRequestLogEvent): TodoCreateBody {
   return { title: cleanTitle(body.title, event) };
@@ -40,7 +36,7 @@ export function validateReorderBody(body: Record<string, unknown>, event?: IRequ
   const isValid =
     Array.isArray(ids) &&
     ids.length <= MAX_REORDER_IDS &&
-    ids.every((id) => typeof id === "string" && id.length <= UUID_MAX_LENGTH);
+    ids.every((id) => typeof id === "string" && charLength(id) <= UUID_MAX_LENGTH);
   event?.children?.push(`'ids' ≤${MAX_REORDER_IDS} uuids ${isValid ? LogEmoji.success : LogEmoji.error} `);
   if (!isValid) throw new Exceptions.InvalidRequest("ids", "format");
   return { ids: ids as string[] };

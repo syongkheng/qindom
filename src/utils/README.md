@@ -13,20 +13,23 @@ values from the env file are read lazily inside functions (see `src/config/READM
 | `MailerUtilities.ts`               | `MailerUtilities.sendMail`, `.escapeHtml`, `MailOptions`, `formatFromHeader`                                                                 | Gmail SMTP (`SMTP_USER`, `SMTP_PASS`); the transporter is built on the first send. Static class so tests can replace `sendMail`.                                                                                                                       |
 | `AuthCookieUtilities.ts`           | `setAuthCookies`, `clearAuthCookies`, `JWT_COOKIE`, `CSRF_COOKIE`                                                                            | httpOnly `jwt_token` + readable `csrf_token` (double-submit), lax, JWT lifetime; in prd `secure` and `Domain=.awense.com` (and the old host-only pair is also cleared on logout).                                                                      |
 | `HashUtilities.ts`                 | `sha256Hex`                                                                                                                                  | Hash for API keys, OTPs, device tokens, report keys.                                                                                                                                                                                                   |
+| `NumberUtilities.ts`               | `toDecimalNumber`                                                                                                                            | DECIMAL column value (a string from mysql2) → number for DTOs. NULL/undefined → `null` (never 0); unreadable (`""`, `"abc"`, `"1e3"`, NaN) → `null` + a PM2 warning, so one bad row never fails a list.                                                |
 | `MaskingUtilities.ts`              | `maskName`                                                                                                                                   | Masks the last 1–3 characters for public responses (wedding status lookup).                                                                                                                                                                            |
 
 ### Transactions
 
 ```ts
-await this.db.transaction(async (trx, tx) => {
-  await tx.updateCount(TABLE, { id, owner_id: userId }, { sort_order: 1 }, event); // timed in the request tree
-  await trx(OTHER_TABLE).whereIn("id", ids).update({ … }); // raw knex still available (not timed)
+await this.db.transaction(async (_trx, tx) => {
+  const id = await tx.insertId(TABLE, { name }, event); // INSERT, returns the new id (no re-read)
+  await tx.updateCount(TABLE, { id, owner_id: userId }, { sort_order: 1 }, event);
+  await tx.updateCountIn(CHILD_TABLE, { parent_id: id }, "id", ids, { record_status: RecordStatus.DELETED }, event);
+  await tx.insertMany(CHILD_TABLE, rows, event); // one multi-row INSERT; [] sends nothing
 }, event); // adds "transaction() committed - Nms" / "rolled back"
 ```
 
-- `tx` is a `KnexSqlUtilities` bound to the transaction; prefer it so each statement is logged.
+- `tx` is a `KnexSqlUtilities` bound to the transaction; use it so each statement is logged. The raw knex `trx` is still the first argument, but no call site uses it any more (itinerary save moved to `tx` in Nov 2026).
 - A `BaseException` thrown inside rolls back and reaches the client unchanged (e.g. 403). Other errors roll back and become a 500. Still check ownership before opening the transaction when you can, so nothing is written.
-- `updateCount` updates without re-reading the rows (returns the affected count); `update` re-reads and returns the rows.
+- `updateCount` updates without re-reading the rows (returns the affected count); `update` re-reads and returns the rows. `updateCountIn` adds `AND column IN (values)` (an empty list sends nothing and returns 0). `insert` re-reads the new row; `insertId` doesn't. `IN (...)` lookups use `find(table, where, { columns, extraWhere: (qb) => qb.whereIn(...) })`.
 
 ## `utils/logging`
 

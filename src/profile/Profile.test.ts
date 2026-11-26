@@ -77,3 +77,36 @@ test("validators: country (empty → null), photo data URL, username length", ()
   assert.throws(() => validateUsernameBody({ newUsername: "ab" }), Exceptions.InvalidRequest);
   assert.throws(() => validateUsernameBody({ newUsername: "x".repeat(65) }), Exceptions.InvalidRequest);
 });
+const errorOf = (fn: () => unknown) => {
+  try {
+    fn();
+  } catch (err) {
+    const e = err as { code: string; typeOfError?: string };
+    return { code: e.code, typeOfError: e.typeOfError };
+  }
+  return null;
+};
+
+test("U2: country counts code points (256 emoji = the VARCHAR(256) limit); absent is still a 400", () => {
+  const emoji = "😀";
+  assert.deepEqual(validateCountryBody({ country: emoji.repeat(256) }), { country: emoji.repeat(256) });
+  assert.deepEqual(validateCountryBody({ country: "   " }), { country: null });
+  assert.deepEqual(
+    errorOf(() => validateCountryBody({ country: emoji.repeat(257) })),
+    {
+      code: "invalid_request_country",
+      typeOfError: "format",
+    },
+  );
+  assert.deepEqual(
+    errorOf(() => validateCountryBody({})),
+    { code: "invalid_request_country", typeOfError: "format" },
+  );
+  assert.deepEqual(
+    errorOf(() => validateCountryBody({ country: null })),
+    {
+      code: "invalid_request_country",
+      typeOfError: "format",
+    },
+  );
+});

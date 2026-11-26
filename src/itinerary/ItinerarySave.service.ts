@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { Knex } from "knex";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { ITB_TRAVEL_ITINERARY } from "../models/databases/tb_travel_itinerary.js";
 import { ITB_TRAVEL_AGENDA_ITEM } from "../models/databases/tb_travel_agenda_item.js";
@@ -61,6 +60,8 @@ const randomIds: ItineraryIdGenerator = {
 // NOT NULL / defaulted columns (`withInsertDefaults`).
 
 type Columns<T> = { [K in keyof T]?: T[K] | null };
+/** The columns a child soft-delete filters on and writes. */
+type ChildRowScope = { itinerary_id: number; record_status: RecordStatus };
 
 /** Absent → undefined; an empty list → NULL; otherwise the JSON. */
 const jsonList = (values: string[] | null | undefined) =>
@@ -193,8 +194,8 @@ export function noteColumns(n: NoteItemBody, sortOrder: number): Columns<ITB_TRA
  * packing, note; updated or listed for deletion) that isn't this trip's is a 403 before anything
  * is written, and every child update/delete is still scoped by `itinerary_id` inside the trx.
  *
- * Writes run in one transaction on the raw knex trx (batch inserts, `whereIn`, `pluck`), so the
- * individual statements are not timed; the transaction as a whole is (`db.transaction(cb, event)`).
+ * Writes run in one transaction through `tx` (the `KnexSqlUtilities` bound to it), so every statement
+ * is timed in the request tree under this method's event, plus the commit/rollback line.
  */
 export class ItinerarySaveService {
   constructor(
@@ -218,23 +219,27 @@ export class ItinerarySaveService {
     const shortCode = this.ids.shortCode();
     const now = Date.now();
 
-    const agendaToFileMap = await this.db.transaction(async (trx) => {
-      const [itineraryId] = await trx(ITINERARY_TABLE).insert({
-        ...withInsertDefaults(itineraryColumns(body), ITINERARY_INSERT_DEFAULTS),
-        session_id: sessionId,
-        short_code: shortCode,
-        idempotency_key: body.idempotencyKey ?? undefined,
-        session_title: body.sessionTitle,
-        challenge: body.challenge ?? undefined,
-        pax_names: jsonList(body.paxNames) ?? undefined,
-        created_dt: now,
-        created_by_id: userId,
-        record_status: RecordStatus.ACTIVE,
-      });
-      const map = await this.saveAgenda(trx, itineraryId, body.agendaItems, now);
-      await this.saveBookings(trx, itineraryId, body.bookings, now);
-      await this.savePacking(trx, itineraryId, body.packingItems, now);
-      await this.saveNotes(trx, itineraryId, body.noteItems, now);
+    const agendaToFileMap = await this.db.transaction(async (_trx, tx) => {
+      const itineraryId = await tx.insertId<Columns<ITB_TRAVEL_ITINERARY>>(
+        ITINERARY_TABLE,
+        {
+          ...withInsertDefaults(itineraryColumns(body), ITINERARY_INSERT_DEFAULTS),
+          session_id: sessionId,
+          short_code: shortCode,
+          idempotency_key: body.idempotencyKey ?? undefined,
+          session_title: body.sessionTitle,
+          challenge: body.challenge ?? undefined,
+          pax_names: jsonList(body.paxNames) ?? undefined,
+          created_dt: now,
+          created_by_id: userId,
+          record_status: RecordStatus.ACTIVE,
+        },
+        event,
+      );
+      const map = await this.saveAgenda(tx, itineraryId, body.agendaItems, now, event);
+      await this.saveBookings(tx, itineraryId, body.bookings, now, event);
+      await this.savePacking(tx, itineraryId, body.packingItems, now, event);
+      await this.saveNotes(tx, itineraryId, body.noteItems, now, event);
       return map;
     }, event);
 
@@ -257,24 +262,27 @@ export class ItinerarySaveService {
     await this.images.assertAttachableBy(userId, shortCodesOf(body.agendaItems), logContext);
 
     const now = Date.now();
-    const agendaToFileMap = await this.db.transaction(async (trx) => {
-      await trx(ITINERARY_TABLE)
-        .where({ id: itineraryId })
-        .update({
+    const agendaToFileMap = await this.db.transaction(async (_trx, tx) => {
+      await tx.updateCount<Columns<ITB_TRAVEL_ITINERARY>>(
+        ITINERARY_TABLE,
+        { id: itineraryId },
+        {
           ...itineraryColumns(body),
           session_title: body.sessionTitle || itinerary.session_title,
           challenge: body.challenge === undefined ? itinerary.challenge : body.challenge || null,
           pax_names: jsonList(body.paxNames),
-        });
+        },
+        event,
+      );
 
-      await this.softDelete(trx, AGENDA_ITEM_TABLE, itineraryId, body.agendaIdsToDelete);
-      const map = await this.saveAgenda(trx, itineraryId, body.agendaItems, now);
-      await this.softDelete(trx, BOOKING_TABLE, itineraryId, body.bookingIdsToDelete);
-      await this.saveBookings(trx, itineraryId, body.bookings, now);
-      await this.softDelete(trx, PACKING_ITEM_TABLE, itineraryId, body.packingIdsToDelete);
-      await this.savePacking(trx, itineraryId, body.packingItems, now);
-      await this.softDelete(trx, NOTE_ITEM_TABLE, itineraryId, body.noteIdsToDelete);
-      await this.saveNotes(trx, itineraryId, body.noteItems, now);
+      await this.softDelete(tx, AGENDA_ITEM_TABLE, itineraryId, body.agendaIdsToDelete, event);
+      const map = await this.saveAgenda(tx, itineraryId, body.agendaItems, now, event);
+      await this.softDelete(tx, BOOKING_TABLE, itineraryId, body.bookingIdsToDelete, event);
+      await this.saveBookings(tx, itineraryId, body.bookings, now, event);
+      await this.softDelete(tx, PACKING_ITEM_TABLE, itineraryId, body.packingIdsToDelete, event);
+      await this.savePacking(tx, itineraryId, body.packingItems, now, event);
+      await this.softDelete(tx, NOTE_ITEM_TABLE, itineraryId, body.noteIdsToDelete, event);
+      await this.saveNotes(tx, itineraryId, body.noteItems, now, event);
       return map;
     }, event);
 
@@ -345,32 +353,44 @@ export class ItinerarySaveService {
     if (ids.some((id) => !ownedIds.has(id))) throw new Exceptions.ForbiddenAccess("Item not in this itinerary");
   }
 
-  private async softDelete(trx: Knex.Transaction, table: string, itineraryId: number, ids: number[]): Promise<void> {
-    if (!ids.length) return;
-    await trx(table)
-      .where({ itinerary_id: itineraryId })
-      .whereIn("id", ids)
-      .update({ record_status: RecordStatus.DELETED });
+  /** Soft-deletes `ids` among this trip's rows (no statement for an empty list). */
+  private async softDelete(
+    tx: KnexSqlUtilities,
+    table: string,
+    itineraryId: number,
+    ids: number[],
+    event?: IRequestLogEvent,
+  ): Promise<void> {
+    await tx.updateCountIn<ChildRowScope>(
+      table,
+      { itinerary_id: itineraryId },
+      "id",
+      ids,
+      { record_status: RecordStatus.DELETED },
+      event,
+    );
   }
 
   /** Updates (scoped by `itinerary_id`) or inserts each item, then attaches its new files. */
   private async saveAgenda(
-    trx: Knex.Transaction,
+    tx: KnexSqlUtilities,
     itineraryId: number,
     items: AgendaItemBody[],
     now: number,
+    event?: IRequestLogEvent,
   ): Promise<AgendaFileMapEntryDto[]> {
     const map: AgendaFileMapEntryDto[] = [];
     const fileRows: Partial<ITB_TRAVEL_AGENDA_FILE>[] = [];
     const fileUuids = items.flatMap((i) => i.filesToInsert.map((f) => f.uuid));
-    const attached = new Set<string>(
-      fileUuids.length
-        ? await trx(AGENDA_FILE_TABLE)
-            .where({ record_status: RecordStatus.ACTIVE })
-            .whereIn("uuid", fileUuids)
-            .pluck("uuid")
-        : [],
-    );
+    const attachedRows = fileUuids.length
+      ? await tx.find<ITB_TRAVEL_AGENDA_FILE>(
+          AGENDA_FILE_TABLE,
+          { record_status: RecordStatus.ACTIVE },
+          { columns: ["uuid"], extraWhere: (qb) => qb.whereIn("uuid", fileUuids) },
+          event,
+        )
+      : [];
+    const attached = new Set<string>(attachedRows.map((r) => r.uuid));
 
     for (const item of items) {
       let agendaId: number;
@@ -378,15 +398,24 @@ export class ItinerarySaveService {
         agendaId = item.id;
         const columns = agendaColumns(item);
         if (hasColumns(columns)) {
-          await trx(AGENDA_ITEM_TABLE).where({ id: agendaId, itinerary_id: itineraryId }).update(columns);
+          await tx.updateCount<Columns<ITB_TRAVEL_AGENDA_ITEM>>(
+            AGENDA_ITEM_TABLE,
+            { id: agendaId, itinerary_id: itineraryId },
+            columns,
+            event,
+          );
         }
       } else {
-        [agendaId] = await trx(AGENDA_ITEM_TABLE).insert({
-          ...withInsertDefaults(agendaColumns(item), AGENDA_INSERT_DEFAULTS),
-          itinerary_id: itineraryId,
-          created_dt: now,
-          record_status: RecordStatus.ACTIVE,
-        });
+        agendaId = await tx.insertId<Columns<ITB_TRAVEL_AGENDA_ITEM>>(
+          AGENDA_ITEM_TABLE,
+          {
+            ...withInsertDefaults(agendaColumns(item), AGENDA_INSERT_DEFAULTS),
+            itinerary_id: itineraryId,
+            created_dt: now,
+            record_status: RecordStatus.ACTIVE,
+          },
+          event,
+        );
       }
 
       // A uuid that is already attached (re-sent, or listed twice) is skipped, as before.
@@ -407,17 +436,28 @@ export class ItinerarySaveService {
       map.push({ agendaId, fileUuids: item.filesToInsert.map((f) => f.uuid) });
     }
 
-    if (fileRows.length) await trx(AGENDA_FILE_TABLE).insert(fileRows);
+    await tx.insertMany(AGENDA_FILE_TABLE, fileRows, event);
     return map;
   }
 
-  private async saveBookings(trx: Knex.Transaction, itineraryId: number, bookings: BookingBody[], now: number) {
+  private async saveBookings(
+    tx: KnexSqlUtilities,
+    itineraryId: number,
+    bookings: BookingBody[],
+    now: number,
+    event?: IRequestLogEvent,
+  ) {
     const inserts: Columns<ITB_TRAVEL_ITINERARY_BOOKING>[] = [];
     for (const b of bookings) {
       if (b.id !== null) {
         const columns = bookingColumns(b);
         if (hasColumns(columns)) {
-          await trx(BOOKING_TABLE).where({ id: b.id, itinerary_id: itineraryId }).update(columns);
+          await tx.updateCount<Columns<ITB_TRAVEL_ITINERARY_BOOKING>>(
+            BOOKING_TABLE,
+            { id: b.id, itinerary_id: itineraryId },
+            columns,
+            event,
+          );
         }
       } else {
         inserts.push({
@@ -428,14 +468,25 @@ export class ItinerarySaveService {
         });
       }
     }
-    if (inserts.length) await trx(BOOKING_TABLE).insert(inserts);
+    await tx.insertMany(BOOKING_TABLE, inserts, event);
   }
 
-  private async savePacking(trx: Knex.Transaction, itineraryId: number, items: PackingItemBody[], now: number) {
+  private async savePacking(
+    tx: KnexSqlUtilities,
+    itineraryId: number,
+    items: PackingItemBody[],
+    now: number,
+    event?: IRequestLogEvent,
+  ) {
     const inserts: Columns<ITB_TRAVEL_PACKING_ITEM>[] = [];
     for (const [index, p] of items.entries()) {
       if (p.id !== null) {
-        await trx(PACKING_ITEM_TABLE).where({ id: p.id, itinerary_id: itineraryId }).update(packingColumns(p, index));
+        await tx.updateCount<Columns<ITB_TRAVEL_PACKING_ITEM>>(
+          PACKING_ITEM_TABLE,
+          { id: p.id, itinerary_id: itineraryId },
+          packingColumns(p, index),
+          event,
+        );
       } else {
         inserts.push({
           ...withInsertDefaults(packingColumns(p, index), PACKING_INSERT_DEFAULTS),
@@ -445,14 +496,25 @@ export class ItinerarySaveService {
         });
       }
     }
-    if (inserts.length) await trx(PACKING_ITEM_TABLE).insert(inserts);
+    await tx.insertMany(PACKING_ITEM_TABLE, inserts, event);
   }
 
-  private async saveNotes(trx: Knex.Transaction, itineraryId: number, items: NoteItemBody[], now: number) {
+  private async saveNotes(
+    tx: KnexSqlUtilities,
+    itineraryId: number,
+    items: NoteItemBody[],
+    now: number,
+    event?: IRequestLogEvent,
+  ) {
     const inserts: Columns<ITB_TRAVEL_NOTE_ITEM>[] = [];
     for (const [index, n] of items.entries()) {
       if (n.id !== null) {
-        await trx(NOTE_ITEM_TABLE).where({ id: n.id, itinerary_id: itineraryId }).update(noteColumns(n, index));
+        await tx.updateCount<Columns<ITB_TRAVEL_NOTE_ITEM>>(
+          NOTE_ITEM_TABLE,
+          { id: n.id, itinerary_id: itineraryId },
+          noteColumns(n, index),
+          event,
+        );
       } else {
         inserts.push({
           ...withInsertDefaults(noteColumns(n, index), NOTE_INSERT_DEFAULTS),
@@ -462,6 +524,6 @@ export class ItinerarySaveService {
         });
       }
     }
-    if (inserts.length) await trx(NOTE_ITEM_TABLE).insert(inserts);
+    await tx.insertMany(NOTE_ITEM_TABLE, inserts, event);
   }
 }

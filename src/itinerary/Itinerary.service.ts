@@ -11,6 +11,7 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { toMessage } from "../utils/ErrorUtilities.js";
+import { toDecimalNumber } from "../utils/NumberUtilities.js";
 import {
   ItineraryAgendaFileDto,
   ItineraryAgendaItemDto,
@@ -54,16 +55,6 @@ const VIEW_USER_AGENT_MAX_LENGTH = 512;
 
 type SummaryRow = Pick<ITB_TRAVEL_ITINERARY, (typeof SUMMARY_COLUMNS)[number]>;
 type FileRow = Pick<ITB_TRAVEL_AGENDA_FILE, (typeof FILE_COLUMNS)[number]>;
-/** Agenda columns as mysql2 returns them (DECIMAL → string). */
-type AgendaRow = Omit<
-  ITB_TRAVEL_AGENDA_ITEM,
-  "budget" | "duration_in_hours" | "coordinates_lat" | "coordinates_lng"
-> & {
-  budget?: string | number | null;
-  duration_in_hours?: string | number | null;
-  coordinates_lat?: string | number | null;
-  coordinates_lng?: string | number | null;
-};
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -120,8 +111,9 @@ export function toAgendaFileDto(row: FileRow): ItineraryAgendaFileDto {
   };
 }
 
-export function toAgendaItemDto(row: AgendaRow, files: ItineraryAgendaFileDto[]): ItineraryAgendaItemDto {
-  const hasCoordinates = row.coordinates_lat != null && row.coordinates_lng != null;
+export function toAgendaItemDto(row: ITB_TRAVEL_AGENDA_ITEM, files: ItineraryAgendaFileDto[]): ItineraryAgendaItemDto {
+  const lat = toDecimalNumber(row.coordinates_lat, "coordinates_lat");
+  const lng = toDecimalNumber(row.coordinates_lng, "coordinates_lng");
   return {
     id: Number(row.id),
     itinerary_id: Number(row.itinerary_id),
@@ -133,12 +125,12 @@ export function toAgendaItemDto(row: AgendaRow, files: ItineraryAgendaFileDto[])
     city_raw: row.city_raw ?? null,
     start_time: minutesToTime(row.start_time),
     end_time: minutesToTime(row.end_time),
-    duration_in_hours: row.duration_in_hours ?? null,
+    duration_in_hours: toDecimalNumber(row.duration_in_hours, "duration_in_hours"),
     unknown_time: row.unknown_time ?? null,
-    budget: row.budget ?? null,
+    budget: toDecimalNumber(row.budget, "budget"),
     day: row.day ?? null,
     date: row.date ?? null,
-    coordinates: hasCoordinates ? { lat: Number(row.coordinates_lat), lng: Number(row.coordinates_lng) } : undefined,
+    coordinates: lat !== null && lng !== null ? { lat, lng } : undefined,
     files,
   };
 }
@@ -155,7 +147,7 @@ export function toBookingDto(row: ITB_TRAVEL_ITINERARY_BOOKING): ItineraryBookin
     startDate: row.start_date ?? null,
     endDate: row.end_date ?? null,
     nights: row.nights ?? null,
-    price: row.price != null ? Number(row.price) : undefined,
+    price: toDecimalNumber(row.price, "price") ?? undefined,
     booked: !!row.booked,
     freeCancellation: row.free_cancellation ?? null,
     breakfast: !!row.breakfast,
@@ -353,7 +345,7 @@ export class ItineraryService {
   ): Promise<Pick<ItineraryDto, "agendaItems" | "bookings" | "packingItems" | "noteItems">> {
     const byItinerary = { itinerary_id: itinerary.id, record_status: RecordStatus.ACTIVE };
     const bySortOrder = { orderBy: "sort_order", orderDirection: "asc" } as const;
-    const agendaRows = await this.db.find<AgendaRow>(
+    const agendaRows = await this.db.find<ITB_TRAVEL_AGENDA_ITEM>(
       AGENDA_ITEM_TABLE,
       byItinerary,
       { orderBy: "id", orderDirection: "asc" },

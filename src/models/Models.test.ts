@@ -10,6 +10,7 @@ import { ControllerResponse, ResponseStatus } from "./responses/ControllerRespon
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { getUser, requireRole, route } from "../utils/RequestUtilities.js";
 import type { IRequestLogContext } from "./IRequestLogContext.js";
+import * as publicUuidMigration from "../migrations/20261126000400_make_public_uuids_not_null.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATABASES_DIR = join(HERE, "databases");
@@ -67,6 +68,44 @@ describe("models/databases row types", () => {
       assert.doesNotMatch(source, /:\s*any\b/, file);
       const status = source.match(/record_status\??:\s*([^;]+);/);
       if (status) assert.match(status[1], /^RecordStatus\b/, file);
+    }
+  });
+});
+
+// ── D1 migration: public uuids NOT NULL ──────────────────────────────────────
+
+describe("migration 20261126000400_make_public_uuids_not_null", () => {
+  /** Records the SQL a migration step sends, without a database. */
+  async function sqlOf(step: (knex: never) => Promise<void>): Promise<string[]> {
+    const sent: string[] = [];
+    await step({ raw: async (sql: string) => void sent.push(sql) } as never);
+    return sent;
+  }
+
+  test("up: per table, backfill NULL uuids with UUID() first, then MODIFY to NOT NULL (same VARCHAR(36))", async () => {
+    assert.deepEqual(await sqlOf(publicUuidMigration.up), [
+      "UPDATE tb_budget_item SET uuid = UUID() WHERE uuid IS NULL",
+      "ALTER TABLE tb_budget_item MODIFY COLUMN uuid VARCHAR(36) NOT NULL",
+      "UPDATE tb_applepay_transaction SET uuid = UUID() WHERE uuid IS NULL",
+      "ALTER TABLE tb_applepay_transaction MODIFY COLUMN uuid VARCHAR(36) NOT NULL",
+    ]);
+  });
+
+  test("down: relaxes both columns back to NULL and leaves the data alone", async () => {
+    assert.deepEqual(await sqlOf(publicUuidMigration.down), [
+      "ALTER TABLE tb_budget_item MODIFY COLUMN uuid VARCHAR(36) NULL",
+      "ALTER TABLE tb_applepay_transaction MODIFY COLUMN uuid VARCHAR(36) NULL",
+    ]);
+  });
+
+  test("the type matches the columns' original definition (VARCHAR(36), added NULL with a unique key)", () => {
+    for (const [file, key] of [
+      ["20260919000000_add_uuid_to_budget_item.ts", "uq_budget_item_uuid"],
+      ["20260919000100_add_uuid_category_to_applepay_transaction.ts", "uq_applepay_transaction_uuid"],
+    ]) {
+      const source = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+      assert.match(source, /ADD COLUMN uuid VARCHAR\(36\) NULL AFTER id/, file);
+      assert.match(source, new RegExp(`ADD UNIQUE KEY ${key} \\(uuid\\)`), file);
     }
   });
 });

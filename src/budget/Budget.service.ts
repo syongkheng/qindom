@@ -8,6 +8,7 @@ import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogConte
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { toDecimalNumber } from "../utils/NumberUtilities.js";
 import {
   BudgetCollaboratorDto,
   BudgetCollaboratorRemovedDto,
@@ -51,9 +52,9 @@ type CollaboratorRow = Pick<ITB_BUDGET_COLLABORATOR, "id" | "table_id" | "user_i
   Pick<ITB_AA_USER, "username" | "email">;
 type SummaryItemRow = Pick<ITB_BUDGET_ITEM, "table_id" | "budget_amount" | "actual_amount">;
 
-/** DECIMAL columns come back from mysql2 as strings. */
+/** DECIMAL(12,2) (a string from mysql2) → number; NULL → undefined (the field is omitted, never 0). */
 const toAmount = (value: number | string | null | undefined): number | undefined =>
-  value != null ? Number(value) : undefined;
+  toDecimalNumber(value, "budget item amount") ?? undefined;
 
 export function toBudgetItemDto(item: ITB_BUDGET_ITEM): BudgetItemDto {
   return {

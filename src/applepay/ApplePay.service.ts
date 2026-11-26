@@ -7,6 +7,7 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { DEFAULT_CURRENCY } from "../constants/Locale.js";
+import { toDecimalNumber } from "../utils/NumberUtilities.js";
 import {
   ApplePayCardLabelDto,
   ApplePayDeletedDto,
@@ -30,7 +31,8 @@ type CardLabels = Record<string, string>;
 function toTransactionDto(row: ITB_APPLEPAY_TRANSACTION, cardLabels: CardLabels = {}): ApplePayTransactionDto {
   return {
     id: row.uuid,
-    amount: Number(row.amount),
+    // NOT NULL column, so null only means an unreadable value (warned by toDecimalNumber); shown as 0.
+    amount: toDecimalNumber(row.amount, "amount") ?? 0,
     currency: row.currency ?? DEFAULT_CURRENCY,
     merchant: row.merchant,
     name: row.name ?? null,

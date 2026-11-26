@@ -1,6 +1,7 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { GeocodeService } from "./Geocode.service.js";
+import { validateGeocodeQuery } from "./Geocode.validator.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 const PLACE = { place_id: 1, lat: "1.36", lon: "103.99", display_name: "Changi Airport, Singapore" };
@@ -56,4 +57,17 @@ test("failed Nominatim fetch throws ExternalRequest and is not cached", async ()
   stubFetch({ ok: false, status: 503 });
   await assert.rejects(new GeocodeService(db).search("nowhere"), Exceptions.ExternalRequest);
   assert.equal(inserts.length, 0);
+});
+
+test("validateGeocodeQuery: trims; 200 emoji is the limit; missing / blank / 201 → invalid_request_q (format)", () => {
+  const emoji = "😀";
+  assert.equal(validateGeocodeQuery("  Changi  "), "Changi");
+  assert.equal(validateGeocodeQuery(emoji.repeat(200)), emoji.repeat(200));
+  for (const bad of [undefined, "", "   ", emoji.repeat(201), "x".repeat(201)]) {
+    assert.throws(
+      () => validateGeocodeQuery(bad),
+      (e: { code: string; typeOfError: string }) => e.code === "invalid_request_q" && e.typeOfError === "format",
+      String(bad),
+    );
+  }
 });

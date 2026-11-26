@@ -38,12 +38,15 @@ const matches = (row: Row, where: Row) => Object.entries(where).every(([k, v]) =
 const defined = (data: Row) => Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
 
 /**
- * In-memory stand-in for KnexSqlUtilities plus the raw knex trx the save service uses.
- * `transaction` restores a snapshot on error and rethrows a plain Error, like the real one.
+ * In-memory stand-in for KnexSqlUtilities. `transaction` hands the callback a raw trx that throws if
+ * touched (the save service must use the logged `tx`) and `tx`, which runs on the same tables and
+ * records every statement with the log event it received (`txCalls`). It restores a snapshot on error
+ * and rethrows a plain Error, like the real one.
  */
 function fakeDb(seed: Record<string, Row[]>) {
   let tables: Record<string, Row[]> = structuredClone(seed);
   let nextId = 1000;
+  const txCalls: { op: string; table: string; event: unknown }[] = [];
   const rowsOf = (t: string) => (tables[t] ??= []);
   const insertRows = (t: string, data: Row | Row[]) =>
     (Array.isArray(data) ? data : [data]).map((d) => {
@@ -51,32 +54,14 @@ function fakeDb(seed: Record<string, Row[]>) {
       rowsOf(t).push(row);
       return row.id;
     });
+  const updateRows = (t: string, keep: (r: Row) => boolean, data: Row) => {
+    const hit = rowsOf(t).filter(keep);
+    hit.forEach((r) => Object.assign(r, defined(data)));
+    return hit.length;
+  };
 
-  const trx = (t: string) => {
-    const filters: ((r: Row) => boolean)[] = [];
-    const selected = () => rowsOf(t).filter((r) => filters.every((f) => f(r)));
-    const qb = {
-      where(w: Row) {
-        filters.push((r) => matches(r, w));
-        return qb;
-      },
-      whereIn(col: string, values: unknown[]) {
-        filters.push((r) => values.includes(r[col]));
-        return qb;
-      },
-      async update(data: Row) {
-        const hit = selected();
-        hit.forEach((r) => Object.assign(r, defined(data)));
-        return hit.length;
-      },
-      async insert(data: Row | Row[]) {
-        return insertRows(t, data);
-      },
-      async pluck(col: string) {
-        return selected().map((r) => r[col]);
-      },
-    };
-    return qb;
+  const rawTrx = () => {
+    throw new Error("raw trx used: statements must go through tx so they are logged");
   };
 
   const db = {
@@ -120,17 +105,42 @@ function fakeDb(seed: Record<string, Row[]>) {
       hit.forEach((r) => Object.assign(r, defined(data)));
       return hit;
     },
-    async transaction<T>(cb: (trx: unknown) => Promise<T>): Promise<T> {
+    async transaction<T>(cb: (trx: unknown, tx: unknown) => Promise<T>): Promise<T> {
       const snapshot = structuredClone(tables);
+      const record = (op: string, table: string, event: unknown) => txCalls.push({ op, table, event });
+      const tx = {
+        async find(t: string, where: Row, opts: Parameters<typeof db.find>[2], event?: unknown) {
+          record("find", t, event);
+          return db.find(t, where, opts);
+        },
+        async insertId(t: string, data: Row, event?: unknown) {
+          record("insertId", t, event);
+          return insertRows(t, data)[0];
+        },
+        async insertMany(t: string, rows: Row[], event?: unknown) {
+          if (!rows.length) return 0;
+          record("insertMany", t, event);
+          return insertRows(t, rows).length;
+        },
+        async updateCount(t: string, where: Row, data: Row, event?: unknown) {
+          record("updateCount", t, event);
+          return updateRows(t, (r) => matches(r, where), data);
+        },
+        async updateCountIn(t: string, where: Row, col: string, values: unknown[], data: Row, event?: unknown) {
+          if (!values.length) return 0;
+          record("updateCountIn", t, event);
+          return updateRows(t, (r) => matches(r, where) && values.includes(r[col]), data);
+        },
+      };
       try {
-        return await cb(trx);
+        return await cb(rawTrx, tx);
       } catch (err) {
         tables = snapshot;
         throw new Error(`Transaction failed: ${(err as Error).message}`);
       }
     },
   };
-  return { db: db as never, tables: () => tables };
+  return { db: db as never, tables: () => tables, txCalls };
 }
 
 const itinerary = (id: number, owner: number, extra: Row = {}): Row => ({
@@ -338,10 +348,37 @@ describe("mappers", () => {
     assert.equal("end_time" in dto && dto.end_time !== undefined, false);
     assert.deepEqual(dto.coordinates, { lat: 35.6895, lng: 139.6917 });
     assert.equal(dto.list_type, "place");
-    assert.equal(dto.budget, "20.00");
+    assert.equal(dto.budget, 20);
     assert.equal("record_status" in dto, false);
     assert.equal("created_dt" in dto, false);
     assert.equal(toAgendaItemDto(agenda(2, 10, { coordinates_lat: null }) as never, []).coordinates, undefined);
+  });
+
+  test("D3: every DECIMAL field leaves as a number (mysql2 strings or numbers in), NULL stays null", () => {
+    const fromStrings = toAgendaItemDto(agenda(1, 10) as never, []);
+    assert.strictEqual(fromStrings.duration_in_hours, 1.5);
+    assert.strictEqual(fromStrings.budget, 20);
+    assert.strictEqual(typeof fromStrings.coordinates?.lat, "number");
+    assert.strictEqual(typeof fromStrings.coordinates?.lng, "number");
+    const fromNumbers = toAgendaItemDto(agenda(2, 10, { duration_in_hours: 2, budget: 0.5 }) as never, []);
+    assert.strictEqual(fromNumbers.duration_in_hours, 2);
+    assert.strictEqual(fromNumbers.budget, 0.5);
+    const unset = toAgendaItemDto(
+      agenda(3, 10, { duration_in_hours: null, budget: null, coordinates_lng: null }) as never,
+      [],
+    );
+    assert.strictEqual(unset.duration_in_hours, null);
+    assert.strictEqual(unset.budget, null);
+    assert.equal(unset.coordinates, undefined);
+    assert.strictEqual(
+      toBookingDto({ id: 1, itinerary_id: 10, item: "x", price: "0.00" as never, created_dt: 1, record_status: "A" })
+        .price,
+      0,
+    );
+    assert.equal(
+      toBookingDto({ id: 1, itinerary_id: 10, item: "x", price: null, created_dt: 1, record_status: "A" }).price,
+      undefined,
+    );
   });
 
   test("booking: remarks from location, price as number, pax breakdown parsed", () => {
@@ -539,6 +576,22 @@ describe("validators", () => {
     assert.equal(
       code(() => validateUpdateBody({ agendaItems: "nope" })),
       "invalid_request_agendaItems",
+    );
+  });
+
+  test("U2: challenge counts code points (6 emoji = VARCHAR(6)), untrimmed; 7 → invalid_request_challenge", () => {
+    const emoji = "😀";
+    assert.equal(validateUpdateBody({ challenge: emoji.repeat(6) }).challenge, emoji.repeat(6));
+    assert.equal(validateCreateBody({ sessionTitle: "t", challenge: emoji.repeat(6) }).challenge, emoji.repeat(6));
+    assert.equal(validateChallengeBody({ shortCode: "abc", challenge: emoji.repeat(6) }).challenge, emoji.repeat(6));
+    assert.equal(validateChallengeBody({ shortCode: "abc", challenge: " 1234 " }).challenge, " 1234 ");
+    assert.equal(
+      code(() => validateUpdateBody({ challenge: emoji.repeat(7) })),
+      "invalid_request_challenge",
+    );
+    assert.equal(
+      code(() => validateChallengeBody({ shortCode: "abc", challenge: emoji.repeat(7) })),
+      "invalid_request_challenge",
     );
   });
 
@@ -1041,6 +1094,76 @@ describe("HTTP /itinerary", () => {
     assert.equal(socks.packed, 1);
     assert.equal(socks.sort_order, 1);
     assert.equal(fake.tables().tb_travel_note_item.find((n) => n.id === 131)?.record_status, "D");
+  });
+
+  test("U1: every save statement runs on the logged tx with the service event, in one transaction", async () => {
+    reset();
+    const created = await call("POST", "/", {
+      user: ALICE,
+      body: {
+        sessionTitle: "Logged",
+        agendaItems: [{ title: "One", _filesToInsert: [imageFile("log-1")] }],
+        bookings: [{ item: "Flight" }],
+        packingItems: [{ label: "Hat" }],
+        noteItems: [{ label: "Note" }],
+      },
+    });
+    assert.equal(created.status, 200, "the raw trx (which throws) was never touched");
+    const createEvent = fake.txCalls[0].event as { message: string; children: string[] };
+    assert.equal(createEvent.message, "Create itinerary");
+    assert.ok(
+      fake.txCalls.every((c) => c.event === createEvent),
+      "every statement got the method's event",
+    );
+    assert.deepEqual(
+      fake.txCalls.map((c) => `${c.op} ${c.table}`),
+      [
+        "insertId tb_travel_itinerary",
+        "find tb_travel_agenda_file",
+        "insertId tb_travel_agenda_item",
+        "insertMany tb_travel_agenda_file",
+        "insertMany tb_travel_itinerary_booking",
+        "insertMany tb_travel_packing_item",
+        "insertMany tb_travel_note_item",
+      ],
+    );
+
+    fake.txCalls.length = 0;
+    const updated = await call("POST", "/s10/update", {
+      user: ALICE,
+      body: {
+        agendaItems: [{ id: 101, title: "Edited" }],
+        bookings: [{ id: 111, item: "Hotel" }],
+        packingItems: [{ id: 121, label: "Socks" }],
+        noteItems: [],
+        _noteIdsToDelete: [131],
+      },
+    });
+    assert.equal(updated.status, 200);
+    const updateEvent = fake.txCalls[0].event as { message: string };
+    assert.equal(updateEvent.message, "Update itinerary");
+    assert.ok(fake.txCalls.every((c) => c.event === updateEvent));
+    assert.deepEqual(
+      fake.txCalls.map((c) => `${c.op} ${c.table}`),
+      [
+        "updateCount tb_travel_itinerary",
+        "updateCount tb_travel_agenda_item",
+        "updateCount tb_travel_itinerary_booking",
+        "updateCount tb_travel_packing_item",
+        "updateCountIn tb_travel_note_item",
+      ],
+    );
+  });
+
+  test("D3: GET returns agenda duration/budget/coordinates and booking price as JSON numbers", async () => {
+    reset();
+    fake.tables().tb_travel_itinerary_booking.find((r) => r.id === 111)!.price = "250.00";
+    const { json } = await call("GET", "/s10", { user: ALICE });
+    const item = json.data.agendaItems[0];
+    assert.strictEqual(item.duration_in_hours, 1.5);
+    assert.strictEqual(item.budget, 20);
+    assert.deepEqual(item.coordinates, { lat: 35.6895, lng: 139.6917 });
+    assert.strictEqual(json.data.bookings[0].price, 250);
   });
 
   test("POST /:sessionId/update: challenge null removes the access code, absent keeps it", async () => {

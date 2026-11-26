@@ -64,3 +64,35 @@ test("validateRenameBody trims, and rejects blank, too long or non-string names"
   assert.throws(() => validateRenameBody({ name: "x".repeat(101) }), Exceptions.InvalidRequest);
   assert.throws(() => validateRenameBody({ name: 42 }), Exceptions.InvalidRequest);
 });
+const errorOf = (fn: () => unknown) => {
+  try {
+    fn();
+  } catch (err) {
+    const e = err as { code: string; typeOfError?: string };
+    return { code: e.code, typeOfError: e.typeOfError };
+  }
+  return null;
+};
+
+test("U2: name counts code points (100 emoji = the VARCHAR(100) limit); error codes unchanged", () => {
+  const emoji = "😀";
+  assert.deepEqual(validateRenameBody({ name: emoji.repeat(100) }), { name: emoji.repeat(100) });
+  assert.deepEqual(
+    errorOf(() => validateRenameBody({ name: emoji.repeat(101) })),
+    {
+      code: "invalid_request_name",
+      typeOfError: "format",
+    },
+  );
+  assert.deepEqual(
+    errorOf(() => validateRenameBody({ name: "  " })),
+    {
+      code: "invalid_request_name",
+      typeOfError: "mandatory",
+    },
+  );
+  assert.deepEqual(
+    errorOf(() => validateRenameBody({})),
+    { code: "invalid_request_name", typeOfError: "format" },
+  );
+});

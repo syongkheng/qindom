@@ -1,5 +1,5 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
+import { StructuralValidationUtilities as V, charLength } from "../utils/StructuralValidationUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { PdcaEnquiryBody } from "./PdcaEnquiry.types.js";
 
@@ -34,7 +34,7 @@ export function validateEnquiryBody(body: Record<string, unknown>, event?: IRequ
   if (body.website !== undefined && body.website !== null) {
     V.string(body.website, "website", event, "(O)");
     website = body.website as string;
-    if (website.length > HONEYPOT_MAX_LENGTH) throw new Exceptions.InvalidRequest("website", "format");
+    if (charLength(website) > HONEYPOT_MAX_LENGTH) throw new Exceptions.InvalidRequest("website", "format");
   }
 
   return { name, clinic, phone, email, message, consent: true, website };

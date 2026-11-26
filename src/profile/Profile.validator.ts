@@ -11,10 +11,8 @@ const COUNTRY_MAX_LENGTH = 256;
 const IMAGE_DATA_URL_REGEX = /^data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/i;
 
 export function validateCountryBody(body: Record<string, unknown>, event?: IRequestLogEvent): ProfileCountryBody {
-  V.string(body.country, "country", event);
-  const country = (body.country as string).trim();
-  if (country.length > COUNTRY_MAX_LENGTH) throw new Exceptions.InvalidRequest("country", "format");
-  return { country: country || null };
+  V.string(body.country, "country", event); // absent stays a 400 (optionalText alone would read it as a clear)
+  return { country: V.optionalText(body.country, "country", COUNTRY_MAX_LENGTH, event) };
 }
 
 export function validatePhotoBody(body: Record<string, unknown>, event?: IRequestLogEvent): ProfilePhotoBody {

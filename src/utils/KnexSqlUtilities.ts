@@ -53,6 +53,39 @@ class KnexSqlUtilities {
     }
   }
 
+  /** INSERT one row without re-reading it: returns the new auto-increment id. */
+  async insertId<T = any>(table: string, data: Partial<T>, logEvent?: IRequestLogEvent): Promise<number> {
+    try {
+      const t0 = Date.now();
+      const [id] = await this.knex(table).insert(data);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.insertId()`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.insertId`, `Inserted into ${table} id=${id}`);
+      }
+      return Number(id);
+    } catch (error) {
+      throw wrapDbError("insertId", "Insert", error);
+    }
+  }
+
+  /** One multi-row INSERT (no re-read). An empty list sends no statement. Returns the number of rows sent. */
+  async insertMany<T = any>(table: string, rows: Partial<T>[], logEvent?: IRequestLogEvent): Promise<number> {
+    if (!rows.length) return 0;
+    try {
+      const t0 = Date.now();
+      await this.knex(table).insert(rows);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.insertMany(${rows.length})`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.insertMany`, `Inserted ${rows.length} row(s) into ${table}`);
+      }
+      return rows.length;
+    } catch (error) {
+      throw wrapDbError("insertMany", "Insert", error);
+    }
+  }
+
   // READ - Single record
   async findOne<T = any>(
     table: string,
@@ -152,6 +185,33 @@ class KnexSqlUtilities {
     }
   }
 
+  /**
+   * `UPDATE table SET … WHERE whereClause AND column IN (values)` without re-reading; returns the
+   * affected row count. An empty `values` list sends no statement and returns 0.
+   */
+  async updateCountIn<T = any>(
+    table: string,
+    whereClause: Partial<T>,
+    column: string,
+    values: readonly (string | number)[],
+    data: Partial<T>,
+    logEvent?: IRequestLogEvent,
+  ): Promise<number> {
+    if (!values.length) return 0;
+    try {
+      const t0 = Date.now();
+      const affected = await this.knex(table).where(whereClause).whereIn(column, values).update(data);
+      if (logEvent) {
+        this.sqlEvent(logEvent, `${table}.updateCountIn(${column} ×${values.length})`, Date.now() - t0);
+      } else {
+        LoggingUtilities.service.debug(`${LOG_LABEL}.updateCountIn`, `Updated ${affected} row(s) in ${table}`);
+      }
+      return affected;
+    } catch (error) {
+      throw wrapDbError("updateCountIn", "Update", error);
+    }
+  }
+
   // DELETE
   async delete<T = any>(table: string, whereClause: Partial<T>, logEvent?: IRequestLogEvent): Promise<number> {
     try {
@@ -205,9 +265,9 @@ class KnexSqlUtilities {
    * Runs `callback` in one transaction (commit on success, rollback on any throw).
    *
    * The callback gets the raw knex `trx` and `tx`, a `KnexSqlUtilities` bound to the same
-   * transaction: prefer `tx.insert/update/updateCount/find/...(…, event)` so each statement is
-   * timed in the request tree. A typed exception (`BaseException`) thrown inside is rethrown
-   * unchanged (keeps its 4xx); anything else becomes a plain `Error` (500) with the cause kept.
+   * transaction: prefer `tx.insert/insertId/insertMany/update/updateCount/updateCountIn/find/...(…, event)`
+   * so each statement is timed in the request tree. A typed exception (`BaseException`) thrown inside is
+   * rethrown unchanged (keeps its 4xx); anything else becomes a plain `Error` (500) with the cause kept.
    */
   async transaction<T>(
     callback: (trx: Knex.Transaction, tx: KnexSqlUtilities) => Promise<T>,

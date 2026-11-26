@@ -123,3 +123,12 @@ test("log payload holds no personal data", () => {
     website: "[0 chars]",
   });
 });
+
+test("U2: the honeypot cap counts code points (200 emoji passes as spam, 201 → 400 invalid_request_website)", () => {
+  const emoji = "😀";
+  assert.equal(isSpam(validateEnquiryBody({ ...valid, website: emoji.repeat(200) })), true);
+  assert.throws(
+    () => validateEnquiryBody({ ...valid, website: emoji.repeat(201) }),
+    (e: { code: string }) => e.code === "invalid_request_website",
+  );
+});

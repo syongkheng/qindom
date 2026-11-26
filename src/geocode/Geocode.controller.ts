@@ -1,11 +1,9 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
 import { route } from "../utils/RequestUtilities.js";
 import { GeocodeService } from "./Geocode.service.js";
 import { NominatimPlaceDto } from "./Geocode.types.js";
-
-const MAX_QUERY_LENGTH = 200;
+import { validateGeocodeQuery } from "./Geocode.validator.js";
 
 export default function createGeocodeController(db: KnexSqlUtilities): Router {
   const router = Router();
@@ -14,8 +12,7 @@ export default function createGeocodeController(db: KnexSqlUtilities): Router {
   router.get(
     "/",
     route("GeocodeController.GET /", "Failed to geocode", async (req, cr) => {
-      const q = String(req.query.q ?? "").trim();
-      if (!q || q.length > MAX_QUERY_LENGTH) throw new Exceptions.InvalidRequest("q", "format");
+      const q = validateGeocodeQuery(req.query.q);
       return cr.ok<NominatimPlaceDto[]>(await svc.search(q, req.logContext));
     }),
   );
