@@ -103,7 +103,10 @@ Each feature folder `src/<module>/` holds:
 - Shared constants (see `src/constants/README.md`): `RecordStatus` (never a raw `"A"`/`"D"`, in raw SQL pass it as a binding), `Time`, `APP_TIMEZONE`, `DEFAULT_CURRENCY`, `LogEmoji`.
 - Hash secrets with `sha256Hex()` from `src/utils/HashUtilities.ts`; never inline `crypto.createHash("sha256")…`.
 - Never pipe untrusted data through a transform stream without error handling. Prefer buffering (`sharp(buf).toBuffer()`), so a bad input can't crash the process.
-- Callbacks the framework doesn't await (bot `onText`, emitters) must catch and log their promise.
+- Callbacks the framework doesn't await (bot `onText`, emitters, WebSocket `message`/`close`/`error`, timers) must catch and log their promise.
+- WebSocket upgrades: wrap the `upgrade` listener body in try/catch; start async handlers with `.catch(...)`, never `void promise`; the `handleUpgrade` callback closes the socket with 1011 on error instead of writing an HTTP response.
+- `new URL(req.url)` outside Express must be wrapped: it throws on inputs like `//`.
+- Socket size limits are checked on byte length before decoding to a string.
 - User text inserted into HTML (emails, Telegram `parse_mode: "HTML"`) is always escaped. HTML template helpers take plain text and escape it themselves; callers never pass pre-escaped strings (except an explicit `bodyHtml`).
 - Email content comes from pure `xyzMail(...) → MailOptions` builders, so tests can check escaping/recipients without SMTP.
 - Services that use randomness take the source as an injectable constructor argument with the real default. Env-dependent security switches (dev OTP bypass) are injectable options defaulting to `IS_DEV`, tested in both states.
@@ -187,6 +190,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | camera: unauthenticated `GET //` upgrade crashed the process (fixed + test); every WS callback guarded; sha256Hex; protocol/security unchanged. Questions C1–C4. |
 | 2026-11-26 | auth: split into AuthRegistration/AuthSession/AuthAdmin services + AuthAdmin.controller; 31 pinning tests before refactor; no security semantics changed; dev OTP bypass via IS_DEV; fndom profile password-change error now toasts. Questions A1–A11. |
 | 2026-11-26 | itinerary: paths → `/:id/update|delete`, dead `/add-collaborator` removed (fndom); service split (read/share vs save); foreign child ids of every type → 403 before the transaction (fixed a 500); file mimeType image/* + column caps; turning off the access code now persists (fndom); `challenge` redacted from logs. Questions I1–I4. |
 | 2026-11-26 | wedding: house style; escaping centralised in templates; unused OptionalTokenFilter removed from all /wedding routes; jessikheng contract unchanged. Questions W1–W3. |

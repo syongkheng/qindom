@@ -41,8 +41,10 @@ export interface DashboardConnection {
 }
 
 /**
- * In-memory relay between phones and dashboards. Pure logic over `RelaySocket`
- * so it can be unit-tested; Camera.ws.ts wires real sockets into it.
+ * In-memory relay between phones and dashboards (single PM2 process: a second
+ * process would not see the first one's sockets). Pure logic over `RelaySocket`
+ * so it can be unit-tested; Camera.ws.ts wires real sockets into it. Methods never
+ * throw because of a client: bad input is ignored, socket errors are swallowed.
  *
  * Frames: only the latest per device is kept. Per dashboard and device at most
  * one frame is being written and at most one waits behind it (newer replaces
@@ -58,7 +60,7 @@ export class CameraRelay {
 
   addPhone(socket: RelaySocket, device: { deviceId: string; userId: number | null; name: string }): PhoneConnection {
     const previous = this.phones.get(device.deviceId);
-    if (previous) previous.socket.close(CAMERA_CLOSE_REPLACED, "replaced");
+    if (previous) this.close(previous.socket, CAMERA_CLOSE_REPLACED, "replaced");
 
     const conn: PhoneConnection = { socket, ...device, status: null, lastFrame: null };
     this.phones.set(device.deviceId, conn);
@@ -171,7 +173,7 @@ export class CameraRelay {
     const phone = this.phones.get(deviceId);
     if (!phone) return;
     this.phones.delete(deviceId);
-    phone.socket.close(CAMERA_CLOSE_UNAUTHORISED, "device removed");
+    this.close(phone.socket, CAMERA_CLOSE_UNAUTHORISED, "device removed");
   }
 
   isOnline(deviceId: string): boolean {
@@ -209,12 +211,19 @@ export class CameraRelay {
 
     const current = slot;
     current.inFlight = true;
-    dashboard.socket.send(packet, () => {
+    const onSent = () => {
       current.inFlight = false;
       const next = current.pending;
       current.pending = null;
       if (next) this.deliverFrame(dashboard, deviceId, next);
-    });
+    };
+    try {
+      dashboard.socket.send(packet, onSent);
+    } catch {
+      // Socket not writable (closing); its close handler removes the dashboard.
+      current.inFlight = false;
+      current.pending = null;
+    }
   }
 
   private broadcast(userId: number, message: Record<string, unknown>): void {
@@ -228,6 +237,14 @@ export class CameraRelay {
       socket.send(JSON.stringify(message));
     } catch {
       // Socket already closing; its close handler cleans up.
+    }
+  }
+
+  private close(socket: RelaySocket, code: number, reason: string): void {
+    try {
+      socket.close(code, reason);
+    } catch {
+      // Already closed.
     }
   }
 }
