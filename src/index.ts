@@ -19,7 +19,7 @@ import { ErrorHandler } from "./middlewares/ErrorHandler.js";
 
 // Controllers
 import createConnectivityController from "./connectivity/Connectivity.controller.js";
-import createHeartbeatController from "./analytics/Heartbeat.controller.js";
+import createAnalyticsLegacyController from "./analytics/AnalyticsLegacy.controller.js";
 import createAnalyticsController from "./analytics/Analytics.controller.js";
 import createHdbController from "./hdb/Hdb.controller.js";
 import createLtaController from "./lta/Lta.controller.js";
@@ -117,7 +117,7 @@ async function startServer() {
   // Route table — [path, middlewares, router]
   const routes: [string, RequestHandler[], Router][] = [
     ["/connectivity", mw.std, createConnectivityController(db)],
-    ["/analytics", mw.std, createHeartbeatController(db)], // legacy POST / and /heartbeat
+    ["/analytics", mw.std, createAnalyticsLegacyController(db)], // legacy POST / and /heartbeat
     ["/analytics", mw.std, createAnalyticsController(db)], // v1: /collect, /systems, /admin/*
     ["/hdb", mw.std, createHdbController(db)],
     ["/lta", mw.std, createLtaController(db)],

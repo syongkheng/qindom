@@ -4,7 +4,7 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import { route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { pdcaEnquiryLimiter } from "../middlewares/RateLimiter.js";
-import { AnalyticSystemService } from "../analytics/AnalyticSystem.service.js";
+import { AnalyticsSystemService } from "../analytics/AnalyticsSystem.service.js";
 import { isEnquiryOriginAllowed, PDCA_ENQUIRY_SYSTEM, PdcaEnquiryService } from "./PdcaEnquiry.service.js";
 import { validateEnquiryBody } from "./PdcaEnquiry.validator.js";
 import { PdcaEnquiryReceivedDto } from "./PdcaEnquiry.types.js";
@@ -18,7 +18,7 @@ const RECEIVED: PdcaEnquiryReceivedDto = { message: "Received" };
  */
 export default function createPdcaEnquiryController(db: KnexSqlUtilities): Router {
   const router = Router();
-  const systems = new AnalyticSystemService(db);
+  const systems = new AnalyticsSystemService(db);
   const svc = new PdcaEnquiryService();
 
   router.post(

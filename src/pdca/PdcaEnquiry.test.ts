@@ -7,7 +7,7 @@ import {
   notificationMail,
   PdcaEnquiryService,
 } from "./PdcaEnquiry.service.js";
-import type { RegisteredSystem } from "../analytics/AnalyticsContract.js";
+import type { RegisteredSystem } from "../analytics/Analytics.types.js";
 import { validateEnquiryBody } from "./PdcaEnquiry.validator.js";
 import { loggablePayload } from "./PdcaEnquiry.middleware.js";
 import { MailerUtilities, MailOptions } from "../utils/MailerUtilities.js";

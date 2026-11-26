@@ -2,7 +2,8 @@ import { MailerUtilities, MailOptions } from "../utils/MailerUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { APP_TIMEZONE } from "../constants/Locale.js";
-import { isOriginAllowed, RegisteredSystem } from "../analytics/AnalyticsContract.js";
+import { isOriginAllowed } from "../analytics/AnalyticsContract.js";
+import { RegisteredSystem } from "../analytics/Analytics.types.js";
 import { PdcaEnquiryBody } from "./PdcaEnquiry.types.js";
 
 /**

@@ -35,7 +35,7 @@ Each feature folder `src/<module>/` holds:
   ```
 - `label` = `"<Module>Controller.<METHOD> <path>"`. `fallback` = the short client-facing 500 message.
 - Success is always `cr.ok<XyzDto>(data)`: **always pass the type argument** so the route shows what it returns (the compiler checks the value against it). Use `cr.ok<void>` / a small inline DTO such as `{ deleted: true }` → `DeletedDto` for acknowledgements.
-- Errors: throw a typed exception via the registry (`throw new Exceptions.NotFound("...")`) (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exception: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`.)
+- Errors: throw a typed exception via the registry (`throw new Exceptions.NotFound("...")`) (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exceptions: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`, and error bodies fixed by an external contract, like `/analytics/report`'s `{message, problems}`, with a comment.)
 - Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
 - Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
 - Auth goes on the mount in `index.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
@@ -90,7 +90,8 @@ Each feature folder `src/<module>/` holds:
 - Need a new error kind? Add a class + registry entry in `AppExceptions.ts` and a row in `src/exceptions/README.md`.
 
 ## 4a. Validation
-- Request validation uses our own hand-written `<Module>.validator.ts` (no zod or other schema libraries). zod remains only in `analytics` until that folder is done, then it's uninstalled.
+- When replacing a validator or library, first write a characterisation table against the old implementation, keep it as the regression test, and (if cheap) run a differential fuzz.
+- Request validation uses our own hand-written `<Module>.validator.ts` (no zod or other schema libraries). zod was fully removed in Nov 2026.
 - Role suffixes beyond controller/service/validator/types/test are fine when a file has one clear job (e.g. `PdcaEnquiry.middleware.ts`).
 - Validators throw `InvalidRequestException(field, "mandatory" | "format")` and return the typed `XyzBody`.
 
@@ -190,6 +191,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | analytics: zod replaced by hand-written validators (176 characterisation cases + 180k-input differential, 0 diffs) and uninstalled; public contracts frozen; services own the SQL. Questions Y1–Y4. |
 | 2026-11-26 | camera: unauthenticated `GET //` upgrade crashed the process (fixed + test); every WS callback guarded; sha256Hex; protocol/security unchanged. Questions C1–C4. |
 | 2026-11-26 | auth: split into AuthRegistration/AuthSession/AuthAdmin services + AuthAdmin.controller; 31 pinning tests before refactor; no security semantics changed; dev OTP bypass via IS_DEV; fndom profile password-change error now toasts. Questions A1–A11. |
 | 2026-11-26 | itinerary: paths → `/:id/update|delete`, dead `/add-collaborator` removed (fndom); service split (read/share vs save); foreign child ids of every type → 403 before the transaction (fixed a 500); file mimeType image/* + column caps; turning off the access code now persists (fndom); `challenge` redacted from logs. Questions I1–I4. |

@@ -6,17 +6,15 @@ import {
   comparePeriod,
   EventRow,
   periodRangeMs,
-  REPORT_BREAKDOWNS,
-  REPORT_CONTRACT,
-  REPORT_METRICS,
-  ReportRequest,
   reportRequestProblems,
   sgDate,
   visitorOf,
 } from "./AnalyticsReport.js";
-import { hashReadKey, readKeyMatches } from "./AnalyticsReport.service.js";
+import { readKeyMatches } from "./AnalyticsReport.service.js";
+import { AnalyticsReportBody, REPORT_BREAKDOWNS, REPORT_CONTRACT, REPORT_METRICS } from "./Analytics.types.js";
+import { sha256Hex } from "../utils/HashUtilities.js";
 
-const req = (start = "2026-10-01", end = "2026-10-31"): ReportRequest => ({
+const req = (start = "2026-10-01", end = "2026-10-31"): AnalyticsReportBody => ({
   contract: REPORT_CONTRACT,
   site: "pdcadental.com",
   timezone: "Asia/Singapore",
@@ -118,7 +116,7 @@ test("visitor id prefers properties.visitorId", () => {
 });
 
 test("read keys are compared by hash", () => {
-  const h = hashReadKey("rk_secret");
+  const h = sha256Hex("rk_secret");
   assert.equal(h.length, 64);
   assert.equal(readKeyMatches("rk_secret", h), true);
   assert.equal(readKeyMatches("rk_other", h), false);
