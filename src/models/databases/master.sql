@@ -687,8 +687,9 @@ CREATE TABLE IF NOT EXISTS tb_budget_collaborator (
 
 -- ── Apple Pay Transaction Log ────────────────────────────────────────────────
 
--- Ingested from the "When Apple Pay is used" Shortcuts automation
--- (v1/ss/ap/transaction, api-key gated) and browsable/categorisable via the
+-- Ingested from the bank-SMS Shortcuts automation (v2/ss/ap/sms, api-key
+-- gated; the V1 "When Apple Pay is used" route was removed Nov 2026, its rows
+-- remain with source 'v1') and browsable/categorisable via the
 -- authenticated dashboard (/api/applepay). uuid is the public identifier
 -- (same pattern as tb_budget_item) — the auto-increment id is never exposed.
 -- category is free text (user-assigned in the dashboard; NULL until then).

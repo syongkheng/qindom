@@ -9,11 +9,13 @@ export interface ITB_APPLEPAY_TRANSACTION {
   currency?: string;
   merchant: string;
   // Apple Pay device/payment label — only ever populated by the V1 NFC-tap
-  // automation; the V2 SMS-parsing automation has no equivalent field.
+  // automation (ingestion removed Nov 2026; old rows keep it); V2 and manual
+  // entries have no equivalent field.
   name?: string | null;
   category?: string | null;
-  // 'v1' = "When Apple Pay is used" Shortcut (NFC taps only), 'v2' = bank
-  // transaction-alert SMS forwarding (covers online + NFC transactions).
+  // 'v1' = legacy "When Apple Pay is used" Shortcut (NFC taps only, ingestion
+  // removed Nov 2026), 'v2' = bank transaction-alert SMS forwarding (covers
+  // online + NFC transactions), 'manual' = dashboard entry.
   source?: string;
   card_last4?: string | null;
   occurred_dt: number;

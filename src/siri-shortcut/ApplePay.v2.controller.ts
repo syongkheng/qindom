@@ -20,8 +20,8 @@ function toSmsConfirmationDto(transaction: ApplePayTransactionDto): SiriShortcut
 
 /**
  * V2 card-transaction ingestion (`/v2/ss`, `ss_` API key). A Shortcut automation forwards the raw
- * text of any bank transaction-alert SMS, so online purchases are captured too (V1 only sees NFC
- * taps). Parsing lives in `ApplePaySms.parser.ts`. Failures still answer with the standard
+ * text of any bank transaction-alert SMS, so online purchases are captured too (the V1 NFC-tap
+ * route was removed in Nov 2026). Parsing lives in `ApplePaySms.parser.ts`. Failures still answer with the standard
  * envelope, so the Shortcut always has a message to show.
  */
 export default function createSsApplePayControllerV2(db: KnexSqlUtilities): Router {

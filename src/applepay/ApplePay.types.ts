@@ -1,6 +1,9 @@
 /** Where a transaction came from. */
 export const TransactionSource = {
-  /** "When Apple Pay is used" Shortcut (NFC taps only). */
+  /**
+   * Legacy "When Apple Pay is used" Shortcut (NFC taps only). Its ingestion route was removed in
+   * Nov 2026; kept so existing rows stored with source "v1" still display.
+   */
   V1: "v1",
   /** Bank transaction-alert SMS forwarded by a Shortcut (online + NFC). Only source with `cardLast4`. */
   V2: "v2",
@@ -64,15 +67,7 @@ export interface ApplePayCardLabelBody {
   label: string | null;
 }
 
-// ── Service inputs from the Siri Shortcut ingestion routes (siri-shortcut/*) ──
-
-/** V1 NFC-tap automation. */
-export interface ApplePayTapInput {
-  amount: number;
-  merchant: string;
-  /** Apple Pay device/card name the Shortcut reports. */
-  name: string;
-}
+// ── Service input from the Siri Shortcut ingestion route (siri-shortcut/ApplePay.v2.controller.ts) ──
 
 /** V2 bank-SMS automation, already parsed. */
 export interface ApplePaySmsInput {

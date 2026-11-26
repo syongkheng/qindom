@@ -13,7 +13,7 @@ import {
 
 /**
  * Authenticated web dashboard (mounted under `mw.auth`) for the transactions the Siri
- * Shortcut automations log (siri-shortcut/ApplePay.v1|v2.controller.ts, API key) plus manual entries.
+ * Shortcut automations log (siri-shortcut/ApplePay.v2.controller.ts, API key) plus manual entries.
  */
 export default function createApplePayController(db: KnexSqlUtilities): Router {
   const router = Router();

@@ -48,6 +48,7 @@ Each feature folder `src/<module>/` holds:
 - Auth goes on the mount in `app.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
 - Binary/raw responses use `route(label, fallback, async (req, _cr, res) => …)`: finish every lookup and upstream call **before** the first `setHeader` so failures still get the JSON error; send with `res.end(buffer)`.
 - Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
+- When removing an ingestion source, keep its enum value and read-side defaults (with a dated comment) as long as stored rows carry it; remove only the write path.
 - Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
 
 ## 4. Services
@@ -203,6 +204,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | User: Apple Pay V1 Shortcut removed (nobody uses it; V2 SMS only). `/v1/ss/todo` widget kept; `TransactionSource.V1` kept for stored rows. S1–S3 resolved by removal. |
 | 2026-11-26 | User: soft-deleted rows are treated as hard-deleted in code (applied to budget collaborators, API-key owners, role updates, session writes). Budget invite: unknown/unverified/deleted email → one identical error; invitees must be verified; collaborators may leave (`POST /budget/:id/leave`); collaborators keep seeing each other's emails. |
 | 2026-11-26 | config/index: `config/loadEnv.ts` first import (dev → `.env.dev`, prd → `.env`), no dotenv in mysql.ts (knex reads env on first connect), tests load no env file, `app.ts` / `createApp()` split from `index.ts`, CORS rejection → registry `ForbiddenAccess`. Questions G1–G4. |
 | 2026-11-26 | User decision: dev must use `.env.dev`. `mysql.ts` loaded `.env` (prod) at import before index.ts's `.env.dev` override (ESM hoisting), so dev was using `.env`'s DB. Folder 30: env loaded by a first-imported `config/loadEnv.ts`, no dotenv in mysql.ts. `npm run migrate` keeps targeting `.env` deliberately. |

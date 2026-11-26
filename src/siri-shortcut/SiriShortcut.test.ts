@@ -4,8 +4,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import express, { NextFunction, Request, Response } from "express";
 import { parseAmount, parseCardLast4, parseMerchant } from "./ApplePaySms.parser.js";
-import { validateSmsBody, validateTapTransactionBody } from "./SiriShortcut.validator.js";
-import createSsApplePayControllerV1 from "./ApplePay.v1.controller.js";
+import { validateSmsBody } from "./SiriShortcut.validator.js";
 import createSsTodoControllerV1 from "./Todo.v1.controller.js";
 import { BaseException } from "../exceptions/AppExceptions.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
@@ -112,36 +111,6 @@ describe("parseCardLast4", () => {
 
 // ── Validators ──
 
-describe("validateTapTransactionBody (V1)", () => {
-  test("accepts '12.50' and '$12.50'; the $ is never kept", () => {
-    const body = { amount: "12.50", merchant: "Starbucks", name: "UOB One" };
-    assert.deepEqual(validateTapTransactionBody(body), { amount: 12.5, merchant: "Starbucks", name: "UOB One" });
-    assert.equal(validateTapTransactionBody({ ...body, amount: " $12.50 " }).amount, 12.5);
-  });
-
-  test("amount must be a string that parses to a DECIMAL(10,2) value", () => {
-    const base = { merchant: "m", name: "n" };
-    assertInvalid(() => validateTapTransactionBody({ ...base, amount: 12.5 }), "amount");
-    assertInvalid(() => validateTapTransactionBody({ ...base }), "amount");
-    assertInvalid(() => validateTapTransactionBody({ ...base, amount: "abc" }), "amount");
-    assertInvalid(() => validateTapTransactionBody({ ...base, amount: "1,234.50" }), "amount");
-    assertInvalid(() => validateTapTransactionBody({ ...base, amount: "Infinity" }), "amount");
-    assertInvalid(() => validateTapTransactionBody({ ...base, amount: "100000000" }), "amount");
-    assert.equal(validateTapTransactionBody({ ...base, amount: "99999999.99" }).amount, 99_999_999.99);
-  });
-
-  test("merchant and name: required strings, ≤255 after trimming; blank kept as ''", () => {
-    const base = { amount: "1.00", merchant: "m", name: "n" };
-    assertInvalid(() => validateTapTransactionBody({ ...base, merchant: undefined }), "merchant");
-    assertInvalid(() => validateTapTransactionBody({ ...base, name: 5 }), "name");
-    assertInvalid(() => validateTapTransactionBody({ ...base, merchant: "x".repeat(256) }), "merchant");
-    assertInvalid(() => validateTapTransactionBody({ ...base, name: "x".repeat(256) }), "name");
-    const ok = validateTapTransactionBody({ ...base, merchant: `  ${"x".repeat(255)}  `, name: "" });
-    assert.equal(ok.merchant.length, 255);
-    assert.equal(ok.name, "");
-  });
-});
-
 describe("validateSmsBody (V2)", () => {
   test("parses each bank format into the service input", () => {
     assert.deepEqual(validateSmsBody({ smsBody: DBS_7ELEVEN }), {
@@ -173,41 +142,18 @@ describe("validateSmsBody (V2)", () => {
   });
 });
 
-// ── HTTP: V1 Apple Pay + widget routes, in-process with a fake DB ──
+// ── HTTP: /v1/ss widget route (the V1 Apple Pay routes were removed in Nov 2026), in-process with a fake DB ──
 
 type Row = Record<string, unknown>;
 
 describe("HTTP /v1/ss", () => {
-  const inserts: Row[] = [];
-  const transactions: Row[] = [
-    {
-      id: 1,
-      uuid: "t-1",
-      amount: "4.50",
-      currency: "SGD",
-      merchant: "Kopitiam",
-      name: "UOB One",
-      category: null,
-      source: "v1",
-      card_last4: null,
-      occurred_dt: 100,
-      created_dt: 100,
-      created_by_id: 42,
-      record_status: "A",
-    },
-  ];
   const tasks: Row[] = [
     { uuid: "a", title: "Old", done: 0, pinned: 0, sort_order: 1 },
     { uuid: "b", title: "Done", done: 1, pinned: 0, sort_order: 2 },
     { uuid: "c", title: "Pinned", done: 0, pinned: 1, sort_order: 3 },
   ];
   const fakeDb = {
-    async insert(_table: string, data: Row) {
-      inserts.push(data);
-      return { id: 9, record_status: "A", ...data };
-    },
     async find(table: string) {
-      if (table === "tb_applepay_transaction") return transactions;
       if (table === "tb_todo_task") return tasks;
       return [];
     },
@@ -235,7 +181,6 @@ describe("HTTP /v1/ss", () => {
       next();
     });
     for (const prefix of ["/v1/ss", "/no-user"]) {
-      app.use(prefix, createSsApplePayControllerV1(fakeDb as never));
       app.use(prefix, createSsTodoControllerV1(fakeDb as never));
     }
     await new Promise<void>((resolve) => {
@@ -248,77 +193,30 @@ describe("HTTP /v1/ss", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  async function call(method: "GET" | "POST", path: string, body?: unknown) {
-    const res = await fetch(`${baseUrl}${path}`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+  async function get(path: string) {
+    const res = await fetch(`${baseUrl}${path}`, { headers: { "Content-Type": "application/json" } });
     return { status: res.status, json: (await res.json()) as { data: Record<string, unknown> & unknown[] } };
   }
 
-  test("POST /ap/transaction stores the parsed amount and returns the transaction DTO", async () => {
-    inserts.length = 0;
-    const { status, json } = await call("POST", "/v1/ss/ap/transaction", {
-      amount: "$12.50",
-      merchant: "Starbucks",
-      name: "UOB One",
-    });
-    assert.equal(status, 200);
-    assert.equal(inserts.length, 1);
-    assert.equal(inserts[0].amount, 12.5);
-    assert.equal(inserts[0].created_by_id, 42);
-    assert.equal(typeof inserts[0].occurred_dt, "number");
-    const data = json.data;
-    assert.equal(data.amount, 12.5);
-    assert.equal(data.merchant, "Starbucks");
-    assert.equal(data.name, "UOB One");
-    assert.equal(data.source, "v1");
-    assert.equal(data.currency, "SGD");
-    assert.equal(typeof data.id, "string");
-    assert.equal("created_by_id" in data, false);
-  });
-
-  test("POST /ap/transaction: bad amount / oversized merchant → 400, nothing stored", async () => {
-    inserts.length = 0;
-    const bad = await call("POST", "/v1/ss/ap/transaction", { amount: "abc", merchant: "m", name: "n" });
-    assert.equal(bad.status, 400);
-    assert.equal(bad.json.data.code, "invalid_request_amount");
-    const long = await call("POST", "/v1/ss/ap/transaction", { amount: "1.00", merchant: "m".repeat(256), name: "n" });
-    assert.equal(long.status, 400);
-    assert.equal(long.json.data.code, "invalid_request_merchant");
-    assert.equal(inserts.length, 0);
-  });
-
-  test("GET /ap/transaction returns camelCase DTOs, never raw rows", async () => {
-    const { status, json } = await call("GET", "/v1/ss/ap/transaction");
-    assert.equal(status, 200);
-    assert.equal(json.data.length, 1);
-    const [first] = json.data as Record<string, unknown>[];
-    assert.equal(first.id, "t-1");
-    assert.equal(first.amount, 4.5);
-    assert.equal(first.occurredDt, 100);
-    assert.equal("record_status" in first, false);
-  });
-
   test("GET /todo returns the widget feed { tasks, openCount }, pinned first", async () => {
-    const { status, json } = await call("GET", "/v1/ss/todo");
+    const { status, json } = await get("/v1/ss/todo");
     assert.equal(status, 200);
     assert.deepEqual(json.data, { tasks: ["Pinned", "Old"], openCount: 2 });
   });
 
-  test("every route → 401 when no API-key user was resolved", async () => {
-    for (const [method, path] of [
-      ["POST", "/no-user/ap/transaction"],
-      ["GET", "/no-user/ap/transaction"],
-      ["GET", "/no-user/todo"],
-    ] as const) {
-      const { status } = await call(
+  test("GET /todo → 401 when no API-key user was resolved", async () => {
+    const { status } = await get("/no-user/todo");
+    assert.equal(status, 401);
+  });
+
+  test("the removed V1 Apple Pay routes no longer match (404)", async () => {
+    for (const method of ["POST", "GET"] as const) {
+      const res = await fetch(`${baseUrl}/v1/ss/ap/transaction`, {
         method,
-        path,
-        method === "POST" ? { amount: "1.00", merchant: "m", name: "n" } : undefined,
-      );
-      assert.equal(status, 401, `${method} ${path}`);
+        headers: { "Content-Type": "application/json" },
+        body: method === "POST" ? JSON.stringify({ amount: "1.00", merchant: "m", name: "n" }) : undefined,
+      });
+      assert.equal(res.status, 404, method);
     }
   });
 });

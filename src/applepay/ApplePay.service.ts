@@ -13,7 +13,6 @@ import {
   ApplePayManualTransactionBody,
   ApplePayRestoredDto,
   ApplePaySmsInput,
-  ApplePayTapInput,
   ApplePayTransactionDto,
   TransactionSource,
 } from "./ApplePay.types.js";
@@ -36,6 +35,7 @@ function toTransactionDto(row: ITB_APPLEPAY_TRANSACTION, cardLabels: CardLabels 
     merchant: row.merchant,
     name: row.name ?? null,
     category: row.category ?? undefined,
+    // Rows from before the source column default to V1 (ingestion removed Nov 2026; old rows still display).
     source: (row.source as TransactionSource) ?? TransactionSource.V1,
     cardLast4: row.card_last4 ?? null,
     cardLabel: (row.card_last4 && cardLabels[row.card_last4]) || null,
@@ -45,8 +45,8 @@ function toTransactionDto(row: ITB_APPLEPAY_TRANSACTION, cardLabels: CardLabels 
 }
 
 /**
- * Apple Pay transactions: one table fed by three sources (V1 NFC Shortcut, V2 bank-SMS
- * Shortcut, manual dashboard entry) so the dashboard shows a single combined feed.
+ * Apple Pay transactions: one table fed by the V2 bank-SMS Shortcut and manual dashboard entry
+ * (plus legacy V1 NFC-Shortcut rows, ingestion removed Nov 2026) so the dashboard shows a single feed.
  * Everything is scoped to `created_by_id = userId`.
  */
 export class ApplePayService {
@@ -55,28 +55,9 @@ export class ApplePayService {
   // ── Ingestion (siri-shortcut/*, API key) ──
 
   /**
-   * V1 "When Apple Pay is used" automation. occurred_dt is the server's clock, not the
-   * Shortcut's: the automation fires at the moment of payment, and this avoids parsing
-   * whatever date format/locale that Shortcuts version sends.
-   */
-  async recordTapTransaction(
-    userId: number,
-    input: ApplePayTapInput,
-    logContext?: IRequestLogContext,
-  ): Promise<ApplePayTransactionDto> {
-    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Insert Apple Pay (V1) transaction");
-    const now = Date.now();
-    const row = await this.db.insert<ITB_APPLEPAY_TRANSACTION>(
-      APPLEPAY_TRANSACTION_TABLE,
-      { uuid: crypto.randomUUID(), ...input, occurred_dt: now, created_dt: now, created_by_id: userId },
-      event,
-    );
-    return toTransactionDto(row);
-  }
-
-  /**
    * V2 bank-SMS automation (the controller parses the SMS). Covers online purchases too,
-   * so there's no Apple Pay device `name`. occurred_dt = receipt time, same reasoning as V1.
+   * so there's no Apple Pay device `name`. occurred_dt = receipt time (server clock), which
+   * avoids parsing whatever date format/locale the SMS or Shortcut uses.
    */
   async recordSmsTransaction(
     userId: number,

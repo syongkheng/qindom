@@ -26,7 +26,6 @@ import createApplePayController from "./applepay/ApplePay.controller.js";
 import createFileController from "./file/File.controller.js";
 import { createTgImageGetController, createTgImageController } from "./tgimage/TgImage.controller.js";
 import createGeocodeController from "./geocode/Geocode.controller.js";
-import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createSsTodoControllerV1 from "./siri-shortcut/Todo.v1.controller.js";
 import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
@@ -77,7 +76,6 @@ export function createRoutes(db: KnexSqlUtilities, cameraService: CameraService,
     ["/img", mw.pub, createTgImageGetController(db)],
     ["/img", mw.authUpload, createTgImageController(db)], // no RHF — multipart upload
     ["/geocode", mw.std, createGeocodeController(db)],
-    ["/v1/ss", mw.ssKey, createSsApplePayControllerV1(db)],
     ["/v1/ss", mw.ssKey, createSsTodoControllerV1(db)],
     ["/v2/ss", mw.ssKey, createSsApplePayControllerV2(db)],
     ["/ss-key", mw.auth, createSsApiKeyController(db)],
