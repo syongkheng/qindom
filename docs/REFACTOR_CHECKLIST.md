@@ -88,9 +88,9 @@ Design/security decisions the refactor deliberately left unchanged. To be decide
 
 **wedding**
 
-- W1. The confirmation email has no PIN (removed in 70d6778 with "Forgot PIN"). A guest who closes the success screen can't use the status lookup. Put the PIN back in the submitter's email?
-- W2. jessikheng `src/utils/rsvpApi.js` still exports the dead `RSVP_RECOVER_PIN_ENDPOINT` (route no longer exists). Delete it there?
-- W3. Submit isn't atomic (soft-deletes, then insert; concurrent same-PIN → 500). Revisit when utils adds logged transactions, or accept at wedding scale?
+- ~~W1. The confirmation email has no PIN (removed in 70d6778 with "Forgot PIN"). A guest who closes the success screen can't use the status lookup. Put the PIN back in the submitter's email?~~ **Resolved:** W1 — no PIN needed (user, 2026-11-26).
+- ~~W2. jessikheng `src/utils/rsvpApi.js` still exports the dead `RSVP_RECOVER_PIN_ENDPOINT` (route no longer exists). Delete it there?~~ **Resolved:** W2 — deleted in jessikheng b8f54db.
+- ~~W3. Submit isn't atomic (soft-deletes, then insert; concurrent same-PIN → 500). Revisit when utils adds logged transactions, or accept at wedding scale?~~ **Resolved:** W3 — non-atomic accepted (user).
 
 **itinerary**
 
@@ -165,3 +165,8 @@ Design/security decisions the refactor deliberately left unchanged. To be decide
 **From the V1 removal (2026-11-26)**
 
 - V1. fndom Apple Pay dashboard still has the v1↔v2 "likely duplicates" detection (filter + tests). No new pairs can appear now, but historical ones can. Keep until old duplicates are cleaned up, or remove?
+
+**From the HDB removal (2026-11-26)**
+- P1. Some users may still hold `PPHS_R4`/`PPHS_R5` in `tb_aa_user.roles`. They're inert now and can't be removed from the admin UI. Strip them with a migration, or leave them?
+
+**Blocked deletions: done 2026-11-26** (user: "delete unused files"): `Auth.service.ts`, `AnalyticEvent.service.ts`, `TokenOrApiKeyFilter.ts`, fndom `SideNavigation.vue` + `views/HomeView.vue`.

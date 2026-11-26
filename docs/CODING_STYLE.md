@@ -49,6 +49,7 @@ Each feature folder `src/<module>/` holds:
 - Binary/raw responses use `route(label, fallback, async (req, _cr, res) => …)`: finish every lookup and upstream call **before** the first `setHeader` so failures still get the JSON error; send with `res.end(buffer)`.
 - Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
 - When removing an ingestion source, keep its enum value and read-side defaults (with a dated comment) as long as stored rows carry it; remove only the write path.
+- When a module is removed: endpoints another feature still uses move to the module that owns their tables; its drop migration also clears its `tb_telegram_log_subscription` rows, and its `TelegramLogModules` entry goes.
 - Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
 
 ## 4. Services
@@ -132,7 +133,7 @@ Each feature folder `src/<module>/` holds:
 - Third-party calls: any failure (network error, non-OK status, unreadable body) → `Exceptions.ExternalRequest` (502); missing server config (API key) → `Unknown` (500) with a server log.
 - Every Nominatim call goes through geocode's `searchNominatim` (one shared 1 req/s queue + UA); no second client.
 - Coordinates in query strings are validated as plain decimals (`/^-?\d+(\.\d+)?$/`) and range-checked (±90 / ±180).
-- Logic duplicated across repos on purpose (e.g. PPHS batch rule in qindom + fndom) carries a comment in both places pointing at the other.
+- Logic duplicated across repos on purpose (e.g. the 3-pin to-do cap in qindom + fndom) carries a comment in both places pointing at the other.
 - Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
 - The env file is loaded only by `config/loadEnv.ts`, the first import of `index.ts`; no other module imports dotenv (test-enforced; `migrate.ts`/`knexfile.ts` deliberately load `.env`). Still read env values lazily inside functions, so modules don't depend on import order and tests can set values per case. Tests never load an env file; shared DB clients fail without config (`DB_URL is not set`) instead of falling back to localhost.
@@ -142,14 +143,14 @@ Each feature folder `src/<module>/` holds:
 ## 6. HTTP conventions
 - Envelope: `{ code, status: "Ok" | "Ko", data }`, produced only by `ControllerResponse`.
 - URL segments use hyphens (`/card-label`, not `/card_label`).
-- Exception to "reads are GET": a read that checks a secret or session state, or triggers outbound calls, may stay `POST` so the CSRF check applies (`/auth/verification`, `/hdb/pphs/geocode-options`). Note why in the README.
+- Exception to "reads are GET": a read that checks a secret or session state, or triggers outbound calls, may stay `POST` so the CSRF check applies (`/auth/verification`). Note why in the README.
 - Mutations are always `POST` (`/:id/delete`, `/:id/update`); no `DELETE`/`PUT`/`PATCH` routes. Bodyless POSTs from clients send `{}`. Changing a verb is a frontend change: update fndom (`ApiRoute` + store) on the fndom branch `refactor/qindom-alignment`.
 
 ## 7. Database
 - Soft delete via `record_status` `'A'`/`'D'`; timestamps are ms epoch (`Date.now()`).
 - **Soft-deleted = gone.** In code, a row with `record_status = 'D'` (above all a user in `tb_aa_user`) behaves exactly as if it didn't exist: lookups, joins, access checks, counts and lists filter on `RecordStatus.ACTIVE`, and every write targets `{ id, record_status: ACTIVE }`. A deleted user's sessions, API keys, collaborations and grants stop working.
 - Anti-enumeration: when an action looks up an account by a user-supplied identifier (e.g. inviting by email), every "no usable account" case (unknown, unverified, deleted) returns one identical error.
-- Module SQL never lives in `KnexSqlUtilities`; it goes in the service that owns the table, and other modules call that service (e.g. hdb → `LtaService`).
+- Module SQL never lives in `KnexSqlUtilities`; it goes in the service that owns the table, and other modules call that service (e.g. the `/bus` and `/flat` nearby lookups live in `LtaService`, which owns the tables).
 - Raw SQL goes through `this.db.raw(sql, bindings, event)` so it's timed in the request tree.
 - Typed exceptions thrown inside `db.transaction` keep their status. Still check ownership before opening it when you can (so nothing is written). Inside the callback use `tx.*(…, event)` (the `KnexSqlUtilities` bound to the trx) rather than the raw `trx`, and pass `event` as `transaction`'s second argument.
 - Client-addressed child rows: check every id (updates and delete lists) belongs to the parent before writing (→ 403), and still scope each child UPDATE/DELETE by the parent id.
@@ -204,6 +205,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | User: HDB PPHS module removed (not working, unused); nearby bus-stop/MRT lookups moved to `/lta`; tables dropped by migration 20261126000100. Wedding: no PIN in email (W1), dead jessikheng constant removed (W2), non-atomic submit accepted (W3). Unused files deleted (A11/M5/Y4). |
 | 2026-11-26 | User: Apple Pay V1 Shortcut removed (nobody uses it; V2 SMS only). `/v1/ss/todo` widget kept; `TransactionSource.V1` kept for stored rows. S1–S3 resolved by removal. |
 | 2026-11-26 | User: soft-deleted rows are treated as hard-deleted in code (applied to budget collaborators, API-key owners, role updates, session writes). Budget invite: unknown/unverified/deleted email → one identical error; invitees must be verified; collaborators may leave (`POST /budget/:id/leave`); collaborators keep seeing each other's emails. |
 | 2026-11-26 | config/index: `config/loadEnv.ts` first import (dev → `.env.dev`, prd → `.env`), no dotenv in mysql.ts (knex reads env on first connect), tests load no env file, `app.ts` / `createApp()` split from `index.ts`, CORS rejection → registry `ForbiddenAccess`. Questions G1–G4. |
