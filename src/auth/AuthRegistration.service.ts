@@ -10,6 +10,8 @@ import { IS_DEV } from "../config/env.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { MailerUtilities } from "../utils/MailerUtilities.js";
 import { sha256Hex } from "../utils/HashUtilities.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
+import { maskEmail } from "../utils/logging/LogRedaction.js";
 import { AA_USER_TABLE, AuthSessionService, BCRYPT_SALT_ROUNDS, SESSION_COLUMNS } from "./AuthSession.service.js";
 import { verificationCodeMail } from "./Auth.emailTemplate.js";
 import {
@@ -44,9 +46,9 @@ const VERIFY_COLUMNS = [
 ];
 const RESEND_COLUMNS = ["id", "username", "email_verified"];
 
-/** Cryptographically random 6-digit code. */
+/** Cryptographically random 6-digit code, uniform over 000000–999999 (`randomInt` has no modulo bias). */
 export function generateOtp(): string {
-  return (crypto.randomBytes(4).readUInt32BE(0) % OTP_MODULUS).toString().padStart(OTP_DIGITS, "0");
+  return crypto.randomInt(0, OTP_MODULUS).toString().padStart(OTP_DIGITS, "0");
 }
 
 /**
@@ -163,7 +165,10 @@ export class AuthRegistrationService {
       await MailerUtilities.sendMail(verificationCodeMail(email, username, code, OTP_TTL_MINUTES));
     } catch (error) {
       if (event) event.detail = "insert or verification email failed";
-      LoggingUtilities.service.error("AuthRegistrationService.register", `Registration failed for ${email}: ${error}`);
+      LoggingUtilities.service.error(
+        "AuthRegistrationService.register",
+        `Registration failed for ${maskEmail(email)}: ${toMessage(error)}`,
+      );
       throw new Exceptions.Registration();
     }
 
@@ -199,7 +204,10 @@ export class AuthRegistrationService {
     const attempts = user.verify_attempts ?? 0;
     if (attempts >= MAX_VERIFY_ATTEMPTS) {
       if (event) event.detail = "max attempts exceeded";
-      LoggingUtilities.service.warn("AuthRegistrationService.verifyEmail", `Max attempts exceeded for ${email}`);
+      LoggingUtilities.service.warn(
+        "AuthRegistrationService.verifyEmail",
+        `Max attempts exceeded for ${maskEmail(email)}`,
+      );
       throw new Exceptions.MaxVerifyAttempts();
     }
 

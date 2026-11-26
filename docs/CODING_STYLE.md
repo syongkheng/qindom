@@ -43,6 +43,10 @@ Each feature folder `src/<module>/` holds:
 - Middlewares signal request errors by throwing `Exceptions.X` (answered by `ErrorHandler`), not inline `cr.result`, except client-contract bodies (TokenFilter `token_invalid`/`csrf_invalid`, the API-key 401), which carry a comment.
 - Client IPs for display/storage always come from `clientIp(req)` (`utils/requestUtils`); limiter keys use their own IPv6-collapsed key.
 - `logContext.metadata` holds only what code reads (e.g. `userId`); never secrets.
+- A limiter that should count a 200 as a failure uses `countAsFailedAttempt(res)`; never change a status code just to feed a limiter.
+- Passwords are capped at 72 UTF-8 bytes (`Buffer.byteLength`); a too-long new password → `weak_password`, an existing one → `invalid_request_<field>`.
+- PM2 lines (`LoggingUtilities.service.*`) are email-masked centrally; still never log raw personal data on purpose.
+- Data migrations that rewrite JSON columns use a pure exported (unit-tested) function + read-modify-write in JS.
 - Rate limiters are built with the `limiter({...})` factory in `RateLimiter.ts`, windows via `Time`; route-group middleware chains live only in `presets.ts` (`mw.*`).
 - The app is built by `createApp()` in `src/app.ts` (route table: `createRoutes`); `index.ts` only boots. Mount changes go in `app.ts`.
 - Auth goes on the mount in `app.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
@@ -53,7 +57,7 @@ Each feature folder `src/<module>/` holds:
 - Round-trip update bodies: a field **absent** = unchanged, **sent blank** (`""`/`null`) = NULL. Validators return `undefined` for absent (`OptionalField<T>`); inserts fill defaults explicitly; an update with no columns is skipped. When both spellings are sent, camelCase wins whenever present (never `??` for this).
 - Frontend: clearing a field sends `null` or `""`, never `undefined` (JSON drops it). Text inputs get `maxlength` from a constants file mirroring the backend column widths, with "keep in sync" comments in both repos.
 - Public (unauthenticated) DTOs are separate types that omit internal ids, owner identifiers and secrets.
-- Backend stores and returns time as ms epoch; formatting for display is the frontend's job (user, A6).
+- Backend stores and returns time as ms epoch; formatting for display is the frontend's job (user, A6). Exception: emails (no frontend renders them) may format time with `APP_TIMEZONE` (wedding tamper notice, PDCA lab notification).
 - Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
 
 ## 4. Services
@@ -209,6 +213,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | auth decisions: password check limiter 10 failures/15 min/user; preflight limiter; owner can't remove own SYSTEM_R5; OTP via randomInt; password email without timestamp; caps (email 255, system 256, password 72 bytes); emails masked in PM2 logs; PPHS roles stripped (migration 20261126000300); PermissionService logs. |
 | 2026-11-26 | itinerary decisions: image ownership via `tb_tg_image.created_by_id` (legacy NULL allowed); blank → NULL on update (absent = unchanged); public views drop internal ids, owner sessionId and challenge; fndom maxlengths. M1: no key migration. G3: unchanged (deploy.sh + health check). |
 | 2026-11-26 | User: HDB PPHS module removed (not working, unused); nearby bus-stop/MRT lookups moved to `/lta`; tables dropped by migration 20261126000100. Wedding: no PIN in email (W1), dead jessikheng constant removed (W2), non-atomic submit accepted (W3). Unused files deleted (A11/M5/Y4). |
 | 2026-11-26 | User: Apple Pay V1 Shortcut removed (nobody uses it; V2 SMS only). `/v1/ss/todo` widget kept; `TransactionSource.V1` kept for stored rows. S1–S3 resolved by removal. |

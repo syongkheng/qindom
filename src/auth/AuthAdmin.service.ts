@@ -6,11 +6,12 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { RequestLogSearch } from "../utils/logging/RequestLogSearch.js";
-import { parseRoles } from "./Permission.js";
+import { Roles, parseRoles } from "./Permission.js";
 import { AA_USER_TABLE } from "./AuthSession.service.js";
 import { AuthAdminUserDto, AuthUpdatedDto } from "./Auth.types.js";
 
 const USER_NOT_FOUND = "User not found";
+const OWN_OWNER_ROLE_REMOVAL = "You can't remove your own owner role";
 const ADMIN_USER_COLUMNS = ["id", "username", "email", "system", "roles", "state", "last_logged_in_dt", "created_dt"];
 
 export function toAdminUserDto(user: ITB_AA_USER): AuthAdminUserDto {
@@ -46,9 +47,21 @@ export class AuthAdminService {
     return rows.map(toAdminUserDto);
   }
 
-  /** A missing or soft-deleted user → 404 (soft-deleted = gone). */
-  async updateUserRoles(userId: number, roles: string[], logContext?: IRequestLogContext): Promise<AuthUpdatedDto> {
+  /**
+   * Replaces a user's roles. The acting OWNER can't drop their own `SYSTEM_R5` (403; it would lock them
+   * out of the admin pages). A missing or soft-deleted user → 404 (soft-deleted = gone).
+   */
+  async updateUserRoles(
+    actorId: number,
+    userId: number,
+    roles: string[],
+    logContext?: IRequestLogContext,
+  ): Promise<AuthUpdatedDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Update user roles");
+    if (actorId === userId && !roles.includes(Roles.OWNER)) {
+      if (event) event.detail = "own owner role removal refused";
+      throw new Exceptions.ForbiddenAccess(OWN_OWNER_ROLE_REMOVAL);
+    }
     const activeUser = { id: userId, record_status: RecordStatus.ACTIVE };
     const user = await this.db.findOne<ITB_AA_USER>(AA_USER_TABLE, activeUser, ["id"], event);
     if (!user) throw new Exceptions.NotFound(USER_NOT_FOUND);

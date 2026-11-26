@@ -1,6 +1,6 @@
 import { IRequestLogContext, IRequestLogEvent, LogStage } from "../../models/IRequestLogContext.js";
 import { appendRequestLog } from "./RequestLogFileWriter.js";
-import { redactForLog, redactTextForLog, redactUrlForLog } from "./LogRedaction.js";
+import { maskEmailsInText, redactForLog, redactTextForLog, redactUrlForLog } from "./LogRedaction.js";
 import { LogEmoji } from "../../constants/LogEmoji.js";
 import { IS_PRD } from "../../config/env.js";
 import { escapeTelegramHtml } from "../TelegramUtilities.js";
@@ -385,21 +385,26 @@ export class LoggingUtilities {
   // Generic Non-Request Logs
   // =========================================================
 
+  /** One PM2 line. Emails anywhere in the message are masked (SMTP / driver errors and debug SQL can embed them). */
+  private static serviceLine(level: string, serviceName: string, message: string): string {
+    return `${LoggingUtilities.timestamp()} | ${level.padEnd(5)} | ${LoggingUtilities.col(serviceName, 30)} | ${maskEmailsInText(message)}`;
+  }
+
   static service = class {
     static info(serviceName: string, message: string): void {
-      console.log(`${LoggingUtilities.timestamp()} | INFO  | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.log(LoggingUtilities.serviceLine("INFO", serviceName, message));
     }
 
     static warn(serviceName: string, message: string): void {
-      console.warn(`${LoggingUtilities.timestamp()} | WARN  | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.warn(LoggingUtilities.serviceLine("WARN", serviceName, message));
     }
 
     static debug(serviceName: string, message: string): void {
-      console.log(`${LoggingUtilities.timestamp()} | DEBUG | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.log(LoggingUtilities.serviceLine("DEBUG", serviceName, message));
     }
 
     static error(serviceName: string, message: string): void {
-      console.error(`${LoggingUtilities.timestamp()} | ERROR | ${LoggingUtilities.col(serviceName, 30)} | ${message}`);
+      console.error(LoggingUtilities.serviceLine("ERROR", serviceName, message));
     }
   };
 

@@ -138,7 +138,7 @@ export default function createAnalyticsController(db: KnexSqlUtilities): Router 
     adminLimiter,
     route("AnalyticsController.GET /admin/systems/:key/access", "Failed to load access list", async (req, cr) => {
       requireRole(req, Roles.OWNER);
-      return cr.ok<AnalyticsGrantDto[]>(await access.listGrants(String(req.params.key)));
+      return cr.ok<AnalyticsGrantDto[]>(await access.listGrants(String(req.params.key), req.logContext));
     }),
   );
 
@@ -165,7 +165,7 @@ export default function createAnalyticsController(db: KnexSqlUtilities): Router 
       async (req, cr) => {
         requireRole(req, Roles.OWNER);
         const userId = validateUserIdParam(req.params.userId);
-        return cr.ok<AnalyticsGrantDto[]>(await access.revoke(String(req.params.key), userId));
+        return cr.ok<AnalyticsGrantDto[]>(await access.revoke(String(req.params.key), userId, req.logContext));
       },
     ),
   );

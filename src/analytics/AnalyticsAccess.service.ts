@@ -29,9 +29,7 @@ export class AnalyticsAccessService {
   async visibleSystems(user: IDecodedTokenUser, logContext?: IRequestLogContext): Promise<AnalyticsSystemDto[]> {
     const active = await this.systems.listActive(logContext);
     if (userIsOwner(user)) return active.map(toSystemDto);
-    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Analytics grants of user");
-    const keys = await this.permissions.grantedKeys(user.id, ResourceType.ANALYTICS_SYSTEM);
-    if (event) event.detail = `${keys.length} grants`;
+    const keys = await this.permissions.grantedKeys(user.id, ResourceType.ANALYTICS_SYSTEM, logContext);
     return active.filter((s) => keys.includes(s.key)).map(toSystemDto);
   }
 
@@ -41,14 +39,14 @@ export class AnalyticsAccessService {
     key: string,
     logContext?: IRequestLogContext,
   ): Promise<RegisteredSystem> {
-    const allowed = await this.permissions.canAccessResource(user, ResourceType.ANALYTICS_SYSTEM, key);
+    const allowed = await this.permissions.canAccessResource(user, ResourceType.ANALYTICS_SYSTEM, key, logContext);
     const system = allowed ? await this.systems.getActive(key, logContext) : undefined;
     if (!system) throw new Exceptions.ForbiddenAccess();
     return system;
   }
 
-  listGrants(key: string): Promise<AnalyticsGrantDto[]> {
-    return this.permissions.listGrants(ResourceType.ANALYTICS_SYSTEM, key);
+  listGrants(key: string, logContext?: IRequestLogContext): Promise<AnalyticsGrantDto[]> {
+    return this.permissions.listGrants(ResourceType.ANALYTICS_SYSTEM, key, logContext);
   }
 
   /** 404 unless a system with this key exists (active or disabled). */
@@ -74,13 +72,13 @@ export class AnalyticsAccessService {
       event,
     );
     if (!target?.id) throw new Exceptions.NotFound(NO_VIEWER_ACCOUNT);
-    await this.permissions.grant(ResourceType.ANALYTICS_SYSTEM, key, target.id, grantedById);
-    return this.listGrants(key);
+    await this.permissions.grant(ResourceType.ANALYTICS_SYSTEM, key, target.id, grantedById, logContext);
+    return this.listGrants(key, logContext);
   }
 
   /** Soft revoke; revoking a grant that doesn't exist is a no-op. */
-  async revoke(key: string, userId: number): Promise<AnalyticsGrantDto[]> {
-    await this.permissions.revoke(ResourceType.ANALYTICS_SYSTEM, key, userId);
-    return this.listGrants(key);
+  async revoke(key: string, userId: number, logContext?: IRequestLogContext): Promise<AnalyticsGrantDto[]> {
+    await this.permissions.revoke(ResourceType.ANALYTICS_SYSTEM, key, userId, logContext);
+    return this.listGrants(key, logContext);
   }
 }

@@ -4,6 +4,8 @@ import { IDecodedTokenUser } from "../token/Token.types.js";
 import { ITB_AA_RESOURCE_ACCESS } from "../models/databases/tb_aa_resource_access.js";
 import { hasRole } from "../utils/RequestUtilities.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
+import { IRequestLogContext } from "../models/IRequestLogContext.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 
 const RESOURCE_ACCESS_TABLE = "tb_aa_resource_access";
 
@@ -78,29 +80,40 @@ export class PermissionService {
   constructor(private db: KnexSqlUtilities) {}
 
   /** OWNER → always; otherwise needs an active grant. */
-  async canAccessResource(user: IDecodedTokenUser | undefined, type: ResourceTypeValue, key: string): Promise<boolean> {
+  async canAccessResource(
+    user: IDecodedTokenUser | undefined,
+    type: ResourceTypeValue,
+    key: string,
+    logContext?: IRequestLogContext,
+  ): Promise<boolean> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Check resource access", `${type}:${key}`);
     if (!user) return false;
     if (userIsOwner(user)) return true;
     const row = await this.db.findOne<ITB_AA_RESOURCE_ACCESS>(
       RESOURCE_ACCESS_TABLE,
       { user_id: user.id, resource_type: type, resource_key: key, record_status: RecordStatus.ACTIVE },
       ["id"],
+      event,
     );
     return !!row;
   }
 
   /** Keys the user holds active grants for. Callers decide what OWNER sees (usually "everything"). */
-  async grantedKeys(userId: number, type: ResourceTypeValue): Promise<string[]> {
+  async grantedKeys(userId: number, type: ResourceTypeValue, logContext?: IRequestLogContext): Promise<string[]> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List granted resource keys", type);
     const rows = await this.db.find<ITB_AA_RESOURCE_ACCESS>(
       RESOURCE_ACCESS_TABLE,
       { user_id: userId, resource_type: type, record_status: RecordStatus.ACTIVE },
       { columns: ["resource_key"] },
+      event,
     );
+    if (event) event.detail = `${rows.length} grants`;
     return rows.map((r) => r.resource_key);
   }
 
   /** Active grants of active users (a soft-deleted user's grant is gone). */
-  async listGrants(type: ResourceTypeValue, key: string): Promise<ResourceGrant[]> {
+  async listGrants(type: ResourceTypeValue, key: string, logContext?: IRequestLogContext): Promise<ResourceGrant[]> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "List resource grants", `${type}:${key}`);
     const rows = await this.db.raw<
       {
         user_id: number;
@@ -117,6 +130,7 @@ export class PermissionService {
         WHERE ra.resource_type = ? AND ra.resource_key = ? AND ra.record_status = ?
         ORDER BY ra.updated_dt DESC`,
       [RecordStatus.ACTIVE, type, key, RecordStatus.ACTIVE],
+      event,
     );
     return rows.map((r) => ({
       userId: Number(r.user_id),
@@ -129,12 +143,20 @@ export class PermissionService {
   }
 
   /** Idempotent: re-activates a previously revoked grant instead of inserting a duplicate. */
-  async grant(type: ResourceTypeValue, key: string, userId: number, grantedById: number): Promise<void> {
+  async grant(
+    type: ResourceTypeValue,
+    key: string,
+    userId: number,
+    grantedById: number,
+    logContext?: IRequestLogContext,
+  ): Promise<void> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Grant resource access", `${type}:${key}`);
     const now = Date.now();
     const existing = await this.db.findOne<ITB_AA_RESOURCE_ACCESS>(
       RESOURCE_ACCESS_TABLE,
       { user_id: userId, resource_type: type, resource_key: key },
       ["id"],
+      event,
     );
     if (existing) {
       await this.db.update<ITB_AA_RESOURCE_ACCESS>(
@@ -146,27 +168,34 @@ export class PermissionService {
           granted_by_id: grantedById,
           updated_dt: now,
         },
+        event,
       );
       return;
     }
-    await this.db.insert<ITB_AA_RESOURCE_ACCESS>(RESOURCE_ACCESS_TABLE, {
-      user_id: userId,
-      resource_type: type,
-      resource_key: key,
-      access_level: AccessLevel.VIEWER,
-      granted_by_id: grantedById,
-      record_status: RecordStatus.ACTIVE,
-      created_dt: now,
-      updated_dt: now,
-    });
+    await this.db.insert<ITB_AA_RESOURCE_ACCESS>(
+      RESOURCE_ACCESS_TABLE,
+      {
+        user_id: userId,
+        resource_type: type,
+        resource_key: key,
+        access_level: AccessLevel.VIEWER,
+        granted_by_id: grantedById,
+        record_status: RecordStatus.ACTIVE,
+        created_dt: now,
+        updated_dt: now,
+      },
+      event,
+    );
   }
 
   /** Soft revoke (record_status = 'D'). */
-  async revoke(type: ResourceTypeValue, key: string, userId: number): Promise<void> {
+  async revoke(type: ResourceTypeValue, key: string, userId: number, logContext?: IRequestLogContext): Promise<void> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Revoke resource access", `${type}:${key}`);
     await this.db.update<ITB_AA_RESOURCE_ACCESS>(
       RESOURCE_ACCESS_TABLE,
       { user_id: userId, resource_type: type, resource_key: key },
       { record_status: RecordStatus.DELETED, updated_dt: Date.now() },
+      event,
     );
   }
 }

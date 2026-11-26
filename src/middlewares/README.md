@@ -53,25 +53,27 @@ Route groups get their chain **only** from `presets.ts` (`mw.*`); routers add pe
 
 ### Rate limiters (`RateLimiter.ts`)
 
-All per-IP (X-Real-IP, IPv6 collapsed to /56, socket address if the header is missing), draft-7 `RateLimit` / `RateLimit-Policy` headers, 429 body `{ success: false, message }`.
+Per-IP unless noted (X-Real-IP, IPv6 collapsed to /56, socket address if the header is missing), draft-7 `RateLimit` / `RateLimit-Policy` headers, 429 body `{ success: false, message }`. "Failures only" limiters count responses with status ≥ 400, plus 200s a handler flags with `countAsFailedAttempt(res)` (a wrong password on `/auth/password/validate`).
 
-| Limiter                     | Limit / window | Notes                                 |
-| --------------------------- | -------------- | ------------------------------------- |
-| `globalLimiter`             | 100 / 1 min    | every route                           |
-| `loginLimiter`              | 10 / 15 min    |                                       |
-| `registerLimiter`           | 5 / 1 h        |                                       |
-| `verifyEmailLimiter`        | 10 / 15 min    |                                       |
-| `resendVerifyLimiter`       | 3 / 15 min     |                                       |
-| `adminLimiter`              | 60 / 15 min    | auth + analytics admin                |
-| `itineraryChallengeLimiter` | 10 / 15 min    | failures only                         |
-| `weddingRsvpLimiter`        | 10 / 15 min    |                                       |
-| `houseViewLimiter`          | 60 / 1 min     |                                       |
-| `analyticsLimiter`          | 120 / 1 min    |                                       |
-| `analyticsReportLimiter`    | 30 / 1 min     |                                       |
-| `cameraRegisterLimiter`     | 30 / 1 h       |                                       |
-| `cameraClaimIpLimiter`      | 10 / 15 min    | failures only                         |
-| `cameraClaimUserLimiter`    | 5 / 15 min     | failures only, keyed on `req.user.id` |
-| `pdcaEnquiryLimiter`        | 5 / 10 min     |                                       |
+| Limiter                     | Limit / window | Notes                                                                                 |
+| --------------------------- | -------------- | ------------------------------------------------------------------------------------- |
+| `globalLimiter`             | 100 / 1 min    | every route                                                                           |
+| `loginLimiter`              | 10 / 15 min    |                                                                                       |
+| `preflightLimiter`          | 30 / 15 min    | `/auth/preflight` (account existence)                                                 |
+| `passwordCheckLimiter`      | 10 / 15 min    | failures only, keyed on `req.user.id`; `/auth/password/validate` + `/update` share it |
+| `registerLimiter`           | 5 / 1 h        |                                                                                       |
+| `verifyEmailLimiter`        | 10 / 15 min    |                                                                                       |
+| `resendVerifyLimiter`       | 3 / 15 min     |                                                                                       |
+| `adminLimiter`              | 60 / 15 min    | auth + analytics admin                                                                |
+| `itineraryChallengeLimiter` | 10 / 15 min    | failures only                                                                         |
+| `weddingRsvpLimiter`        | 10 / 15 min    |                                                                                       |
+| `houseViewLimiter`          | 60 / 1 min     |                                                                                       |
+| `analyticsLimiter`          | 120 / 1 min    |                                                                                       |
+| `analyticsReportLimiter`    | 30 / 1 min     |                                                                                       |
+| `cameraRegisterLimiter`     | 30 / 1 h       |                                                                                       |
+| `cameraClaimIpLimiter`      | 10 / 15 min    | failures only                                                                         |
+| `cameraClaimUserLimiter`    | 5 / 15 min     | failures only, keyed on `req.user.id`                                                 |
+| `pdcaEnquiryLimiter`        | 5 / 10 min     |                                                                                       |
 
 ### ErrorHandler
 

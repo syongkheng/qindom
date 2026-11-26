@@ -1,7 +1,15 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
-import { loginLimiter, registerLimiter, verifyEmailLimiter, resendVerifyLimiter } from "../middlewares/RateLimiter.js";
+import {
+  countAsFailedAttempt,
+  loginLimiter,
+  passwordCheckLimiter,
+  preflightLimiter,
+  registerLimiter,
+  resendVerifyLimiter,
+  verifyEmailLimiter,
+} from "../middlewares/RateLimiter.js";
 import { getUser, route } from "../utils/RequestUtilities.js";
 import { toMessage } from "../utils/ErrorUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
@@ -43,6 +51,7 @@ export default function createAuthController(db: KnexSqlUtilities): Router {
   // Tells the login form whether to show register or login next.
   router.post(
     "/preflight",
+    preflightLimiter,
     route("AuthController.POST /preflight", "Failed to check email", async (req, cr) => {
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
       const body = validateEmailBody(req.body, event);
@@ -130,19 +139,26 @@ export default function createAuthController(db: KnexSqlUtilities): Router {
     }),
   );
 
+  // Re-checks the session user's password. A wrong one still answers 200 { isValid: false } but counts
+  // toward passwordCheckLimiter (shared with /password/update).
   router.post(
     "/password/validate",
     MandatoryTokenFilter,
-    route("AuthController.POST /password/validate", "Failed to validate password", async (req, cr) => {
+    passwordCheckLimiter,
+    route("AuthController.POST /password/validate", "Failed to validate password", async (req, cr, res) => {
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
       const { password } = validatePasswordValidateBody(req.body, event);
-      return cr.ok<AuthPasswordValidityDto>(await sessions.validatePassword(getUser(req).id, password, req.logContext));
+      const validity = await sessions.validatePassword(getUser(req).id, password, req.logContext);
+      if (!validity.isValid) countAsFailedAttempt(res);
+      return cr.ok<AuthPasswordValidityDto>(validity);
     }),
   );
 
+  // A wrong current password is a 401, so it counts toward passwordCheckLimiter.
   router.post(
     "/password/update",
     MandatoryTokenFilter,
+    passwordCheckLimiter,
     route("AuthController.POST /password/update", "Failed to update password", async (req, cr, res) => {
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
       const body = validatePasswordUpdateBody(req.body, event);

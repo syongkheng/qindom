@@ -6,15 +6,6 @@ import { MailOptions, MailerUtilities } from "../utils/MailerUtilities.js";
 const esc = MailerUtilities.escapeHtml;
 
 const PASSWORD_CHANGED_SUBJECT = "Your Awense password has been changed";
-// Formatted in the server's timezone (no timeZone option), as before the refactor.
-const CHANGED_AT_FORMAT: Intl.DateTimeFormatOptions = {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZoneName: "short",
-};
 
 /** Registration / resend email. `code` is the plain 6-digit OTP (only its SHA-256 is stored). */
 export function verificationCodeMail(to: string, username: string, code: string, ttlMinutes: number): MailOptions {
@@ -31,14 +22,17 @@ export function verificationCodeMail(to: string, username: string, code: string,
   };
 }
 
-/** Security notice sent after a password change. */
-export function passwordChangedMail(to: string, username: string, changedAt: Date): MailOptions {
+/**
+ * Security notice sent after a password change. No timestamp: the backend deals in epoch ms only and
+ * leaves time display to the client, so the email never shows a time in the server's timezone.
+ */
+export function passwordChangedMail(to: string, username: string): MailOptions {
   return {
     to,
     subject: PASSWORD_CHANGED_SUBJECT,
     html: `
       <p>Hi <strong>${esc(username)}</strong>,</p>
-      <p>Your password was successfully changed on <strong>${esc(changedAt.toLocaleString("en-GB", CHANGED_AT_FORMAT))}</strong>.</p>
+      <p>Your password was successfully changed.</p>
       <p>If you did not make this change, please contact us immediately and secure your account.</p>
       <p>— no-reply</p>
     `,

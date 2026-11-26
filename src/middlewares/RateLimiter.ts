@@ -1,4 +1,4 @@
-import { Request } from "express";
+import { Request, Response } from "express";
 import rateLimit, { ipKeyGenerator, Options } from "express-rate-limit";
 import { Time } from "../constants/Time.js";
 
@@ -11,13 +11,27 @@ import { Time } from "../constants/Time.js";
 const clientIpKey = (req: Request) =>
   ipKeyGenerator(String(req.headers["x-real-ip"] || req.socket.remoteAddress || ""));
 
+/** Minimum HTTP status counted as a failure by `skipSuccessfulRequests` limiters. */
+const MIN_FAILED_STATUS = 400;
+
+/**
+ * Marks a request as a failed attempt for `skipSuccessfulRequests` limiters even though it answers
+ * 200 (e.g. `POST /auth/password/validate` → `{ isValid: false }`).
+ */
+export function countAsFailedAttempt(res: Response): void {
+  res.locals.failedAttempt = true;
+}
+
+const isSuccessfulRequest = (_req: Request, res: Response) =>
+  res.statusCode < MIN_FAILED_STATUS && res.locals.failedAttempt !== true;
+
 interface LimiterConfig {
   windowMs: number;
   /** Requests allowed per key per window. */
   limit: number;
   /** Body of the 429: `{ success: false, message }`. */
   message: string;
-  /** Count only failed (status >= 400) requests. */
+  /** Count only failed requests (status >= 400, or flagged with `countAsFailedAttempt`). */
   skipSuccessfulRequests?: boolean;
   keyGenerator?: Options["keyGenerator"];
 }
@@ -34,6 +48,7 @@ const limiter = ({
     windowMs,
     limit,
     skipSuccessfulRequests,
+    requestWasSuccessful: isSuccessfulRequest,
     keyGenerator,
     standardHeaders: "draft-7",
     legacyHeaders: false,
@@ -52,6 +67,26 @@ export const loginLimiter = limiter({
   windowMs: 15 * Time.MINUTE_MS,
   limit: 10,
   message: "Too many login attempts. Please try again in 15 minutes.",
+});
+
+/** POST /auth/preflight: tells the login form whether an email has an account, so it is capped per IP. */
+export const preflightLimiter = limiter({
+  windowMs: 15 * Time.MINUTE_MS,
+  limit: 30,
+  message: "Too many requests. Please try again in 15 minutes.",
+});
+
+/**
+ * POST /auth/password/validate and /auth/password/update (one shared bucket, after MandatoryTokenFilter):
+ * 10 wrong passwords per user per 15 min, so a stolen session can't brute-force the account password.
+ * Only failures count (a wrong password on validate is flagged with `countAsFailedAttempt`).
+ */
+export const passwordCheckLimiter = limiter({
+  windowMs: 15 * Time.MINUTE_MS,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req: Request) => `password-check-user:${req.user?.id ?? "none"}`,
+  message: "Too many password attempts. Please try again in 15 minutes.",
 });
 
 /** POST /auth/register */

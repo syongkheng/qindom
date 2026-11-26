@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import express, { RequestHandler } from "express";
 import cookieParser from "cookie-parser";
+import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { IS_DEV } from "../config/env.js";
 import tokenFilterDb from "../config/db/mysql.js";
@@ -26,12 +27,17 @@ import { AuthSessionService, BCRYPT_SALT_ROUNDS } from "./AuthSession.service.js
 import { toAdminUserDto } from "./AuthAdmin.service.js";
 import { passwordChangedMail, verificationCodeMail } from "./Auth.emailTemplate.js";
 import { PermissionService, ResourceType, isValidRole, parseRoles } from "./Permission.js";
+import { PPHS_ROLES, stripRoles } from "../migrations/20261126000300_strip_pphs_roles.js";
 import {
+  EMAIL_MAX_LENGTH,
+  PASSWORD_MAX_BYTES,
+  SYSTEM_MAX_LENGTH,
   isStrongPassword,
   parseRecentLogsLimit,
   validateEmailBody,
   validateLoginBody,
   validatePasswordUpdateBody,
+  validatePasswordValidateBody,
   validateRegisterBody,
   validateRequestIdParam,
   validateTelegramChatIdParam,
@@ -259,6 +265,12 @@ describe("POST /auth/register", () => {
       [{ ...ok, username: "ab" }, 400, "invalid_request_username"],
       [{ ...ok, username: "x".repeat(65) }, 400, "invalid_request_username"],
       [{ ...ok, email: "nope" }, 400, "invalid_request_email"],
+      // A7: column-width caps (an oversized email used to reach the insert and answer 500 registration_failed)
+      [{ ...ok, email: `${"a".repeat(EMAIL_MAX_LENGTH)}@example.com` }, 400, "invalid_request_email"],
+      [{ ...ok, system: "f".repeat(SYSTEM_MAX_LENGTH + 1) }, 400, "invalid_request_system"],
+      // A7: bcrypt only hashes 72 bytes; a too-long new password is a weak one
+      [{ ...ok, password: `Aa1!${"a".repeat(PASSWORD_MAX_BYTES - 3)}` }, 400, "weak_password"],
+      [{ ...ok, password: `Aa1!${"é".repeat(35)}` }, 400, "weak_password"], // 39 chars, 74 bytes
     ] as const) {
       const res = await post("/register", body);
       assert.equal(res.status, status, JSON.stringify(body));
@@ -355,6 +367,28 @@ describe("POST /auth/preflight", () => {
       assert.deepEqual(res.json.data, expected, email);
     }
     assert.equal((await post("/preflight", { email: "bad", system: SYSTEM })).json.data.code, "invalid_request_email");
+  });
+});
+
+describe("POST /auth/preflight limiter (A9)", () => {
+  test("30 per IP per 15 min, then 429 with the limiter body; other IPs unaffected", async () => {
+    const preflight = (ip: string) =>
+      fetch(`${base}/preflight`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Real-IP": ip },
+        body: JSON.stringify({ email: "nobody@example.com", system: SYSTEM }),
+      });
+    const first = await preflight("203.0.113.9");
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get("ratelimit-policy"), "30;w=900");
+    for (let i = 1; i < 30; i++) assert.equal((await preflight("203.0.113.9")).status, 200);
+    const limited = await preflight("203.0.113.9");
+    assert.equal(limited.status, 429);
+    assert.deepEqual(await limited.json(), {
+      success: false,
+      message: "Too many requests. Please try again in 15 minutes.",
+    });
+    assert.equal((await preflight("203.0.113.10")).status, 200);
   });
 });
 
@@ -542,6 +576,25 @@ describe("POST /auth/login", () => {
     assert.equal(unv.json.data.code, "email_not_verified");
     assert.equal(cookieValue(unv.cookies, "jwt_token"), undefined);
   });
+
+  test("a password over 72 bytes → 400 invalid_request_password, before any lookup (A7)", async () => {
+    const res = await post("/login", { email: "loginok@example.com", password: "x".repeat(73), system: SYSTEM });
+    assert.equal(res.status, 400);
+    assert.equal(res.json.data.code, "invalid_request_password");
+  });
+
+  test("the unverified-login PM2 line masks the email (A8)", async (t) => {
+    await seedUser({ username: "maskme", email_verified: 0 });
+    const lines: string[] = [];
+    t.mock.method(console, "warn", (line: string) => lines.push(line));
+    assert.equal(
+      (await post("/login", { email: "maskme@example.com", password: PASSWORD, system: SYSTEM })).status,
+      403,
+    );
+    const line = lines.find((l) => l.includes("Unverified login attempt"));
+    assert.ok(line?.includes("m***@example.com"), line);
+    assert.ok(!line?.includes("maskme@"), line);
+  });
 });
 
 // ── session routes ─────────────────────────────────────────────────────────
@@ -622,6 +675,70 @@ describe("POST /auth/password/*", () => {
     assert.equal(sentMail.length, 1);
     assert.equal(sentMail[0].to, user.email);
     assert.equal(sentMail[0].subject, "Your Awense password has been changed");
+  });
+
+  test("validate / update reject a password over 72 bytes with the field's invalid_request code (A7)", async () => {
+    const token = sessionFor(await seedUser({ username: "pwlong" }));
+    const long = "x".repeat(PASSWORD_MAX_BYTES + 1);
+    assert.equal(
+      (await post("/password/validate", { password: long }, token)).json.data.code,
+      "invalid_request_password",
+    );
+    const current = await post("/password/update", { currentPassword: long, newPassword: "N3w!passwd" }, token);
+    assert.equal(current.json.data.code, "invalid_request_currentPassword");
+    const next = await post("/password/update", { currentPassword: PASSWORD, newPassword: `Aa1!${long}` }, token);
+    assert.equal(next.json.data.code, "weak_password");
+  });
+
+  test("passwordCheckLimiter: 10 wrong passwords per user per 15 min, shared by validate and update (A1)", async () => {
+    const user = await seedUser({ username: "pwbrute" });
+    const token = sessionFor(user);
+    // Successes never count.
+    for (let i = 0; i < 12; i++) {
+      assert.deepEqual((await post("/password/validate", { password: PASSWORD }, token)).json.data, { isValid: true });
+    }
+    // A wrong password answers 200 { isValid: false } but counts; so does update's 401.
+    for (let i = 0; i < 9; i++) {
+      const res = await post("/password/validate", { password: "Wr0ng!pass" }, token);
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.json.data, { isValid: false });
+    }
+    const wrongCurrent = await post(
+      "/password/update",
+      { currentPassword: "Wr0ng!pass", newPassword: "N3w!passwd" },
+      token,
+    );
+    assert.equal(wrongCurrent.status, 401);
+    // The 11th attempt is refused on both routes, even with the right password (each call has its own IP).
+    for (const [path, body] of [
+      ["/password/validate", { password: PASSWORD }],
+      ["/password/update", { currentPassword: PASSWORD, newPassword: "N3w!passwd" }],
+    ] as const) {
+      const limited = await post(path, body, token);
+      assert.equal(limited.status, 429, path);
+      assert.deepEqual(limited.json, {
+        success: false,
+        message: "Too many password attempts. Please try again in 15 minutes.",
+      });
+    }
+    assert.ok(await bcrypt.compare(PASSWORD, user.password));
+    // Another user's bucket is untouched.
+    const other = sessionFor(await seedUser({ username: "pwbystander" }));
+    assert.equal((await post("/password/validate", { password: PASSWORD }, other)).status, 200);
+  });
+
+  test("the password-changed email has no formatted time (A6)", async () => {
+    const user = await seedUser({ username: "pwnotime" });
+    const ok = await post(
+      "/password/update",
+      { currentPassword: PASSWORD, newPassword: "N3w!passwd" },
+      sessionFor(user),
+    );
+    assert.equal(ok.status, 200);
+    await new Promise((resolve) => setImmediate(resolve));
+    const html = sentMail.at(-1)!.html!;
+    assert.ok(html.includes("<p>Your password was successfully changed.</p>"));
+    assert.doesNotMatch(html, /\d{1,2}:\d{2}|\b20\d{2}\b/);
   });
 
   test("update still succeeds when the notification email fails", async () => {
@@ -712,6 +829,25 @@ describe("/auth/admin (OWNER only)", () => {
     assert.equal(ok.status, 200);
     assert.deepEqual(ok.json.data, { updated: true });
     assert.equal(target.roles, JSON.stringify(["TRAVEL_R4", "admin"]));
+  });
+
+  test("POST /admin/users/:id/roles: an OWNER can't drop their own SYSTEM_R5 (A3), others' roles unchanged", async () => {
+    const boss = activeUser("boss@example.com")!;
+    for (const roles of [[], ["TRAVEL_R5"]]) {
+      const res = await post(`/admin/users/${boss.id}/roles`, { roles }, ownerToken);
+      assert.equal(res.status, 403);
+      assert.equal(res.json.data.code, "forbidden_access");
+      assert.equal(res.json.data.message, "You can't remove your own owner role");
+    }
+    assert.equal(boss.roles, JSON.stringify([OWNER_ROLE]));
+    // Keeping SYSTEM_R5 while changing the rest is fine.
+    const keep = await post(`/admin/users/${boss.id}/roles`, { roles: [OWNER_ROLE, "TRAVEL_R5"] }, ownerToken);
+    assert.equal(keep.status, 200);
+    assert.equal(boss.roles, JSON.stringify([OWNER_ROLE, "TRAVEL_R5"]));
+    // Another owner can still be demoted.
+    const otherOwner = await seedUser({ username: "boss2", roles: JSON.stringify([OWNER_ROLE]) });
+    assert.equal((await post(`/admin/users/${otherOwner.id}/roles`, { roles: [] }, ownerToken)).status, 200);
+    assert.equal(otherOwner.roles, "[]");
   });
 
   test("POST /admin/users/:id/roles on a soft-deleted or unknown user → 404, nothing written (A3)", async () => {
@@ -845,6 +981,40 @@ describe("Auth validators", () => {
     assert.throws(() => validateLoginBody({ email: "a@b.co", password: "x" }), { code: "invalid_request_system" });
   });
 
+  test("caps at the tb_aa_user column widths and bcrypt's 72 bytes (A7)", () => {
+    assert.equal(EMAIL_MAX_LENGTH, 255);
+    assert.equal(SYSTEM_MAX_LENGTH, 256);
+    assert.equal(PASSWORD_MAX_BYTES, 72);
+    const email255 = `${"a".repeat(EMAIL_MAX_LENGTH - "@b.co".length)}@b.co`;
+    assert.equal(validateEmailBody({ email: email255, system: "fnd" }).email, email255);
+    assert.throws(() => validateEmailBody({ email: `a${email255}`, system: "fnd" }), { code: "invalid_request_email" });
+    assert.equal(validateEmailBody({ email: "a@b.co", system: "s".repeat(SYSTEM_MAX_LENGTH) }).system.length, 256);
+    for (const system of ["", "   ", "s".repeat(SYSTEM_MAX_LENGTH + 1)]) {
+      assert.throws(() => validateEmailBody({ email: "a@b.co", system }), { code: "invalid_request_system" });
+    }
+    // Exactly 72 bytes passes; 73 bytes (or 37 two-byte chars) doesn't.
+    const login = { email: "a@b.co", system: "fnd" };
+    assert.equal(validateLoginBody({ ...login, password: "x".repeat(72) }).password.length, 72);
+    for (const password of ["x".repeat(73), "é".repeat(37)]) {
+      assert.throws(() => validateLoginBody({ ...login, password }), { code: "invalid_request_password" });
+      assert.throws(() => validateVerifyEmailBody({ ...login, code: "012345", password }), {
+        code: "invalid_request_password",
+      });
+      assert.throws(() => validatePasswordValidateBody({ password }), { code: "invalid_request_password" });
+      assert.throws(() => validatePasswordUpdateBody({ currentPassword: password, newPassword: PASSWORD }), {
+        code: "invalid_request_currentPassword",
+      });
+      assert.throws(() => validatePasswordUpdateBody({ currentPassword: "x", newPassword: `Aa1!${password}` }), {
+        code: "weak_password",
+      });
+    }
+    const strong72 = `Aa1!${"a".repeat(68)}`;
+    assert.equal(
+      validateRegisterBody({ username: "bob", email: "a@b.co", password: strong72, system: "fnd" }).password,
+      strong72,
+    );
+  });
+
   test("password update: weak new password → weak_password", () => {
     assert.throws(() => validatePasswordUpdateBody({ currentPassword: "x", newPassword: "short" }), {
       code: "weak_password",
@@ -897,8 +1067,11 @@ describe("Auth helpers and mappers", () => {
     assert.equal(isStaleUnverified({ email_verified: 0, verify_code_expires_at: null }, now), true);
   });
 
-  test("generateOtp: 6 digits, zero-padded", () => {
+  test("generateOtp: 6 digits, zero-padded, from crypto.randomInt(0, 1_000_000) (A5)", (t) => {
     for (let i = 0; i < 200; i++) assert.match(generateOtp(), /^\d{6}$/);
+    const randomInt = t.mock.method(crypto, "randomInt", () => 42);
+    assert.equal(generateOtp(), "000042");
+    assert.deepEqual(randomInt.mock.calls[0].arguments, [0, 1_000_000]);
   });
 
   test("constants keep their security values", () => {
@@ -944,9 +1117,12 @@ describe("Auth helpers and mappers", () => {
     assert.ok(!otp.html!.includes("<img"));
     assert.ok(otp.html!.includes("<strong>15 minutes</strong>"));
 
-    const changed = passwordChangedMail("a@b.co", "<b>", new Date(0));
+    const changed = passwordChangedMail("a@b.co", "<b>");
+    assert.equal(changed.to, "a@b.co");
     assert.equal(changed.subject, "Your Awense password has been changed");
     assert.ok(changed.html!.includes("&lt;b&gt;"));
+    assert.ok(changed.html!.includes("<p>Your password was successfully changed.</p>"));
+    assert.ok(changed.html!.includes("If you did not make this change, please contact us immediately"));
   });
 
   test("Permission: parseRoles and isValidRole", () => {
@@ -970,6 +1146,64 @@ describe("Auth helpers and mappers", () => {
     // The user join filters on the active status too: a soft-deleted user's grant isn't listed.
     assert.match(String(calls[0][0]), /JOIN tb_aa_user u ON u\.id = ra\.user_id AND u\.record_status = \?/);
     assert.deepEqual(calls[0][1], ["A", "analytics_system", "fndom", "A"]);
+  });
+
+  test("PermissionService: every method adds one SERVICE event and passes it to each DB call (Y3)", async () => {
+    const seen: { method: string; event: unknown }[] = [];
+    let existing: Row | undefined;
+    const record =
+      (method: string, result: () => unknown) =>
+      async (...args: unknown[]) => {
+        seen.push({ method, event: args.at(-1) });
+        return result();
+      };
+    const svc = new PermissionService({
+      findOne: record("findOne", () => existing),
+      find: record("find", () => [{ resource_key: "fndom" }]),
+      raw: record("raw", () => []),
+      update: record("update", () => []),
+      insert: record("insert", () => ({})),
+    } as never);
+    const user = { id: 3, username: "v", system: SYSTEM, roles: [], lastLoggedInDt: 0 };
+    const type = ResourceType.ANALYTICS_SYSTEM;
+    const calls: [string, (ctx: never) => Promise<unknown>, string[]][] = [
+      ["Check resource access", (ctx) => svc.canAccessResource(user, type, "fndom", ctx), ["findOne"]],
+      ["List granted resource keys", (ctx) => svc.grantedKeys(3, type, ctx), ["find"]],
+      ["List resource grants", (ctx) => svc.listGrants(type, "fndom", ctx), ["raw"]],
+      ["Grant resource access", (ctx) => svc.grant(type, "fndom", 3, 1, ctx), ["findOne", "insert"]],
+      ["Revoke resource access", (ctx) => svc.revoke(type, "fndom", 3, ctx), ["update"]],
+    ];
+    for (const [label, run, methods] of calls) {
+      seen.length = 0;
+      const ctx = { requestId: "t", startTime: 0, method: "POST", path: "/", ip: "", events: [] as Row[] };
+      await run(ctx as never);
+      assert.equal(ctx.events.length, 1, label);
+      assert.equal(ctx.events[0].message, label);
+      assert.deepEqual(
+        seen.map((c) => c.method),
+        methods,
+        label,
+      );
+      for (const call of seen) assert.equal(call.event, ctx.events[0], `${label} ${call.method}`);
+    }
+    existing = { id: 9 };
+    seen.length = 0;
+    await svc.grant(type, "fndom", 3, 1);
+    assert.deepEqual(
+      seen.map((c) => c.method),
+      ["findOne", "update"],
+    );
+  });
+
+  test("P1 migration: stripRoles removes PPHS_R4 / PPHS_R5 and leaves everything else alone", () => {
+    assert.deepEqual(PPHS_ROLES, ["PPHS_R4", "PPHS_R5"]);
+    assert.equal(stripRoles('["SYSTEM_R5","PPHS_R5","KS_R5"]', PPHS_ROLES), '["SYSTEM_R5","KS_R5"]');
+    assert.equal(stripRoles('["PPHS_R4"]', PPHS_ROLES), "[]");
+    assert.equal(stripRoles('["PPHS_R4","PPHS_R4","TRAVEL_R4"]', PPHS_ROLES), '["TRAVEL_R4"]');
+    // Nothing to strip, or not a JSON array → null (row left untouched).
+    for (const raw of ['["SYSTEM_R5"]', '["PPHS_R3","XPPHS_R4"]', "[]", "R5", '{"PPHS_R4":1}', "", null]) {
+      assert.equal(stripRoles(raw, PPHS_ROLES), null, String(raw));
+    }
   });
 });
 

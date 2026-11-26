@@ -7,6 +7,7 @@ import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { MailerUtilities } from "../utils/MailerUtilities.js";
 import { toMessage } from "../utils/ErrorUtilities.js";
+import { maskEmail } from "../utils/logging/LogRedaction.js";
 import { signToken, verifyToken } from "../token/Token.service.js";
 import { parseRoles } from "./Permission.js";
 import { passwordChangedMail } from "./Auth.emailTemplate.js";
@@ -50,7 +51,7 @@ export class AuthSessionService {
     }
     if (user.email_verified !== 1) {
       if (event) event.detail = "email not verified";
-      LoggingUtilities.service.warn("AuthSessionService.login", `Unverified login attempt for ${email}`);
+      LoggingUtilities.service.warn("AuthSessionService.login", `Unverified login attempt for ${maskEmail(email)}`);
       throw new Exceptions.EmailNotVerified();
     }
     if (event) event.detail = "authenticated";
@@ -161,12 +162,13 @@ export class AuthSessionService {
     const { token } = await this.issueSession(user, event);
     if (event) event.detail = "password updated, token rotated";
 
-    if (user.email) {
+    const { email } = user;
+    if (email) {
       // Fire-and-forget: a mail failure must not fail the change.
-      MailerUtilities.sendMail(passwordChangedMail(user.email, user.username, new Date())).catch(() => {
+      MailerUtilities.sendMail(passwordChangedMail(email, user.username)).catch(() => {
         LoggingUtilities.service.warn(
           "AuthSessionService.updatePassword",
-          `Failed to send password-change notification to ${user.email}`,
+          `Failed to send password-change notification to ${maskEmail(email)}`,
         );
       });
     }

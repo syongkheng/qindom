@@ -867,6 +867,19 @@ describe("Rate limiters", () => {
       message: "Too many login attempts. Please try again in 15 minutes.",
     },
     {
+      name: "preflightLimiter",
+      limit: 30,
+      windowSec: 15 * MIN,
+      message: "Too many requests. Please try again in 15 minutes.",
+    },
+    {
+      name: "passwordCheckLimiter",
+      limit: 10,
+      windowSec: 15 * MIN,
+      message: "Too many password attempts. Please try again in 15 minutes.",
+      skipSuccessful: true,
+    },
+    {
       name: "registerLimiter",
       limit: 5,
       windowSec: 60 * MIN,
@@ -949,6 +962,11 @@ describe("Rate limiters", () => {
         };
       next();
     });
+    // A 200 flagged as a failed attempt (what /auth/password/validate does for a wrong password).
+    app.get("/flagged/passwordCheckLimiter", Limiters.passwordCheckLimiter, (_req, res) => {
+      Limiters.countAsFailedAttempt(res);
+      res.status(200).json({ ok: true });
+    });
     for (const { name } of EXPECTED) {
       app.get(`/${name}`, Limiters[name] as RequestHandler, (req, res) => {
         res.status(Number(req.query.status ?? 200)).json({ ok: true });
@@ -973,8 +991,9 @@ describe("Rate limiters", () => {
 
   // The user limiter keys on the user id, so every case gets its own user there.
   let limiterUser = 1000;
+  const USER_KEYED = ["cameraClaimUserLimiter", "passwordCheckLimiter"];
   const subject = (name: string): Record<string, string> =>
-    name === "cameraClaimUserLimiter" ? { "x-test-user": String(++limiterUser) } : { "X-Real-IP": ip() };
+    USER_KEYED.includes(name) ? { "x-test-user": String(++limiterUser) } : { "X-Real-IP": ip() };
 
   for (const expected of EXPECTED) {
     test(`${expected.name}: ${expected.limit} per ${expected.windowSec}s, draft-7 headers, 429 body`, async () => {
@@ -1003,6 +1022,12 @@ describe("Rate limiters", () => {
   test("skipSuccessfulRequests limiters: successes never count", async () => {
     const who = { "X-Real-IP": ip() };
     for (let i = 0; i < 15; i++) assert.equal((await hit("itineraryChallengeLimiter", who)).status, 200);
+  });
+
+  test("countAsFailedAttempt: a flagged 200 counts toward a skipSuccessfulRequests limiter", async () => {
+    const who = { "x-test-user": String(++limiterUser) };
+    for (let i = 0; i < 10; i++) assert.equal((await hit("flagged/passwordCheckLimiter", who)).status, 200);
+    assert.equal((await hit("passwordCheckLimiter", who)).status, 429);
   });
 
   test("non-skip limiters count successes too", async () => {

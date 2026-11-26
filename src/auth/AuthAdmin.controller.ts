@@ -3,7 +3,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { adminLimiter } from "../middlewares/RateLimiter.js";
 import { RecentRequestLogDto, RequestLogMatchDto } from "../utils/logging/RequestLog.types.js";
-import { requireRole, route } from "../utils/RequestUtilities.js";
+import { getUser, requireRole, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { TelegramLogMatrix, TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { Roles } from "./Permission.js";
@@ -48,7 +48,7 @@ export default function createAuthAdminController(db: KnexSqlUtilities): Router 
       const userId = validateUserIdParam(req.params.id);
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
       const { roles } = validateUserRolesBody(req.body, event);
-      return cr.ok<AuthUpdatedDto>(await svc.updateUserRoles(userId, roles, req.logContext));
+      return cr.ok<AuthUpdatedDto>(await svc.updateUserRoles(getUser(req).id, userId, roles, req.logContext));
     }),
   );
 
