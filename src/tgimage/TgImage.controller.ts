@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { getUser, requireRole, route } from "../utils/requestUtils.js";
+import { clientIp, getUser, requireRole, route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Roles } from "../auth/Permission.js";
 import { TgImageService } from "./TgImage.service.js";
@@ -11,8 +11,6 @@ import { TgAdminAddedDto, TgAdminDto, TgAdminRemovedDto, TgImageUploadDto } from
 
 const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
 const UPLOAD_FIELD = "file";
-/** Same client-IP source as RestRequestLogger / RateLimiter (nginx sets X-Real-IP). */
-const UNKNOWN_IP = "Unknown";
 /** A short code always serves the same image (a new upload gets a new code), so clients may cache it for a day. */
 const IMAGE_CACHE_CONTROL = "public, max-age=86400";
 // User content on the API origin: if anything ever renders as a document,
@@ -56,7 +54,7 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
       const body = validateUploadBody(req.body, event);
       const uploader = {
         username: getUser(req).username,
-        ip: String(req.headers["x-real-ip"] || req.socket.remoteAddress || UNKNOWN_IP),
+        ip: clientIp(req),
       };
       return cr.ok<TgImageUploadDto>(await svc.upload(file, body, uploader, req.logContext));
     }),

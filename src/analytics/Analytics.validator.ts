@@ -1,5 +1,6 @@
 import { Request } from "express";
 import { Exceptions } from "../exceptions/AppExceptions.js";
+import { clientIp } from "../utils/requestUtils.js";
 import {
   AnalyticsBreakpoint,
   AnalyticsCollectBody,
@@ -217,10 +218,9 @@ export function validateHeartbeatBody(body: unknown): AnalyticsHeartbeatBody {
 
 /** Who sent an event, from the request (never the body): username ("" for visitors), client IP, user agent. */
 export function readRequestMeta(req: Request): AnalyticsRequestMeta {
-  const ip = req.headers["x-real-ip"] || req.socket.remoteAddress || UNKNOWN_CLIENT;
   return {
     userId: req.user?.username ?? "",
-    ipAddress: Array.isArray(ip) ? ip[0] : ip,
+    ipAddress: clientIp(req),
     userAgent: req.headers["user-agent"] || UNKNOWN_CLIENT,
   };
 }

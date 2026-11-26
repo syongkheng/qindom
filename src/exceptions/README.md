@@ -20,6 +20,7 @@ throw new Exceptions.NotFound("No log entries found for that Request ID");
 | `NotFound(message?)`                                         | 404  | `entity_not_found`                                    | yes                |
 | `EmailAlreadyRegistered`                                     | 409  | `email_already_registered`                            |                    |
 | `UsernameAlreadyTaken`                                       | 409  | `username_already_taken`                              |                    |
+| `UnsupportedMediaType`                                       | 415  | `unsupported_media_type`                              |                    |
 | `MaxVerifyAttempts`                                          | 429  | `max_verify_attempts`                                 |                    |
 | `Unknown`                                                    | 500  | `unknown`                                             |                    |
 | `Registration`                                               | 500  | `registration_failed`                                 |                    |

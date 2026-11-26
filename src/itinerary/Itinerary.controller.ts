@@ -2,7 +2,7 @@ import { Request, Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { itineraryChallengeLimiter } from "../middlewares/RateLimiter.js";
-import { getUser, route } from "../utils/requestUtils.js";
+import { clientIp, getUser, route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ItineraryService } from "./Itinerary.service.js";
 import { ItinerarySaveService } from "./ItinerarySave.service.js";
@@ -18,7 +18,6 @@ import {
 const UNKNOWN = "Unknown";
 
 const validationEvent = (req: Request) => LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
-const clientIp = (req: Request) => String(req.headers["x-real-ip"] || req.socket.remoteAddress || UNKNOWN);
 const userAgent = (req: Request) => req.headers["user-agent"] || UNKNOWN;
 
 /**

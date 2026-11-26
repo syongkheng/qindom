@@ -38,6 +38,10 @@ Each feature folder `src/<module>/` holds:
 - Errors: throw a typed exception via the registry (`throw new Exceptions.NotFound("...")`) (from the service, or from the controller for request-shape problems). `route()` maps it to the right status. Don't call `cr.result(...)` / `cr.badRequest(...)` inline. (Only exceptions: endpoints whose job is to answer with an arbitrary status, like `/debug/status/:code`, and error bodies fixed by an external contract, like `/analytics/report`'s `{message, problems}`, with a comment.)
 - Role checks use `requireRole(req, ...roles)` (throws `ForbiddenAccessException`), not `if (!hasRole(...)) return cr.result(403, ...)`.
 - Every error body has the same shape: `data = { code, message, fieldName, typeOfError, timestamp }`. When converting an inline error, check fndom for readers of `data` as a string and switch them to `data.message`.
+- Middlewares signal request errors by throwing `Exceptions.X` (answered by `ErrorHandler`), not inline `cr.result`, except client-contract bodies (TokenFilter `token_invalid`/`csrf_invalid`, the API-key 401), which carry a comment.
+- Client IPs for display/storage always come from `clientIp(req)` (`utils/requestUtils`); limiter keys use their own IPv6-collapsed key.
+- `logContext.metadata` holds only what code reads (e.g. `userId`); never secrets.
+- Rate limiters are built with the `limiter({...})` factory in `RateLimiter.ts`, windows via `Time`; route-group middleware chains live only in `presets.ts` (`mw.*`).
 - Auth goes on the mount in `index.ts` (`mw.auth`), not repeated per route (`router.get(path, MandatoryTokenFilter, ...)`), unless only some routes of a router need it.
 - Binary/raw responses use `route(label, fallback, async (req, _cr, res) => …)`: finish every lookup and upstream call **before** the first `setHeader` so failures still get the JSON error; send with `res.end(buffer)`.
 - Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
@@ -191,6 +195,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | middlewares: 79 pinning tests before refactor (88 total); request-log flush in `finish` could crash the process (fixed); shared `clientIp`; raw API key no longer in log metadata; new registry `UnsupportedMediaType` (415); `mw.authUpload` / `mw.pdcaPublic` presets. Questions M1–M5. |
 | 2026-11-26 | analytics: zod replaced by hand-written validators (176 characterisation cases + 180k-input differential, 0 diffs) and uninstalled; public contracts frozen; services own the SQL. Questions Y1–Y4. |
 | 2026-11-26 | camera: unauthenticated `GET //` upgrade crashed the process (fixed + test); every WS callback guarded; sha256Hex; protocol/security unchanged. Questions C1–C4. |
 | 2026-11-26 | auth: split into AuthRegistration/AuthSession/AuthAdmin services + AuthAdmin.controller; 31 pinning tests before refactor; no security semantics changed; dev OTP bypass via IS_DEV; fndom profile password-change error now toasts. Questions A1–A11. |

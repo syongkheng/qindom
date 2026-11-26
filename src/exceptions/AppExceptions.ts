@@ -119,6 +119,15 @@ export class UsernameAlreadyTakenException extends BaseException {
   }
 }
 
+// ── 415 Unsupported Media Type ──────────────────────────────────
+
+/** A body-carrying request (POST) that isn't JSON. Thrown by `RequestHeaderFilter`. */
+export class UnsupportedMediaTypeException extends BaseException {
+  constructor() {
+    super("unsupported_media_type", "Content-Type must be application/json", 415);
+  }
+}
+
 // ── 429 Too Many Requests ───────────────────────────────────────
 
 export class MaxVerifyAttemptsException extends BaseException {
@@ -178,6 +187,7 @@ export const Exceptions = {
   NotFound: EntityNotFoundException,
   EmailAlreadyRegistered: EmailAlreadyRegisteredException,
   UsernameAlreadyTaken: UsernameAlreadyTakenException,
+  UnsupportedMediaType: UnsupportedMediaTypeException,
   MaxVerifyAttempts: MaxVerifyAttemptsException,
   Unknown: UnknownException,
   Registration: RegistrationException,

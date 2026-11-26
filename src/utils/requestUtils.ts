@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import { Request, RequestHandler, Response } from "express";
 import { BaseException, Exceptions } from "../exceptions/AppExceptions.js";
 import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
@@ -5,6 +6,19 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { LoggingUtilities } from "./logging/LoggingUtilities.js";
 import { toMessage } from "./errorUtils.js";
+
+/** Shown when neither X-Real-IP nor the socket address is known. */
+export const UNKNOWN_IP = "Unknown";
+
+/**
+ * The caller's IP for logs, alerts and stored request metadata: nginx's `X-Real-IP` (the real client,
+ * see MINDMAP "Infrastructure"), else the socket address. Always a string (`String(...)`), so a
+ * header that arrives as an array can't break string handling downstream. Rate limiters key on
+ * their own IPv6-collapsed variant in `middlewares/RateLimiter.ts`.
+ */
+export function clientIp(req: IncomingMessage): string {
+  return String(req.headers["x-real-ip"] || req.socket.remoteAddress || UNKNOWN_IP);
+}
 
 export function getUser(req: RequestWithUserInfo): IDecodedTokenUser {
   if (!req.user) throw new Exceptions.UnauthorizedAccess();

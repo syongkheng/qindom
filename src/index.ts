@@ -11,8 +11,6 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { LoggingUtilities } from "./utils/logging/LoggingUtilities.js";
 import { initializeDatabase } from "./config/db/mysql.js";
-import { RestRequestLogger } from "./middlewares/RestRequestLogger.js";
-import { MandatoryTokenFilter } from "./middlewares/TokenFilter.js";
 import { globalLimiter } from "./middlewares/RateLimiter.js";
 import { mw } from "./middlewares/presets.js";
 import { ErrorHandler } from "./middlewares/ErrorHandler.js";
@@ -55,8 +53,6 @@ import createCameraController from "./camera/Camera.controller.js";
 
 // PDCA website (dental-directory) contact form
 import createPdcaEnquiryController from "./pdca/PdcaEnquiry.controller.js";
-import { stripPersonalDataFromLog } from "./pdca/PdcaEnquiry.middleware.js";
-import { RequestHeaderFilter } from "./middlewares/RequestHeaderFilter.js";
 import { CameraService } from "./camera/Camera.service.js";
 import { CameraRelay } from "./camera/Camera.relay.js";
 import { PairingCodeStore } from "./camera/Camera.pairing.js";
@@ -132,7 +128,7 @@ async function startServer() {
     ["/applepay", mw.auth, createApplePayController(db)],
     ["/file", mw.auth, createFileController(db)],
     ["/img", mw.pub, createTgImageGetController(db)],
-    ["/img", [RestRequestLogger, MandatoryTokenFilter], createTgImageController(db)], // no RHF — multipart upload
+    ["/img", mw.authUpload, createTgImageController(db)], // no RHF — multipart upload
     ["/geocode", mw.std, createGeocodeController(db)],
     ["/v1/ss", mw.ssKey, createSsApplePayControllerV1(db)],
     ["/v1/ss", mw.ssKey, createSsTodoControllerV1(db)],
@@ -142,7 +138,7 @@ async function startServer() {
     ["/suggestion", mw.std, createSuggestionController(db)],
     ["/camera", mw.std, createCameraController(cameraService)], // auth per route
     // Public contact form; body logged as field lengths only (personal data)
-    ["/pdca", [RestRequestLogger, stripPersonalDataFromLog, RequestHeaderFilter], createPdcaEnquiryController(db)],
+    ["/pdca", mw.pdcaPublic, createPdcaEnquiryController(db)],
     // Open in dev for curl testing; prd requires login (+ SYSTEM_R5, checked in the controller)
     ["/debug", process.env.NODE_ENV === "prd" ? mw.auth : mw.std, createDebugController()],
   ];

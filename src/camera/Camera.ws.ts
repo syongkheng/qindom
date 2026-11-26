@@ -3,6 +3,7 @@ import type { Duplex } from "stream";
 import { WebSocketServer, WebSocket, RawData } from "ws";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { toMessage } from "../utils/errorUtils.js";
+import { clientIp } from "../utils/requestUtils.js";
 import { JWT_COOKIE } from "../utils/AuthCookieUtilities.js";
 import { resolveSessionUser } from "../middlewares/TokenFilter.js";
 import { Time } from "../constants/Time.js";
@@ -113,8 +114,6 @@ const toText = (data: RawData): string | null => {
   const buffer = toBuffer(data);
   return buffer.length > CAMERA_MAX_TEXT_BYTES ? null : buffer.toString("utf8");
 };
-
-const clientIp = (req: IncomingMessage) => String(req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown");
 
 /**
  * Handles HTTP upgrades for the camera relay on the Express server:

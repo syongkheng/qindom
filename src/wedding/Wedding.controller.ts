@@ -1,7 +1,7 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { weddingRsvpLimiter } from "../middlewares/RateLimiter.js";
-import { route } from "../utils/requestUtils.js";
+import { clientIp, route } from "../utils/requestUtils.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { WeddingService } from "./Wedding.service.js";
 import { WeddingVisitNotifier } from "./Wedding.visitNotifier.js";
@@ -13,7 +13,6 @@ import {
 } from "./Wedding.validator.js";
 import { WeddingRsvpPreflightDto, WeddingRsvpStatusDto, WeddingRsvpSubmittedDto } from "./Wedding.types.js";
 
-const UNKNOWN_IP = "Unknown";
 /** The visit beacon has nothing to return; 204 keeps it body-less (jessikheng ignores the response). */
 const NO_CONTENT = 204;
 
@@ -29,7 +28,7 @@ export default function createWeddingController(db: KnexSqlUtilities): Router {
     route("WeddingController.POST /visit", "Failed to record the visit", (req, _cr, res) => {
       void visitNotifier.notify({
         ...sanitiseVisitBody(req.body),
-        ip: String(req.headers["x-real-ip"] || req.socket.remoteAddress || UNKNOWN_IP),
+        ip: clientIp(req),
         userAgent: req.headers["user-agent"] ?? "",
       });
       res.status(NO_CONTENT).end();
