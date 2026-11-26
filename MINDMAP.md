@@ -3,6 +3,7 @@
 Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "module"`, `nodenext`, relative imports need `.js`). Dev runner: `tsx watch`. Deploy: AWS EC2 ap-southeast-1, port 3000, PM2 (`ecosystem.config.cjs`) behind nginx, behind Cloudflare (since 2026-11-19).
 
 ## Infrastructure
+
 - DNS: `awense.com` zone on Cloudflare (free plan; registrar still Vercel). `api` A → EC2 `52.220.202.154` **proxied**; `@` and `www` CNAME → Vercel (`vercel-dns-017.com`) **DNS only** (Vercel advises against proxying). Universal edge cert covers `awense.com` + `*.awense.com`; SSL/TLS mode Automatic.
 - Network: EC2 security group inbound = HTTP 80 + HTTPS 443 from managed prefix list `pl-0c867e2053ac61bf6` (`cloudflare-ipv4`, the 15 ranges from cloudflare.com/ips-v4), SSH 22 from the owner's IP only (if it changes, reset the rule to "My IP" or `deploy.sh` times out). Direct hits on the EC2 IP time out. If Cloudflare publishes new ranges, update both the prefix list and the nginx realip file.
 - nginx proxies to :3000 and sets `X-Real-IP $remote_addr`. `/etc/nginx/conf.d/cloudflare-realip.conf` has `set_real_ip_from` for every Cloudflare v4/v6 range + `real_ip_header CF-Connecting-IP`, so `$remote_addr` (and therefore `X-Real-IP`) is the real client IP, not a Cloudflare edge IP.
@@ -15,6 +16,7 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 - Knex CLI scripts run via `node --import tsx`; `__dirname` via `fileURLToPath(import.meta.url)`.
 
 ## Middleware stack (global → route-level)
+
 1. **CORS** (`ALLOWED_ORIGINS`), security headers (nosniff, X-Frame DENY, no-referrer, HSTS in prd).
 2. **globalLimiter** 100 req/min/IP. All limiters (`RateLimiter.ts`) key on `X-Real-IP` (set by nginx; no `trust proxy`). Safe because port 3000 is reachable only via nginx, nginx only via Cloudflare (security group), and nginx's realip config takes the client IP from `CF-Connecting-IP` only when the connection comes from a Cloudflare range. If that realip file is removed, users share buckets per Cloudflare edge IP.
 3. cookieParser, `express.json` 5MB, urlencoded.
@@ -27,34 +29,35 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 10. **ErrorHandler** — registered last; replaces Express default (no stack leaks). `BaseException` → status, Multer → 413/400, http-errors → 4xx, else generic 500.
 
 ## Route table (index.ts) — `mw.std` open, `mw.auth` JWT, `mw.pub` public
-| Prefix | Auth | Module |
-|---|---|---|
-| /connectivity | std | health check (process + DB `SELECT 1`; 500 if DB down; polled by deploy.sh) |
-| /analytics | std | heartbeat, event ingest |
-| /hdb, /lta, /geocode | std | HDB, LTA, Nominatim proxy |
-| /auth | std | auth |
-| /pfp | auth | profile (`src/profile/Profile.*`) |
-| /itinerary | std | trips |
-| /budget | auth | budget |
-| /applepay | auth | Apple Pay dashboard |
-| /todo | auth | Personal to-do list |
-| /house-layout | auth | Saved house-planner layouts |
-| /house/share | auth | Create / list / revoke a user's house share links |
-| /house/view/:token | public (`mw.housePublic`, 60/min/IP) | Read one shared house snapshot |
-| /v1/ss/todo | ss_ API key | Lock-screen widget feed (Scriptable) |
-| /file | auth | soft-delete itinerary file records |
-| /img | pub GET / JWT upload | Telegram image CDN |
-| /v1/ss, /v2/ss | api-key | Siri Shortcut ingestion |
-| /ss-key | auth | API-key mgmt |
-| /wedding | std | RSVP |
-| /suggestion | std (writes: JWT + admin per route) | packing / country-note suggestions |
-| /camera | std + per-route JWT | camera relay REST (register public + limited; claim/list/delete JWT) |
-| /pdca | public (`RestRequestLogger` + `stripPersonalDataFromLog` + RHF; `pdcaEnquiryLimiter` 5/10min/IP) | PDCA website contact form |
-| /camera/ws/phone, /camera/ws/dashboard | WebSocket upgrade (device token / cookie + Origin) | camera relay sockets |
-| /debug | open in dev; JWT + SYSTEM_R5 in prd | `GET /status/:code` logging test |
 
+| Prefix                                 | Auth                                                                                             | Module                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| /connectivity                          | std                                                                                              | health check (process + DB `SELECT 1`; 500 if DB down; polled by deploy.sh) |
+| /analytics                             | std                                                                                              | heartbeat, event ingest                                                     |
+| /hdb, /lta, /geocode                   | std                                                                                              | HDB, LTA, Nominatim proxy                                                   |
+| /auth                                  | std                                                                                              | auth                                                                        |
+| /pfp                                   | auth                                                                                             | profile (`src/profile/Profile.*`)                                           |
+| /itinerary                             | std                                                                                              | trips                                                                       |
+| /budget                                | auth                                                                                             | budget                                                                      |
+| /applepay                              | auth                                                                                             | Apple Pay dashboard                                                         |
+| /todo                                  | auth                                                                                             | Personal to-do list                                                         |
+| /house-layout                          | auth                                                                                             | Saved house-planner layouts                                                 |
+| /house/share                           | auth                                                                                             | Create / list / revoke a user's house share links                           |
+| /house/view/:token                     | public (`mw.housePublic`, 60/min/IP)                                                             | Read one shared house snapshot                                              |
+| /v1/ss/todo                            | ss_ API key                                                                                      | Lock-screen widget feed (Scriptable)                                        |
+| /file                                  | auth                                                                                             | soft-delete itinerary file records                                          |
+| /img                                   | pub GET / JWT upload                                                                             | Telegram image CDN                                                          |
+| /v1/ss, /v2/ss                         | api-key                                                                                          | Siri Shortcut ingestion                                                     |
+| /ss-key                                | auth                                                                                             | API-key mgmt                                                                |
+| /wedding                               | std                                                                                              | RSVP                                                                        |
+| /suggestion                            | std (writes: JWT + admin per route)                                                              | packing / country-note suggestions                                          |
+| /camera                                | std + per-route JWT                                                                              | camera relay REST (register public + limited; claim/list/delete JWT)        |
+| /pdca                                  | public (`RestRequestLogger` + `stripPersonalDataFromLog` + RHF; `pdcaEnquiryLimiter` 5/10min/IP) | PDCA website contact form                                                   |
+| /camera/ws/phone, /camera/ws/dashboard | WebSocket upgrade (device token / cookie + Origin)                                               | camera relay sockets                                                        |
+| /debug                                 | open in dev; JWT + SYSTEM_R5 in prd                                                              | `GET /status/:code` logging test                                            |
 
 ## Modules
+
 - **AUTH `/auth`** — register → OTP email → verify → JWT set via Set-Cookie only (never in body). `POST /logout` clears cookies; `POST /verification` reads cookie. bcrypt 10 rounds; OTP SHA-256, 15-min TTL, max 5 attempts (429). `/verify-email` requires `password` too (bcrypt-checked; wrong password counts as an attempt) so a pre-registered squat can't be verified by the real owner. Unverified rows whose OTP lapsed count as free: preflight says register, register soft-deletes them (email or username). Register `system` must be in `REGISTER_SYSTEMS` (`["fnd"]`). Limits: 5 reg/hr, 10 login/15min, verify 10/15min, resend 3/15min. Usernames 3–64 chars, HTML-escaped in emails. **Dev OTP bypass:** code `111111` accepted only when `NODE_ENV === "dev"`. Admin (SYSTEM_R5): `GET /admin/recent-request-logs?limit=`, `GET /admin/request-logs/:requestId` (`req_` + 12 hex; older 5-hex ids accepted; parsed by `RequestLogParser.ts`, must track `LoggingUtilities.render()`). DB: `tb_aa_user` (unique `username_system_active` among active rows).
 - **PROFILE `/pfp`** (JWT on mount, `src/profile/Profile.*`) — country (`""` clears), avatar (image data URL in `pfp_picture_blob` LONGBLOB; legacy raw base64 read back as JPEG), username change (3–64, shared `validateUsername`; re-signs JWT + sets cookies). Responses are small DTOs, never user rows. DB: `tb_aa_user`.
 - **ANALYTICS `/analytics`** — two routers on the same prefix. Legacy (`Heartbeat.controller.ts`, deprecated): `POST /` (loose event), `POST /heartbeat` (upsert by session_id). **v1** (`Analytics.controller.ts`): `POST /collect` public fixed contract (`AnalyticsContract.ts`, zod; `v:1`, `screen.{width,height,breakpoint,size}`), `analyticsLimiter` 120/min, Telegram-silent. Whitelist = `tb_analytic_system` (active = `record_status 'A'`; per-system ordered `breakpoints` `{key,label,maxWidth,size}` + `allowed_origins`; 60s cache in `AnalyticSystem.service.ts`). Unknown breakpoint → `'unknown'`; missing size derived from breakpoint. Reads (JWT): `GET /systems`, `GET /systems/:key/summary?hours=` (≤168; hourly series, breakpoint + size session splits, top pages; `AnalyticsDashboard.service.ts`). **Report** `POST /report` (`AnalyticsReport.ts` pure validator/aggregation + `AnalyticsReport.service.ts`): `pdca.analytics.report/v1` request → response (`source: "qindom"`) for the PDCA site's private `/insights` page; `site` → system via `REPORT_SITES` (`pdcadental.com` → `dental-directory`); no login — viewer key in `x-analytics-key` checked (timing-safe) against `tb_analytic_system.read_key_hash` (sha256 hex) + origin check, same 403 for every failure; `analyticsReportLimiter` 30/min. Visitors = distinct `properties.visitorId` (fallback session_id); periods are Singapore dates; country/searchTerm/listing* not measurable → 0/[]. OWNER (SYSTEM_R5) admin: `POST /admin/systems/:key/read-key` (rotate, plain key returned once), `GET|POST /admin/systems`, `GET|POST /admin/systems/:key/access`, `POST /admin/systems/:key/access/:userId/revoke`. Seeded systems: `fndom`, `jessikheng`, `dental-directory` (breakpoints sm≤460/md≤820/lg≤1024/xl since migration 20261125000000). DB: `tb_analytic_system`, `tb_analytic_event` (+ `screen_*` cols), `tb_analytic_user_activity`.
@@ -62,9 +65,9 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
 - **ITINERARY `/itinerary`** — trips shareable via `short_code` + 6-char PIN; `POST /challenge` limited to 10 failed/15min/IP. Agenda items (nullable day/date, `unknown_time`, `list_type` todo|place), bookings, packing, notes. `POST /edit/:sessionId`: child rows addressed by client ids → **every update/delete scoped by `itinerary_id`**, foreign agenda id → ForbiddenAccess + rollback (keep on any new child write). JWT-only. DB: `tb_travel_itinerary`, `_agenda_item`, `_agenda_file`, `_itinerary_booking`, `_itinerary_view`, `_packing_item`, `_note_item`.
 - **FILE `/file`** (JWT) — `POST /delete` `{ _fileIdsToDelete: uuid[] (1–100) }` → `{ deleted }` (rows actually soft-deleted, owner = itinerary creator). Records are **created by the itinerary save** (`_filesToInsert`), not here; `POST /file/tg` removed Nov 2026 (unused). Known gaps (itinerary save): `tgShortCode` ownership and `mimeType` unvalidated. DB: `tb_travel_agenda_file`.
 - **IMAGE CDN `/img`** (`src/tgimage/`) — `POST /upload` (JWT, `image/*` only, multer 30MB memory → Telegram sendDocument, 8-hex shortCode, `tb_tg_image`); `GET /:shortCode` public, downloaded from Telegram and re-encoded by sharp (buffered, before any header), CSP `default-src 'none'; sandbox`. SVG never served raw (rasterised to PNG on upload and on read). `/admin/list|add|remove` (SYSTEM_R5, `requireRole`) → `tb_tg_stats_whitelist` (camelCase `{ id, telegramUserId, addedAt }`). Files `TgImage.{controller,service,validator,types,bot,test}.ts`; `TgImageService` owns `tb_tg_image` + whitelist writes (`TelegramLogSubscriptionService` reads it); `TgLog.logSender.ts` = Telegram log-alert transport.
-- **GEOCODE `/geocode?q=`** — Nominatim proxy, DB-cached (`tb_geocode_cache`, failures not cached), queue ≥1.1s/call, max 5 waiting, q ≤ 200 chars.
-- **HDB `/hdb`** — property search, nearest (Haversine); coordinate admin routes (`/pphs/update|clear-coordinates|geocode-options|refresh`) need PPHS_R5|SYSTEM_R5. DB: `tb_hdb_pphs`, `tb_hdb_pphs_coordinate`.
-- **LTA `/lta`** — `GET /timing` (DataMall bus arrivals pass-through), `GET /bus/services?busStopCode=`. `LtaService` owns `tb_lta_busstop`, `tb_lta_bus_info`, `tb_lrt_mrt_station` and also serves hdb's nearest bus stops/MRT lookups (`/hdb/pphs/busstops|mrt`).
+- **GEOCODE `/geocode?q=`** — Nominatim proxy, DB-cached (`tb_geocode_cache`, failures not cached), queue ≥1.1s/call, max 5 waiting, q ≤ 200 chars. The queue is exported as `searchNominatim(params)` (uncached) and also used by hdb.
+- **HDB `/hdb`** (`src/hdb/`, see its README) — public `GET /pphs?batch=YYYYMM` (stored batch; only the current batch (latest even month, SGT; same rule as fndom's switcher default) is scraped by the pure `HdbPphs.parser.ts` and stored, other unstored batches 404; HDB down/layout changed → 502), `GET /pphs/busstops?lat=&lng=&radius=` → `{ busStops, count }`, `GET /pphs/mrt?lat=&lng=&limit=` → `{ stations, count }` (camelCase; were POST + snake_case `{rows,count}` until Nov 2026; data via `LtaService`). Coordinate admin `POST /pphs/update|clear-coordinates|geocode-options|refresh` (update = upsert, server-built `formedUrl`; geocode-options stays POST for CSRF) (per-route MandatoryTokenFilter + `requireRole(PPHS_R5|SYSTEM_R5)`). `HdbCoordinateService` = geocoding cache (DB → OneMap → Nominatim via geocode's shared `searchNominatim` queue). DB: `tb_hdb_pphs`, `tb_hdb_pphs_coordinate`.
+- **LTA `/lta`** — `GET /timing` (DataMall bus arrivals pass-through), `GET /bus/services?busStopCode=`. `LtaService` owns `tb_lta_busstop`, `tb_lta_bus_info`, `tb_lrt_mrt_station` and also serves hdb's nearest bus stops/MRT lookups (`GET /hdb/pphs/busstops|mrt`; raw rows, hdb maps to DTOs).
 - **SIRI SHORTCUTS (API-key, `src/siri-shortcut/`, see its README; frozen contract with the phone)** — V1 `POST /v1/ss/ap/transaction {amount, merchant, name}` (all strings; Apple Pay NFC; `$` stripped; merchant/name ≤255) + `GET /v1/ss/ap/transaction` (no frontend caller, kept for Shortcuts); V2 `POST /v2/ss/ap/sms {smsBody ≤2000}` → `{amount, currency, merchant, cardLast4, timestamp}` (pure parsers in `ApplePaySms.parser.ts`: currency + amount, merchant, card last 3–4; UOB/DBS/Citibank — Citi merchant = `by … on dd/mm/yy`, city/country padding stripped). Validation in `SiriShortcut.validator.ts`. `occurred_dt` always server-stamped. Both write `tb_applepay_transaction` (`source` v1|v2|manual) via `ApplePayService`.
 - **APPLE PAY DASHBOARD `/applepay`** (JWT) — `GET /` (v1+v2 feed), `POST /` manual entry (no future dates, 5-min skew), `POST /:id/delete` (soft), `POST /:id/restore` (undo: D -> A, owner-scoped, 404 if not deleted), `POST /:id/category`, `POST /card-label/:cardLast4`. Owner-scoped; uuid is public id. Duplicate detection/CSV export are frontend-only. DB: `tb_applepay_transaction` (`currency` CHAR(3), default SGD — never converted; frontend shows SGD headline + per-currency totals/pies), `tb_applepay_card_label`. Service: `applepay/ApplePay.service.ts` (`ApplePayService`), also used by the siri-shortcut V1/V2 ingestion routes.
 - **SS API KEY `/ss-key`** (JWT) — `GET/POST /api-key`, `POST /api-key/delete` (revoke; was DELETE until Nov 2026), `POST /api-key/name` (≤100 chars). One active `ss_` key per user, SHA-256 hashed, shown once. DB: `tb_ss_api_key`.
@@ -83,14 +86,17 @@ Express 5 + TypeScript + MySQL (db `wuxi`) via Knex. Native ESM (`"type": "modul
   - DB: `tb_wedding_rsvp`, `tb_wedding_rsvp_guest`.
 
 ## External services
+
 MySQL · Nominatim · LTA DataMall · `ws` (camera relay WebSockets) · Telegram Bot API (`node-telegram-bot-api` ^1.1, ESM, fetch-based) · Nodemailer (OTP/RSVP/PDCA enquiry email; `MailOptions.fromName`/`replyTo` optional, address always `SMTP_USER`).
 
 ## DB patterns
+
 - Soft delete `record_status` 'A'/'D'; timestamps are ms epoch (`Date.now()`); JSON fields (roles, pax_names…) stored as strings; audit `created_by`/`updated_by` (username).
 - Never put plain UNIQUE on a user-chosen value (a 'D' row would block a new one): use a VIRTUAL column `IF(record_status='A', col, NULL)` + UNIQUE. System ids (uuid, session_id, short_code) stay plain UNIQUE.
 - `KnexSqlUtilities` takes optional `logContext` (last param) and auto-emits timed SQL events; all raw SQL uses bindings.
 
 ## Code conventions
+
 - **Style guide: `docs/CODING_STYLE.md`** (source of truth; refactor progress in `docs/REFACTOR_CHECKLIST.md`). Prettier (`npm run format`).
 - Response interfaces `XyzDto` + request bodies `XyzBody` → co-located `src/<module>/<Module>.types.ts` (legacy ones still in `models/dtos/`, `models/requests/` until migrated); DB rows `ITB_*`/`ITb*` → `models/databases/`.
 - URLs use hyphens. Envelope `{ code, status: "Ok"|"Ko", data }`.

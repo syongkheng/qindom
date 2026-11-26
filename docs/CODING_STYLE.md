@@ -109,6 +109,9 @@ Each feature folder `src/<module>/` holds:
 - Free-form input parsing (SMS, scraped text) lives in a pure `<Feature>.parser.ts` returning null for missing parts; the validator decides which gaps are 400s.
 - When two modules check the same column, the owning module exports the limit (`MAX_AMOUNT`, `MERCHANT_MAX_LENGTH`).
 - Third-party calls: any failure (network error, non-OK status, unreadable body) → `Exceptions.ExternalRequest` (502); missing server config (API key) → `Unknown` (500) with a server log.
+- Every Nominatim call goes through geocode's `searchNominatim` (one shared 1 req/s queue + UA); no second client.
+- Coordinates in query strings are validated as plain decimals (`/^-?\d+(\.\d+)?$/`) and range-checked (±90 / ±180).
+- Logic duplicated across repos on purpose (e.g. PPHS batch rule in qindom + fndom) carries a comment in both places pointing at the other.
 - Build query strings with `URLSearchParams`, not string concatenation, and name limits like `NOMINATIM_RESULT_LIMIT`.
 - Values that differ per environment come from `process.env`, read in one place, with a documented default.
 - Env vars loaded by dotenv (secrets, URLs) must be read **lazily** inside a function (`getJwtSecret()`), never in a top-level `const`: ESM evaluates imports before `index.ts` runs `dotenv.config`. Required ones are checked once at boot in `index.ts`.
@@ -174,6 +177,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | hdb: pphs list/busstops/mrt → GET + camelCase (fndom); scraping only for the current batch (latest even month, same rule as fndom); admin update upserts and builds formedUrl server-side; Nominatim via the shared queue. Questions H1–H3. |
 | 2026-11-26 | siri-shortcut: Citi SMS regex ReDoS fixed (2 KB of spaces blocked the event loop ~4 s); smsBody ≤ 2000; contract unchanged. Questions S1–S4 collected. |
 | 2026-11-26 | budget: paths → `/:id/update|delete`, `/:id/item/:itemId/update` (fndom); create accepts null amounts; fndom category clear fixed. Design questions B1–B5 collected for the user. |
 | 2026-11-26 | tgimage: image fetch buffered (a non-image used to crash the process); uploads image/* only; bot `/list` escaped; caption IP from x-real-ip; admin list camelCase (fndom). |

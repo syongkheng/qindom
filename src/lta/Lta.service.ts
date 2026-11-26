@@ -102,14 +102,14 @@ export class LtaService {
 
   /** Bus stops within `radiusM` metres of a point, nearest first (capped at `NEARBY_BUS_STOPS_MAX_ROWS`). */
   async findBusStopsNear(
-    lat: string,
-    lng: string,
+    lat: number,
+    lng: number,
     radiusM: number,
     logContext?: IRequestLogContext,
   ): Promise<NearbyBusStopsResult> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "LTA bus stops near point");
     const rows = await this.db.raw<NearbyBusStopRow[]>(
-      `SELECT b.busstop_code, b.road_name, b.desc, b.lat, b.lng,
+      `SELECT b.busstop_code, b.road_name, b.desc,
               ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) AS distance_m
        FROM ${LTA_BUS_STOP_TABLE} b
        WHERE ST_Distance_Sphere(POINT(b.lng, b.lat), POINT(?, ?)) <= ?
@@ -123,8 +123,8 @@ export class LtaService {
 
   /** The `limit` nearest MRT/LRT stations to a point (one row per station, using its closest exit). */
   async findNearestMrtStations(
-    lat: string,
-    lng: string,
+    lat: number,
+    lng: number,
     limit: number,
     logContext?: IRequestLogContext,
   ): Promise<NearestMrtStationsResult> {

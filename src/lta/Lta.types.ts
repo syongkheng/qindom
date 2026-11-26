@@ -59,11 +59,10 @@ export interface BusStopCodeQuery {
   busStopCode: string;
 }
 
-// ── Proximity lookups used by /hdb/pphs/busstops and /hdb/pphs/mrt ──
-// These keep hdb's current snake_case `{ rows, count }` response shape; hdb will
-// map them to camelCase DTOs when that folder is refactored.
+// ── Proximity lookups used by GET /hdb/pphs/busstops and GET /hdb/pphs/mrt ──
+// Raw rows (snake_case, internal): hdb maps them to its camelCase DTOs (`Hdb.types.ts`).
 
-export type NearbyBusStopRow = Pick<ITB_LTA_BUSSTOP, "busstop_code" | "road_name" | "desc" | "lat" | "lng"> & {
+export type NearbyBusStopRow = Pick<ITB_LTA_BUSSTOP, "busstop_code" | "road_name" | "desc"> & {
   distance_m: number;
 };
 

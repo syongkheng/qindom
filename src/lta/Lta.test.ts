@@ -76,17 +76,17 @@ test("listBusServices queries by stop code and returns mapped services with thei
 test("findBusStopsNear caps rows but reports the full count, binding lng before lat", async () => {
   const stops = Array.from({ length: NEARBY_BUS_STOPS_MAX_ROWS + 5 }, (_, i) => ({ busstop_code: String(i) }));
   const { db, calls } = fakeDb(stops);
-  const result = await new LtaService(db).findBusStopsNear("1.35", "103.84", 300);
+  const result = await new LtaService(db).findBusStopsNear(1.35, 103.84, 300);
   assert.equal(result.rows.length, NEARBY_BUS_STOPS_MAX_ROWS);
   assert.equal(result.count, NEARBY_BUS_STOPS_MAX_ROWS + 5);
-  assert.deepEqual(calls[0].bindings, ["103.84", "1.35", "103.84", "1.35", 300]);
+  assert.deepEqual(calls[0].bindings, [103.84, 1.35, 103.84, 1.35, 300]);
 });
 
 test("findNearestMrtStations keeps the swapped-column POINT and binds the limit", async () => {
   const { db, calls } = fakeDb([{ station: "BISHAN MRT STATION", type: "MRT", distance_m: 10 }]);
-  const result = await new LtaService(db).findNearestMrtStations("1.35", "103.84", 3);
+  const result = await new LtaService(db).findNearestMrtStations(1.35, 103.84, 3);
   assert.match(calls[0].sql, /POINT\(e\.lat, e\.lng\)/);
-  assert.deepEqual(calls[0].bindings, ["103.84", "1.35", 3]);
+  assert.deepEqual(calls[0].bindings, [103.84, 1.35, 3]);
   assert.equal(result.count, 1);
 });
 

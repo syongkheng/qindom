@@ -46,7 +46,13 @@ export class GeocodeService {
       return cached;
     }
 
-    const results = await this.throttled(() => this.fetchNominatim(normalized));
+    const results = await searchNominatim({
+      q: normalized,
+      limit: String(NOMINATIM_RESULT_LIMIT),
+      // addressdetails=1 so callers can resolve a destination's country
+      // (the trip-creation flow uses it to look up per-country note suggestions).
+      addressdetails: "1",
+    });
     if (results === null) throw new Exceptions.ExternalRequest(NOMINATIM_SERVICE_NAME);
 
     await this.storeCache(normalized, results, event);
@@ -83,51 +89,49 @@ export class GeocodeService {
       LoggingUtilities.service.error("GeocodeService.storeCache", `Cache write failed: ${toMessage(error)}`);
     }
   }
+}
 
-  // ── Nominatim ──
+// ── Nominatim (shared: hdb's coordinate lookups go through the same queue) ──
 
-  private async throttled<T>(fn: () => Promise<T>): Promise<T> {
-    if (nominatimQueued >= NOMINATIM_MAX_QUEUED) {
-      LoggingUtilities.service.warn("GeocodeService.throttled", `Nominatim queue full (${nominatimQueued}), rejecting`);
-      throw new Exceptions.ExternalRequest(NOMINATIM_SERVICE_NAME);
-    }
-    nominatimQueued++;
-    const run = nominatimQueue.then(fn);
-    // The next caller starts only after this one finishes (or fails) plus the policy gap.
-    nominatimQueue = run.then(waitPolicyGap, waitPolicyGap);
-    try {
-      return await run;
-    } finally {
-      nominatimQueued--;
-    }
+async function throttled<T>(fn: () => Promise<T>): Promise<T> {
+  if (nominatimQueued >= NOMINATIM_MAX_QUEUED) {
+    LoggingUtilities.service.warn("GeocodeService.throttled", `Nominatim queue full (${nominatimQueued}), rejecting`);
+    throw new Exceptions.ExternalRequest(NOMINATIM_SERVICE_NAME);
   }
+  nominatimQueued++;
+  const run = nominatimQueue.then(fn);
+  // The next caller starts only after this one finishes (or fails) plus the policy gap.
+  nominatimQueue = run.then(waitPolicyGap, waitPolicyGap);
+  try {
+    return await run;
+  } finally {
+    nominatimQueued--;
+  }
+}
 
-  /** Returns null on any failure so the caller can refuse to cache it. */
-  private async fetchNominatim(query: string): Promise<NominatimPlaceDto[] | null> {
-    const params = new URLSearchParams({
-      q: query,
-      format: "json",
-      limit: String(NOMINATIM_RESULT_LIMIT),
-      // addressdetails=1 so callers can resolve a destination's country
-      // (the trip-creation flow uses it to look up per-country note suggestions).
-      addressdetails: "1",
-    });
-    const url = `${NOMINATIM_SEARCH_URL}?${params}`;
-    LoggingUtilities.service.info("GeocodeService.fetchNominatim", `[EXT-GET] ${url}`);
+/** Returns null on any failure so the caller can refuse to cache it. */
+async function fetchNominatim(params: Record<string, string>): Promise<NominatimPlaceDto[] | null> {
+  const url = `${NOMINATIM_SEARCH_URL}?${new URLSearchParams({ ...params, format: "json" })}`;
+  LoggingUtilities.service.info("GeocodeService.fetchNominatim", `[EXT-GET] ${url}`);
 
-    try {
-      const response = await fetch(url, { headers: NOMINATIM_HEADERS });
-      if (!response.ok) {
-        LoggingUtilities.service.error(
-          "GeocodeService.fetchNominatim",
-          `Nominatim HTTP ${response.status} for: ${query}`,
-        );
-        return null;
-      }
-      return (await response.json()) as NominatimPlaceDto[];
-    } catch (error) {
-      LoggingUtilities.service.error("GeocodeService.fetchNominatim", `Fetch failed for ${query}: ${toMessage(error)}`);
+  try {
+    const response = await fetch(url, { headers: NOMINATIM_HEADERS });
+    if (!response.ok) {
+      LoggingUtilities.service.error("GeocodeService.fetchNominatim", `Nominatim HTTP ${response.status} for: ${url}`);
       return null;
     }
+    return (await response.json()) as NominatimPlaceDto[];
+  } catch (error) {
+    LoggingUtilities.service.error("GeocodeService.fetchNominatim", `Fetch failed for ${url}: ${toMessage(error)}`);
+    return null;
   }
+}
+
+/**
+ * Nominatim `/search` (uncached) through the module's 1 req/s queue, with the identifying
+ * User-Agent the usage policy requires. `format=json` is always set. Returns null when the
+ * call fails; throws `ExternalRequest` when too many calls are already waiting.
+ */
+export function searchNominatim(params: Record<string, string>): Promise<NominatimPlaceDto[] | null> {
+  return throttled(() => fetchNominatim(params));
 }

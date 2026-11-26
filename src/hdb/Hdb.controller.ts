@@ -1,99 +1,128 @@
-import { Router, Request, Response } from "express";
-import { ControllerResponse } from "../models/responses/ControllerResponse.js";
+import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { HdbService } from "./Hdb.service.js";
-import { CoordinateService } from "./Coordinate.service.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
-import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { Exceptions } from "../exceptions/AppExceptions.js";
-import { getUser, handleException, hasRole } from "../utils/requestUtils.js";
+import { getUser, requireRole, route } from "../utils/requestUtils.js";
+import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Roles } from "../auth/Permission.js";
+import { HdbService } from "./Hdb.service.js";
+import { HdbCoordinateService } from "./HdbCoordinate.service.js";
+import {
+  validateAddressBody,
+  validateCoordinatesUpdateBody,
+  validateNearbyBusStopsQuery,
+  validateNearestMrtStationsQuery,
+  validatePphsListQuery,
+} from "./Hdb.validator.js";
+import {
+  CoordinateOptionDto,
+  CoordinatesClearedDto,
+  CoordinatesUpdatedDto,
+  NearbyBusStopsDto,
+  NearestMrtStationsDto,
+  PphsListDto,
+  ResolvedCoordinatesDto,
+} from "./Hdb.types.js";
 
-export default function createHdbController(db: KnexSqlUtilities) {
+/** Who may change PPHS coordinates. */
+const COORDINATE_ADMIN_ROLES = [Roles.PPHS_ADMIN, Roles.OWNER];
+
+/**
+ * Mounted under `mw.std` (public): the reads are open; the coordinate admin routes add
+ * MandatoryTokenFilter per route + a PPHS_R5 / SYSTEM_R5 role check.
+ */
+export default function createHdbController(db: KnexSqlUtilities): Router {
   const router = Router();
   const hdbSvc = new HdbService(db);
-  const coordinateSvc = new CoordinateService(db);
+  const coordinateSvc = new HdbCoordinateService(db);
 
-  router.post("/pphs", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const { batch } = req.body as { batch: string };
-      return cr.ok(await hdbSvc.retrieveListOfPphsWithCoordinates(batch));
-    } catch (err) {
-      return handleException(err, cr, "HdbController.POST /pphs", "Failed to fetch PPHS");
-    }
-  });
+  // ── Public reads ──
 
-  router.post("/pphs/update", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const user = getUser(req);
-      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
-      const { address, lat, lng, formedUrl } = req.body as {
-        address: string;
-        lat: string;
-        lng: string;
-        formedUrl: string;
-      };
-      return cr.ok(await coordinateSvc.updateCoordinates(address, { lat, lng, formed_url: formedUrl }, user.username));
-    } catch (err) {
-      return handleException(err, cr, "HdbController.POST /pphs/update", "Failed to update coordinates");
-    }
-  });
+  router.get(
+    "/pphs",
+    route("HdbController.GET /pphs", "Failed to fetch PPHS", async (req, cr) => {
+      const { batch } = validatePphsListQuery(
+        req.query,
+        LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request query"),
+      );
+      return cr.ok<PphsListDto>(await hdbSvc.listPphs(batch, req.logContext));
+    }),
+  );
 
-  router.post("/pphs/clear-coordinates", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
-      const { address } = req.body as { address: string };
-      await hdbSvc.clearCoordinatesOfAddress(address);
-      return cr.ok(true);
-    } catch (err) {
-      return handleException(err, cr, "HdbController.POST /pphs/clear-coordinates", "Failed to clear coordinates");
-    }
-  });
+  router.get(
+    "/pphs/busstops",
+    route("HdbController.GET /pphs/busstops", "Failed to fetch bus stops", async (req, cr) => {
+      const query = validateNearbyBusStopsQuery(
+        req.query,
+        LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request query"),
+      );
+      return cr.ok<NearbyBusStopsDto>(await hdbSvc.findBusStopsNear(query, req.logContext));
+    }),
+  );
 
-  router.post("/pphs/geocode-options", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
-      const { address } = req.body as { address: string };
-      return cr.ok(await hdbSvc.getAllCoordinateOptions(address));
-    } catch (err) {
-      return handleException(err, cr, "HdbController.POST /pphs/geocode-options", "Failed to fetch coordinate options");
-    }
-  });
+  router.get(
+    "/pphs/mrt",
+    route("HdbController.GET /pphs/mrt", "Failed to fetch MRT stations", async (req, cr) => {
+      const query = validateNearestMrtStationsQuery(
+        req.query,
+        LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request query"),
+      );
+      return cr.ok<NearestMrtStationsDto>(await hdbSvc.findNearestMrtStations(query, req.logContext));
+    }),
+  );
 
-  router.post("/pphs/refresh", [MandatoryTokenFilter], async (req: RequestWithUserInfo, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      if (!hasRole(req, Roles.PPHS_ADMIN, Roles.OWNER)) throw new Exceptions.UnauthorizedAccess();
-      const { address } = req.body as { address: string };
-      return cr.ok(await hdbSvc.refreshCoordinatesOfAddress(address));
-    } catch (err) {
-      return handleException(err, cr, "HdbController.POST /pphs/refresh", "Failed to refresh coordinates");
-    }
-  });
+  // ── Coordinate admin (JWT + role) ──
 
-  router.post("/pphs/busstops", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const { lat, lng, radius } = req.body as { lat: string; lng: string; radius: number };
-      return cr.ok(await hdbSvc.retrieveBusstopWithinRadiusOfLatLng(lat, lng, radius));
-    } catch (err) {
-      return handleException(err, cr, "HdbController.POST /pphs/busstops", "Failed to fetch bus stops");
-    }
-  });
+  router.post(
+    "/pphs/update",
+    MandatoryTokenFilter,
+    route("HdbController.POST /pphs/update", "Failed to update coordinates", async (req, cr) => {
+      requireRole(req, ...COORDINATE_ADMIN_ROLES);
+      const body = validateCoordinatesUpdateBody(
+        req.body,
+        LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body"),
+      );
+      return cr.ok<CoordinatesUpdatedDto>(await coordinateSvc.update(body, getUser(req).username, req.logContext));
+    }),
+  );
 
-  router.post("/pphs/mrt", async (req: Request, res: Response) => {
-    const cr = new ControllerResponse(req, res);
-    try {
-      const { lat, lng, limit } = req.body as { lat: string; lng: string; limit?: number };
-      return cr.ok(await hdbSvc.retrieveNearestMrtStationsOfLatLng(lat, lng, limit));
-    } catch (err) {
-      return handleException(err, cr, "HdbController.POST /pphs/mrt", "Failed to fetch MRT stations");
-    }
-  });
+  router.post(
+    "/pphs/clear-coordinates",
+    MandatoryTokenFilter,
+    route("HdbController.POST /pphs/clear-coordinates", "Failed to clear coordinates", async (req, cr) => {
+      requireRole(req, ...COORDINATE_ADMIN_ROLES);
+      const { address } = validateAddressBody(
+        req.body,
+        LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body"),
+      );
+      return cr.ok<CoordinatesClearedDto>(await coordinateSvc.clear(address, req.logContext));
+    }),
+  );
+
+  router.post(
+    "/pphs/geocode-options",
+    MandatoryTokenFilter,
+    route("HdbController.POST /pphs/geocode-options", "Failed to fetch coordinate options", async (req, cr) => {
+      requireRole(req, ...COORDINATE_ADMIN_ROLES);
+      const { address } = validateAddressBody(
+        req.body,
+        LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body"),
+      );
+      return cr.ok<CoordinateOptionDto[]>(await coordinateSvc.listOptions(address, req.logContext));
+    }),
+  );
+
+  router.post(
+    "/pphs/refresh",
+    MandatoryTokenFilter,
+    route("HdbController.POST /pphs/refresh", "Failed to refresh coordinates", async (req, cr) => {
+      requireRole(req, ...COORDINATE_ADMIN_ROLES);
+      const { address } = validateAddressBody(
+        req.body,
+        LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body"),
+      );
+      return cr.ok<ResolvedCoordinatesDto>(await coordinateSvc.refresh(address, req.logContext));
+    }),
+  );
 
   return router;
 }

@@ -1,347 +1,170 @@
-import { parse, HTMLElement } from "node-html-parser";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { CoordinateService } from "./Coordinate.service.js";
-import { LtaService } from "../lta/Lta.service.js";
+import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { toMessage } from "../utils/errorUtils.js";
+import { APP_TIMEZONE } from "../constants/Locale.js";
+import { LtaService } from "../lta/Lta.service.js";
+import { NearbyBusStopRow, NearestMrtStationRow } from "../lta/Lta.types.js";
+import { HdbCoordinateService } from "./HdbCoordinate.service.js";
+import { parsePphsPage } from "./HdbPphs.parser.js";
+import {
+  NearbyBusStopDto,
+  NearbyBusStopsDto,
+  NearbyBusStopsQuery,
+  NearestMrtStationDto,
+  NearestMrtStationsDto,
+  NearestMrtStationsQuery,
+  PphsListDto,
+  PphsRecord,
+} from "./Hdb.types.js";
 
-interface FlatRecord {
-  town: string;
-  address: string;
-  flatTypes: {
-    "2-room"?: string;
-    "3-room"?: string;
-    "4-room"?: string;
-  };
-  siteExpiry: string;
+const HDB_PPHS_TABLE = "tb_hdb_pphs";
+/** `created_by` for batches scraped by the server. */
+const SYSTEM_USER = "SYSTEM";
+
+const HDB_SERVICE_NAME = "HDB website";
+const HDB_PPHS_PAGE_URL =
+  "https://www.hdb.gov.sg/renting-a-flat/parenthood-provisional-housing-scheme/application-process/pphs-flats-available-for-application";
+// The HDB site refuses requests without a browser-like User-Agent.
+const HDB_REQUEST_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+};
+
+const BATCH_NOT_FOUND_MESSAGE = "Batch not found";
+
+const BATCH_FORMAT = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE, year: "numeric", month: "2-digit" });
+
+/** HDB releases PPHS batches in even months. */
+const BATCH_MONTH_STEP = 2;
+const DECEMBER = 12;
+
+/**
+ * The current batch `YYYYMM`: the latest even month up to `now` in Singapore (Nov 2026 → 202610,
+ * Dec 2026 → 202612, Jan 2027 → 202612). The default for `GET /pphs` and the only batch that may be
+ * scraped. Keep in step with fndom's batch switcher (`pphsBatch` in src/components/views/hdb/HomeView.vue),
+ * whose default is the same month, so the page's default request is always one the server can fill.
+ */
+export function currentPphsBatch(now: Date = new Date()): string {
+  const parts = BATCH_FORMAT.formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  let year = part("year");
+  let month = part("month");
+  if (month % BATCH_MONTH_STEP !== 0) month -= 1;
+  if (month === 0) {
+    month = DECEMBER;
+    year -= 1;
+  }
+  return `${year}${String(month).padStart(2, "0")}`;
 }
 
+export function toNearbyBusStopDto(row: NearbyBusStopRow): NearbyBusStopDto {
+  return {
+    busStopCode: row.busstop_code,
+    roadName: row.road_name,
+    description: row.desc,
+    distanceM: Math.round(Number(row.distance_m)),
+  };
+}
+
+export function toNearestMrtStationDto(row: NearestMrtStationRow): NearestMrtStationDto {
+  return { station: row.station, type: row.type, distanceM: Math.round(Number(row.distance_m)) };
+}
+
+/** PPHS flats (owns `tb_hdb_pphs`) with their coordinates, and nearby transport via LtaService. */
 export class HdbService {
-  private coordinateService: CoordinateService;
-  private ltaService: LtaService;
+  private coordinates: HdbCoordinateService;
+  private lta: LtaService;
+
   constructor(private db: KnexSqlUtilities) {
-    this.coordinateService = new CoordinateService(db);
-    this.ltaService = new LtaService(db);
+    this.coordinates = new HdbCoordinateService(db);
+    this.lta = new LtaService(db);
   }
 
-  async retrieveListOfPphs(batch: string | undefined): Promise<{
-    records: FlatRecord[];
-    source: "database" | "website" | "error";
-  }> {
-    const currentBatch = batch || this.generateBatch();
+  /**
+   * A batch's PPHS flats with coordinates. A stored batch is read from the DB. Only the current
+   * batch (this month in Singapore) is ever scraped: the HDB page shows today's flats, so storing it
+   * under another month would be wrong. Any other unstored batch → 404, with no outbound call.
+   * HDB unreachable or the page layout changed → 502.
+   */
+  async listPphs(batch: string | null, logContext?: IRequestLogContext): Promise<PphsListDto> {
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "PPHS list");
+    const currentBatch = currentPphsBatch();
+    const batchKey = batch ?? currentBatch;
 
-    if (typeof currentBatch !== "string" || !/^\d{6}$/.test(currentBatch)) {
-      LoggingUtilities.service.error("HdbService.statistics", `Invalid batch format: ${currentBatch}`);
-      throw new Exceptions.InvalidRequest("Invalid batch format. Expected 'YYYYMM'.");
+    let records = await this.loadBatch(batchKey, event);
+    const from = records ? "database" : HDB_SERVICE_NAME;
+    if (!records) {
+      if (batchKey !== currentBatch) throw new Exceptions.NotFound(BATCH_NOT_FOUND_MESSAGE);
+      records = await this.scrapePphsPage();
+      await this.storeBatch(batchKey, records, event);
     }
 
-    // 1️⃣ Check if data exists in DB
-    const existingRecords = await this.db.find<ITB_HDB_PPHS>(
-      "tb_hdb_pphs",
-      { batch: currentBatch },
-      {
-        limit: 1,
-        orderBy: "created_dt",
-        orderDirection: "desc",
-        columns: ["json_string", "batch", "created_dt"],
-      },
+    const withCoordinates = await Promise.all(
+      records.map(async (record) => ({ ...record, ...(await this.coordinates.resolve(record.address, event)) })),
     );
+    if (event) event.detail = `batch ${batchKey}: ${records.length} record(s) from ${from}`;
+    return { records: withCoordinates };
+  }
 
-    if (existingRecords.length > 0) {
-      LoggingUtilities.service.info(
-        "HdbService.statistics",
-        `Found existing records for batch ${currentBatch} in database`,
+  async findBusStopsNear(query: NearbyBusStopsQuery, logContext?: IRequestLogContext): Promise<NearbyBusStopsDto> {
+    const { rows, count } = await this.lta.findBusStopsNear(query.lat, query.lng, query.radiusM, logContext);
+    return { busStops: rows.map(toNearbyBusStopDto), count };
+  }
+
+  async findNearestMrtStations(
+    query: NearestMrtStationsQuery,
+    logContext?: IRequestLogContext,
+  ): Promise<NearestMrtStationsDto> {
+    const { rows, count } = await this.lta.findNearestMrtStations(query.lat, query.lng, query.limit, logContext);
+    return { stations: rows.map(toNearestMrtStationDto), count };
+  }
+
+  // ── Batches ──
+
+  /** The stored batch, or null when there is none (or its JSON is unreadable, so it's scraped again). */
+  private async loadBatch(batch: string, event?: IRequestLogEvent): Promise<PphsRecord[] | null> {
+    const row = await this.db.findOne<ITB_HDB_PPHS>(HDB_PPHS_TABLE, { batch }, ["json_string"], event);
+    if (!row) return null;
+    try {
+      return JSON.parse(row.json_string) as PphsRecord[];
+    } catch {
+      LoggingUtilities.service.error("HdbService.loadBatch", `Stored JSON for batch ${batch} is unreadable`);
+      return null;
+    }
+  }
+
+  /** Best effort: a failed write (e.g. a concurrent request stored the batch first) still returns the records. */
+  private async storeBatch(batch: string, records: PphsRecord[], event?: IRequestLogEvent): Promise<void> {
+    try {
+      await this.db.insert<ITB_HDB_PPHS>(
+        HDB_PPHS_TABLE,
+        { batch, json_string: JSON.stringify(records), created_dt: Date.now(), created_by: SYSTEM_USER },
+        event,
       );
-      try {
-        const records = JSON.parse(existingRecords[0].json_string) as FlatRecord[];
-        return { records, source: "database" };
-      } catch (parseError) {
-        LoggingUtilities.service.error("HdbService.statistics", "Failed to parse JSON from database");
-      }
+    } catch (error) {
+      LoggingUtilities.service.error("HdbService.storeBatch", `Storing batch ${batch} failed: ${toMessage(error)}`);
     }
+  }
 
-    LoggingUtilities.service.info(
-      "HdbService.statistics",
-      `No existing records found for batch ${currentBatch}, fetching from HDB website...`,
-    );
-
-    // 2️⃣ Fetch from HDB website using fetch()
-    const url =
-      "https://www.hdb.gov.sg/renting-a-flat/parenthood-provisional-housing-scheme/application-process/pphs-flats-available-for-application";
+  private async scrapePphsPage(): Promise<PphsRecord[]> {
     let html: string;
     try {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Exceptions.Unknown();
-      }
-
+      const response = await fetch(HDB_PPHS_PAGE_URL, { headers: HDB_REQUEST_HEADERS });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       html = await response.text();
     } catch (error) {
-      LoggingUtilities.service.error("HdbService.statistics", `Failed to fetch from HDB website: ${toMessage(error)}`);
-      return { records: [], source: "error" };
+      LoggingUtilities.service.error("HdbService.scrapePphsPage", `${HDB_SERVICE_NAME} failed: ${toMessage(error)}`);
+      throw new Exceptions.ExternalRequest(HDB_SERVICE_NAME);
     }
 
-    // 3️⃣ Parse HTML response — table is embedded inside __NEXT_DATA__ JSON
-    const root = parse(html);
-    const nextDataScript = root.querySelector("script#__NEXT_DATA__");
-
-    if (!nextDataScript) {
-      LoggingUtilities.service.error("HdbService.statistics", "Could not find __NEXT_DATA__ script on HDB page.");
-      throw new Exceptions.Unknown();
+    const records = parsePphsPage(html);
+    if (!records) {
+      LoggingUtilities.service.error("HdbService.scrapePphsPage", "PPHS table not found: the page layout changed");
+      throw new Exceptions.ExternalRequest(HDB_SERVICE_NAME);
     }
-
-    let bodyContentHtml: string | null = null;
-    try {
-      const nextData = JSON.parse(nextDataScript.text);
-      const componentProps: Record<string, unknown> = nextData?.props?.pageProps?.componentProps ?? {};
-
-      for (const uid of Object.keys(componentProps)) {
-        const items = (componentProps[uid] as { props?: { accordionItems?: { bodyContentVal?: string }[] } })?.props
-          ?.accordionItems;
-        if (Array.isArray(items)) {
-          for (const item of items) {
-            if (typeof item.bodyContentVal === "string" && item.bodyContentVal.includes("<table>")) {
-              bodyContentHtml = item.bodyContentVal;
-              break;
-            }
-          }
-        }
-        if (bodyContentHtml) break;
-      }
-    } catch {
-      LoggingUtilities.service.error("HdbService.statistics", "Failed to parse __NEXT_DATA__ JSON.");
-      throw new Exceptions.Unknown();
-    }
-
-    if (!bodyContentHtml) {
-      LoggingUtilities.service.error(
-        "HdbService.statistics",
-        "No accordion body content with table found in __NEXT_DATA__.",
-      );
-      throw new Exceptions.Unknown();
-    }
-
-    const bodyRoot = parse(bodyContentHtml);
-    const tables = bodyRoot.querySelectorAll("table");
-
-    if (tables.length === 0) {
-      LoggingUtilities.service.error("HdbService.statistics", "No tables found in accordion body content.");
-      throw new Exceptions.Unknown();
-    }
-
-    const pphsTable = tables[0];
-    const records: FlatRecord[] = this.parseTable(pphsTable);
-
-    // 4️⃣ Store records into DB
-    try {
-      await this.db.insert<ITB_HDB_PPHS>("tb_hdb_pphs", {
-        batch: currentBatch,
-        json_string: JSON.stringify(records),
-        created_dt: new Date().getTime(),
-        created_by: "SYSTEM",
-      });
-      LoggingUtilities.service.info(
-        "HdbService.statistics",
-        `Successfully stored ${records.length} records for batch ${currentBatch} in database`,
-      );
-    } catch (error) {
-      LoggingUtilities.service.error(
-        "HdbService.statistics",
-        `Failed to insert records into database: ${toMessage(error)}`,
-      );
-    }
-
-    return { records, source: "website" };
-  }
-
-  async retrieveListOfPphsWithCoordinates(batch: string | undefined): Promise<{
-    records: (FlatRecord & { formedUrl: string; lat: string; lng: string })[];
-    source: "database" | "website" | "error";
-  }> {
-    const { records, source } = await this.retrieveListOfPphs(batch);
-
-    const recordsWithCoordinates = (
-      await Promise.all(
-        records.flatMap((record) => {
-          const expandedAddresses = [record.address];
-
-          return expandedAddresses.map(async (address) => {
-            LoggingUtilities.service.info(
-              "HdbService.retrieveListOfPphsWithCoordinates",
-              `Fetching coordinates for address: ${address}`,
-            );
-
-            const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
-
-            const { formed_url, lat, lng, source } =
-              await this.coordinateService.getCoordinatesOfAddress(transformedAddress);
-
-            return {
-              ...record,
-              address, // keep expanded address
-              formedUrl: formed_url,
-              lat,
-              lng,
-              source,
-            };
-          });
-        }),
-      )
-    ).flat();
-
-    return { records: recordsWithCoordinates, source };
-  }
-
-  async clearCoordinatesOfAddress(address: string): Promise<void> {
-    const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
-    await this.coordinateService.clearCoordinates(transformedAddress);
-  }
-
-  async getAllCoordinateOptions(address: string): Promise<
-    Array<{
-      source: "onemap" | "nominatim";
-      lat: string;
-      lng: string;
-      formedUrl: string;
-    }>
-  > {
-    const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
-    return this.coordinateService.fetchAllCoordinateOptions(transformedAddress);
-  }
-
-  async refreshCoordinatesOfAddress(address: string): Promise<{
-    lat: string;
-    lng: string;
-    formedUrl: string;
-    source: string;
-  }> {
-    const transformedAddress = await this.coordinateService.replaceWhitespaceWithPlus(address);
-    await this.coordinateService.deleteCache(transformedAddress);
-    const { lat, lng, formed_url, source } = await this.coordinateService.getCoordinatesOfAddress(transformedAddress);
-    return { lat, lng, formedUrl: formed_url, source };
-  }
-
-  async retrieveBusstopWithinRadiusOfLatLng(lat: string, lng: string, radius: number) {
-    try {
-      return await this.ltaService.findBusStopsNear(lat, lng, radius);
-    } catch (error) {
-      throw new Exceptions.Unknown();
-    }
-  }
-
-  async retrieveNearestMrtStationsOfLatLng(lat: string, lng: string, limit?: number) {
-    try {
-      return await this.ltaService.findNearestMrtStations(lat, lng, limit ?? 3);
-    } catch (error) {
-      throw new Exceptions.Unknown();
-    }
-  }
-
-  private parseTable(table: HTMLElement): FlatRecord[] {
-    const allRows = table.querySelectorAll("tbody > tr");
-    const results: FlatRecord[] = [];
-
-    // Detect whether the table has a 4-room column by inspecting the second header row
-    const headerRow2Cells = allRows[1]?.querySelectorAll("td") ?? [];
-    const has4Room = headerRow2Cells.length >= 3;
-
-    // Number of cells in a data row that includes the town cell
-    const rowWithTown = has4Room ? 6 : 5;
-    // Minimum cells in a data row (no town cell)
-    const rowWithoutTown = rowWithTown - 1;
-
-    const rows = allRows.slice(2);
-    let currentTown = "";
-
-    for (const row of rows) {
-      const cells = row.querySelectorAll("td");
-      if (cells.length < rowWithoutTown) continue;
-
-      let addressCell: HTMLElement;
-      let twoCell: HTMLElement;
-      let threeCell: HTMLElement;
-      let fourCell: HTMLElement | null = null;
-      let expiryCell: HTMLElement;
-
-      if (cells.length >= rowWithTown) {
-        // Row includes the town cell
-        const townText = cells[0].textContent?.trim();
-        if (townText) currentTown = townText;
-
-        addressCell = cells[1];
-        twoCell = cells[2];
-        threeCell = cells[3];
-        if (has4Room) {
-          fourCell = cells[4];
-          expiryCell = cells[5];
-        } else {
-          expiryCell = cells[4];
-        }
-      } else {
-        // Row without town cell (rowspan from previous row)
-        addressCell = cells[0];
-        twoCell = cells[1];
-        threeCell = cells[2];
-        if (has4Room) {
-          fourCell = cells[3];
-          expiryCell = cells[4];
-        } else {
-          expiryCell = cells[3];
-        }
-      }
-
-      const record: FlatRecord = {
-        town: currentTown,
-        address: addressCell.textContent?.trim() || "",
-        flatTypes: {},
-        siteExpiry: expiryCell.textContent?.trim() || "",
-      };
-
-      const t2 = twoCell.textContent?.trim();
-      const t3 = threeCell.textContent?.trim();
-      const t4 = fourCell?.textContent?.trim();
-
-      if (t2 && t2 !== "-") record.flatTypes["2-room"] = t2;
-      if (t3 && t3 !== "-") record.flatTypes["3-room"] = t3;
-      if (t4 && t4 !== "-") record.flatTypes["4-room"] = t4;
-
-      results.push(record);
-    }
-
-    return results;
-  }
-
-  private generateBatch(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    return `${year}${month}`;
-  }
-
-  async getAvailableBatches(): Promise<string[]> {
-    try {
-      const batches = await this.db.find<ITB_HDB_PPHS>(
-        "tb_hdb_pphs",
-        {},
-        {
-          columns: ["batch"],
-          orderBy: "batch",
-          orderDirection: "desc",
-        },
-      );
-
-      return [...new Set(batches.map((b) => b.batch))];
-    } catch (error) {
-      LoggingUtilities.service.error("HdbService.getAvailableBatches", `${error}`);
-      return [];
-    }
+    return records;
   }
 }
