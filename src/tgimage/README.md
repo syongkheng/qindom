@@ -4,6 +4,7 @@ Images are stored as documents in a Telegram chat and served back through the AP
 
 - `TgImageService` owns `tb_tg_image` and the bot-admin writes to `tb_tg_stats_whitelist` (add / remove / chat id on `/start`). `TelegramLogSubscriptionService` (`utils/logging`) also reads the whitelist to fan out log alerts.
 - **Storage chat** = the first active admin with a `telegram_chat_id` (set when that admin DMs the bot `/start`). With none, uploads fail with 500 and a server log.
+- **Uploader:** `POST /img/upload` stores the caller's user id in `tb_tg_image.created_by_id` (migration `20261126000200`). `assertAttachableBy(userId, shortCodes)` is used by the itinerary save: unknown/deleted short code → 400 `invalid_request_tgShortCode`, someone else's upload → 403. Rows uploaded before the migration have `created_by_id` NULL and are accepted for anyone (their uploader can't be known).
 - Env: `AWENSE_CDN_TELEGRAM_BOT_TOKEN` (read lazily; missing = 500 + server log; without it the bot doesn't start).
 - `TgImage.bot.ts`: the polling bot. Admin commands `/start` (stores the private chat id), `/help`, `/stats` (file count + total size), `/list` (last 10 files). Non-admins get an access-denied reply with their Telegram user id.
 - The bot token getter, `TELEGRAM_API_URL` and `escapeTelegramHtml` come from `utils/TelegramUtilities.ts` (shared with the request-log alerts in `utils/logging/TelegramLogSender.ts` and the wedding visit notifier).

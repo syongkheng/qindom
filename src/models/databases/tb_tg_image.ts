@@ -8,6 +8,8 @@ export interface ITB_TG_IMAGE {
   mime_type?: string | null;
   file_name?: string | null;
   size_in_bytes?: number | null;
+  /** Uploader (`tb_aa_user.id`); NULL on rows uploaded before migration 20261126000200. */
+  created_by_id?: number | null;
   created_dt: number;
   record_status: RecordStatus;
 }

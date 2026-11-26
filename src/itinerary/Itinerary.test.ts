@@ -14,14 +14,17 @@ import {
   toBookingDto,
   toItineraryDto,
   toPackingItemDto,
+  toPublicItineraryDto,
 } from "./Itinerary.service.js";
-import { agendaColumns, bookingColumns, packingColumns } from "./ItinerarySave.service.js";
+import { agendaColumns, bookingColumns, noteColumns, packingColumns } from "./ItinerarySave.service.js";
 import {
   normaliseCityRaw,
   validateAgendaItemBody,
   validateBookingBody,
   validateChallengeBody,
   validateCreateBody,
+  validateNoteItemBody,
+  validatePackingItemBody,
   validateUpdateBody,
 } from "./Itinerary.validator.js";
 
@@ -273,6 +276,27 @@ function seed(): Record<string, Row[]> {
       },
     ],
     tb_travel_itinerary_view: [],
+    // Uploads (tgimage). dd44dd44 predates `created_by_id` (legacy, uploader unknown).
+    tb_tg_image: [
+      tgImage(601, "aa11aa11", ALICE),
+      tgImage(602, "bb22bb22", BOB),
+      tgImage(603, "cc33cc33", ALICE),
+      tgImage(604, "dd44dd44", null),
+      tgImage(605, "ee55ee55", ALICE, { record_status: "D" }),
+    ],
+  };
+}
+
+function tgImage(id: number, shortCode: string, createdById: number | null, extra: Row = {}): Row {
+  return {
+    id,
+    short_code: shortCode,
+    uuid: null,
+    telegram_file_id: `F${id}`,
+    created_by_id: createdById,
+    created_dt: 1,
+    record_status: "A",
+    ...extra,
   };
 }
 
@@ -346,12 +370,40 @@ describe("mappers", () => {
     assert.equal(dto.quantity, undefined);
   });
 
-  test("itinerary: viewCount only when given; corrupt pax_names reads as []", () => {
+  test("itinerary: no viewCount for the owner; corrupt pax_names reads as []", () => {
     const children = { agendaItems: [], bookings: [], packingItems: [], noteItems: [] };
     const owner = toItineraryDto(itinerary(10, ALICE, { pax_names: "{oops" }) as never, children);
     assert.deepEqual(owner.paxNames, []);
     assert.equal("viewCount" in owner, false);
-    assert.equal(toItineraryDto(itinerary(10, ALICE) as never, children, 7).viewCount, 7);
+  });
+
+  test("public view drops the trip id, the owner's sessionId and child ids except agenda item ids", () => {
+    const owner = toItineraryDto(itinerary(10, ALICE) as never, {
+      agendaItems: [
+        toAgendaItemDto(agenda(101, 10) as never, [
+          { id: 501, uuid: "u", name: "a.jpg", mime_type: "image/jpeg", size_in_bytes: 1, tg_short_code: "aa11aa11" },
+        ]),
+      ],
+      bookings: [toBookingDto({ id: 111, itinerary_id: 10, item: "Hotel", created_dt: 1, record_status: "A" })],
+      packingItems: [toPackingItemDto({ id: 121, itinerary_id: 10, label: "Hat", packed: 0, sort_order: 0 } as never)],
+      noteItems: [{ id: 131, label: "Visa", done: false }],
+    });
+    const pub = toPublicItineraryDto(owner, 7);
+    assert.equal(pub.viewCount, 7);
+    assert.equal("id" in pub, false);
+    assert.equal("sessionId" in pub, false);
+    assert.equal("challenge" in pub, false);
+    assert.equal(pub.shortCode, "code10");
+    assert.equal(pub.agendaItems[0].id, 101, "kept: fndom's ICS export uses it as the event UID");
+    assert.equal("itinerary_id" in pub.agendaItems[0], false);
+    assert.deepEqual(pub.agendaItems[0].files, [
+      { uuid: "u", name: "a.jpg", mime_type: "image/jpeg", size_in_bytes: 1, tg_short_code: "aa11aa11" },
+    ]);
+    assert.equal("id" in pub.bookings[0] || "itineraryId" in pub.bookings[0], false);
+    assert.equal(pub.bookings[0].item, "Hotel");
+    assert.deepEqual(pub.packingItems, [{ label: "Hat", category: "misc", packed: false, quantity: undefined }]);
+    assert.deepEqual(pub.noteItems, [{ label: "Visa", done: false }]);
+    assert.equal(owner.id, 10, "the owner's DTO is not modified");
   });
 });
 
@@ -510,31 +562,141 @@ describe("validators", () => {
   });
 });
 
-describe("column mappers keep 'blank = unchanged'", () => {
-  test("agenda: blank optionals are undefined (knex leaves the column alone)", () => {
-    const cols = agendaColumns(validateAgendaItemBody({ title: "x", date: "", day: 0, budget: 0, startTime: null }));
-    assert.equal(cols.date, undefined);
-    assert.equal(cols.day, undefined);
-    assert.equal(cols.budget, undefined);
-    assert.equal(cols.start_time, undefined);
-    assert.equal(cols.unknown_time, 0);
+describe("column mappers: absent = unchanged, sent blank = NULL", () => {
+  const agendaCols = (body: Row) => agendaColumns(validateAgendaItemBody(body));
+
+  test("agenda: every nullable field sent blank becomes NULL", () => {
+    const cols = agendaCols({
+      category: "",
+      listType: null,
+      desc: "",
+      city: "",
+      cityRaw: [],
+      coordinates: null,
+      startTime: null,
+      endTime: "",
+      durationInHours: null,
+      budget: null,
+      day: null,
+      date: "",
+    });
+    for (const column of [
+      "category",
+      "list_type",
+      "desc",
+      "city",
+      "city_raw",
+      "coordinates_lat",
+      "coordinates_lng",
+      "start_time",
+      "end_time",
+      "duration_in_hours",
+      "budget",
+      "day",
+      "date",
+    ] as const) {
+      assert.equal(cols[column], null, column);
+    }
   });
 
-  test("booking + packing defaults", () => {
-    const b = bookingColumns(validateBookingBody({ item: "x", nights: 0, price: 0 }));
-    assert.equal(b.nights, 0);
-    assert.equal(b.price, 0);
-    assert.equal(b.sort_order, 0);
-    const p = packingColumns(validatePackingItem({ label: "x" }), 3);
-    assert.equal(p.category, "misc");
-    assert.equal(p.quantity, null);
-    assert.equal(p.sort_order, 3);
+  test("agenda: absent fields are undefined (knex leaves the column alone)", () => {
+    const cols = agendaCols({ id: 101 });
+    assert.deepEqual(
+      Object.entries(cols).filter(([, v]) => v !== undefined),
+      [],
+    );
+  });
+
+  test("agenda: 0 has always meant 'not set' for budget / duration / day", () => {
+    const cols = agendaCols({ budget: 0, durationInHours: 0, day: 0 });
+    assert.equal(cols.budget, null);
+    assert.equal(cols.duration_in_hours, null);
+    assert.equal(cols.day, null);
+  });
+
+  test("agenda: date cleared without a day → unscheduled (day NULL too); a day that was sent is kept", () => {
+    const unscheduled = agendaCols({ date: "" });
+    assert.equal(unscheduled.date, null);
+    assert.equal(unscheduled.day, null);
+    const undatedTripDay3 = agendaCols({ date: "", day: 3 });
+    assert.equal(undatedTripDay3.date, null);
+    assert.equal(undatedTripDay3.day, 3);
+    assert.equal(agendaCols({ title: "x" }).day, undefined, "no date sent → day unchanged");
+  });
+
+  test("agenda: the camelCase field fndom edits wins over the GET's snake_case one, even when cleared", () => {
+    const cleared = agendaCols({ startTime: null, start_time: "09:30", unknownTime: false, unknown_time: 1 });
+    assert.equal(cleared.start_time, null);
+    assert.equal(cleared.unknown_time, 0);
+    assert.equal(agendaCols({ start_time: "09:30" }).start_time, 570);
+    assert.equal(agendaCols({ cityRaw: [], city_raw: '["Tokyo"]' }).city_raw, null);
+  });
+
+  test("booking: blank → NULL, absent → unchanged; flags and sort order only when sent", () => {
+    const cleared = bookingColumns(
+      validateBookingBody({
+        category: "",
+        remarks: "",
+        link: "",
+        payment: null,
+        startDate: null,
+        endDate: null,
+        nights: null,
+        price: null,
+        freeCancellation: "",
+        deposit: "",
+        paxBreakdown: {},
+      }),
+    );
+    for (const column of [
+      "category",
+      "location",
+      "link",
+      "payment",
+      "start_date",
+      "end_date",
+      "nights",
+      "price",
+      "free_cancellation",
+      "deposit",
+      "pax_breakdown",
+    ] as const) {
+      assert.equal(cleared[column], null, column);
+    }
+    const absent = bookingColumns(validateBookingBody({ id: 111 }));
+    assert.deepEqual(
+      Object.entries(absent).filter(([, v]) => v !== undefined),
+      [],
+    );
+    const values = bookingColumns(validateBookingBody({ item: "x", nights: 0, price: 0, booked: false }));
+    assert.equal(values.nights, 0);
+    assert.equal(values.price, 0);
+    assert.equal(values.booked, 0);
+    assert.equal(bookingColumns(validateBookingBody({ sortOrder: null })).sort_order, 0);
+  });
+
+  test("packing: quantity cleared → NULL, absent → unchanged; blank category → misc", () => {
+    const cleared = packingColumns(validatePackingItemBody({ quantity: null, category: "" }), 3);
+    assert.equal(cleared.quantity, null);
+    assert.equal(cleared.category, "misc");
+    assert.equal(cleared.sort_order, 3);
+    const absent = packingColumns(validatePackingItemBody({ id: 121 }), 0);
+    assert.equal(absent.quantity, undefined);
+    assert.equal(absent.category, undefined);
+    assert.equal(absent.label, undefined);
+    assert.equal(absent.packed, undefined);
+  });
+
+  test("note: category / url cleared → NULL, absent → unchanged", () => {
+    const cleared = noteColumns(validateNoteItemBody({ category: "", url: null }), 0);
+    assert.equal(cleared.category, null);
+    assert.equal(cleared.url, null);
+    const absent = noteColumns(validateNoteItemBody({ id: 131 }), 0);
+    assert.equal(absent.category, undefined);
+    assert.equal(absent.url, undefined);
+    assert.equal(absent.done, undefined);
   });
 });
-
-function validatePackingItem(body: Row) {
-  return validateCreateBody({ sessionTitle: "x", packingItems: [body] }).packingItems[0];
-}
 
 // ─── HTTP (in-process; real MandatoryTokenFilter + rate limiter, DB lookups faked) ──
 
@@ -701,6 +863,14 @@ describe("HTTP /itinerary", () => {
     assert.equal(open.status, 200);
     assert.equal(open.json.data.sessionTitle, "Trip 10");
     assert.equal(open.json.data.viewCount, 0);
+    assert.equal("id" in open.json.data || "sessionId" in open.json.data, false, "no internal id / owner sessionId");
+    assert.equal("challenge" in open.json.data, false);
+    assert.equal(open.json.data.agendaItems[0].id, 101);
+    assert.equal("id" in open.json.data.agendaItems[0].files[0], false);
+    assert.equal("id" in open.json.data.bookings[0], false);
+    assert.equal("id" in open.json.data.packingItems[0], false);
+    assert.equal("id" in open.json.data.noteItems[0], false);
+    assert.doesNotMatch(JSON.stringify(open.json), /"s10"/);
     assert.equal(fake.tables().tb_travel_itinerary_view.length, 1);
     assert.equal(fake.tables().tb_travel_itinerary_view[0].short_code, "code10");
 
@@ -722,6 +892,9 @@ describe("HTTP /itinerary", () => {
     assert.equal(right.status, 200);
     assert.equal(right.json.data.sessionTitle, "Trip 20");
     assert.equal(right.json.data.agendaItems[0].files[0].tg_short_code, "bb22bb22");
+    assert.equal("id" in right.json.data || "sessionId" in right.json.data, false);
+    assert.equal("challenge" in right.json.data, false, "the access code is not echoed back");
+    assert.equal("itineraryId" in right.json.data.bookings[0], false);
     assert.equal(fake.tables().tb_travel_itinerary_view.length, 1);
 
     assert.equal((await call("POST", "/challenge", { body: { shortCode: "nope", challenge: "1" } })).status, 404);
@@ -858,7 +1031,8 @@ describe("HTTP /itinerary", () => {
     const edited = fake.tables().tb_travel_agenda_item.find((r) => r.id === 101)!;
     assert.equal(edited.title, "Edited");
     assert.equal(edited.start_time, 675);
-    assert.equal(edited.date, "2026-12-01", "blank date keeps the stored value");
+    assert.equal(edited.date, "2026-12-01", "absent date keeps the stored value");
+    assert.equal(edited.budget, "20.00", "absent budget keeps the stored value");
     assert.equal(fake.tables().tb_travel_agenda_file.find((f) => f.uuid === "new-2")?.agenda_item_id, 101);
     assert.equal(rowsOf("tb_travel_agenda_item", 10).length, 2);
     assert.equal(fake.tables().tb_travel_itinerary_booking.find((b) => b.id === 111)?.item, "Hotel A2");
@@ -970,6 +1144,149 @@ describe("HTTP /itinerary", () => {
     fake.tables().tb_travel_itinerary_booking.find((b) => b.id === 111)!.record_status = "D";
     const { status } = await call("POST", "/s10/update", { user: ALICE, body: { _bookingIdsToDelete: [111] } });
     assert.equal(status, 200);
+  });
+
+  // ── Image ownership (tb_tg_image.created_by_id) ──
+
+  const withImage = (tgShortCode: string, id?: number) => ({
+    agendaItems: [
+      { ...(id ? { id } : {}), title: "x", _filesToInsert: [imageFile(`f-${tgShortCode}`, { tgShortCode })] },
+    ],
+  });
+
+  test("attaching someone else's upload → 403 before anything is written (create and update)", async () => {
+    reset();
+    const before = structuredClone(fake.tables());
+    const upd = await call("POST", "/s10/update", {
+      user: ALICE,
+      body: { sessionTitle: "nope", ...withImage("bb22bb22", 101) },
+    });
+    assert.equal(upd.status, 403);
+    assert.equal(upd.json.data.code, "forbidden_access");
+    const created = await call("POST", "/", { user: ALICE, body: { sessionTitle: "nope", ...withImage("bb22bb22") } });
+    assert.equal(created.status, 403);
+    assert.deepEqual(fake.tables(), before);
+  });
+
+  test("unknown or deleted short code → 400 invalid_request_tgShortCode, nothing written", async () => {
+    reset();
+    const before = structuredClone(fake.tables());
+    for (const code of ["ffff0000", "ee55ee55"]) {
+      const { status, json } = await call("POST", "/s10/update", { user: ALICE, body: withImage(code, 101) });
+      assert.equal(status, 400, code);
+      assert.equal(json.data.code, "invalid_request_tgShortCode");
+    }
+    assert.deepEqual(fake.tables(), before);
+  });
+
+  test("own uploads and legacy uploads (no created_by_id) can be attached", async () => {
+    reset();
+    for (const code of ["cc33cc33", "dd44dd44"]) {
+      const { status } = await call("POST", "/s10/update", { user: ALICE, body: withImage(code, 101) });
+      assert.equal(status, 200, code);
+      assert.equal(fake.tables().tb_travel_agenda_file.find((f) => f.tg_short_code === code)?.agenda_item_id, 101);
+    }
+    // The legacy image is attachable by bob too.
+    const bobs = await call("POST", "/s20/update", { user: BOB, body: withImage("dd44dd44", 201) });
+    assert.equal(bobs.status, 200);
+  });
+
+  // ── Update: absent = unchanged, sent blank = NULL ──
+
+  test("agenda: clearing fields stores NULL; moving an item back to unscheduled clears day and date", async () => {
+    reset();
+    const { status } = await call("POST", "/s10/update", {
+      user: ALICE,
+      // What fndom sends after "unschedule" + clearing the place, time and budget in the drawer:
+      // the GET's snake_case fields plus the edited camelCase ones; `day` is undefined (dropped).
+      body: {
+        agendaItems: [
+          {
+            ...agenda(101, 10, { day: undefined, start_time: "09:30" }),
+            date: "",
+            city: "",
+            cityRaw: [],
+            coordinates: null,
+            startTime: null,
+            budget: null,
+          },
+        ],
+      },
+    });
+    assert.equal(status, 200);
+    const row = fake.tables().tb_travel_agenda_item.find((r) => r.id === 101)!;
+    assert.equal(row.date, null);
+    assert.equal(row.day, null);
+    assert.equal(row.coordinates_lat, null);
+    assert.equal(row.coordinates_lng, null);
+    assert.equal(row.start_time, null);
+    assert.equal(row.budget, null);
+    assert.equal(row.title, "Agenda 101", "round-tripped values are written unchanged");
+    assert.equal(row.category, "food");
+  });
+
+  test("agenda: an item sent with only its id changes nothing", async () => {
+    reset();
+    const before = structuredClone(fake.tables().tb_travel_agenda_item);
+    const { status } = await call("POST", "/s10/update", { user: ALICE, body: { agendaItems: [{ id: 101 }] } });
+    assert.equal(status, 200);
+    assert.deepEqual(fake.tables().tb_travel_agenda_item, before);
+  });
+
+  test("booking / packing / note: cleared → NULL, absent → unchanged", async () => {
+    reset();
+    Object.assign(
+      fake.tables().tb_travel_itinerary_booking.find((b) => b.id === 111)!,
+      {
+        location: "Shinjuku",
+        payment: "Instant",
+        price: "100.00",
+        deposit: "50",
+      },
+    );
+    Object.assign(
+      fake.tables().tb_travel_packing_item.find((p) => p.id === 121)!,
+      { quantity: 3, category: "clothes" },
+    );
+    Object.assign(
+      fake.tables().tb_travel_note_item.find((n) => n.id === 131)!,
+      { url: "https://x", category: "docs" },
+    );
+
+    const { status } = await call("POST", "/s10/update", {
+      user: ALICE,
+      body: {
+        bookings: [{ id: 111, item: "Hotel A", remarks: "", payment: null }],
+        packingItems: [{ id: 121, label: "Socks", quantity: null }],
+        noteItems: [{ id: 131, label: "Visa", url: "" }],
+      },
+    });
+    assert.equal(status, 200);
+    const booking = fake.tables().tb_travel_itinerary_booking.find((b) => b.id === 111)!;
+    assert.equal(booking.location, null);
+    assert.equal(booking.payment, null);
+    assert.equal(booking.price, "100.00", "absent price unchanged");
+    assert.equal(booking.deposit, "50");
+    assert.equal(booking.booked, 1, "absent flag unchanged");
+    const packing = fake.tables().tb_travel_packing_item.find((p) => p.id === 121)!;
+    assert.equal(packing.quantity, null);
+    assert.equal(packing.category, "clothes");
+    const note = fake.tables().tb_travel_note_item.find((n) => n.id === 131)!;
+    assert.equal(note.url, null);
+    assert.equal(note.category, "docs");
+  });
+
+  test("trip: destination / country cleared → NULL; absent pax count and duration unchanged", async () => {
+    reset();
+    const { status } = await call("POST", "/s10/update", { user: ALICE, body: { destination: "", country: null } });
+    assert.equal(status, 200);
+    const trip = fake.tables().tb_travel_itinerary.find((r) => r.id === 10)!;
+    assert.equal(trip.destination, null);
+    assert.equal(trip.country, null);
+    assert.equal(trip.number_of_pax, 2);
+    assert.equal(trip.duration_in_days, 3);
+    assert.equal(trip.destination_raw, '["Tokyo"]');
+    assert.equal(trip.start_date, 1_700_000_000_000);
   });
 
   // ── Delete ──

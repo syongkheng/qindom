@@ -60,6 +60,7 @@ const UPLOAD_CAPTION_TITLE = "📤 agenda_upload";
 
 const SUMMARY_COLUMNS = ["short_code", "file_name", "mime_type", "size_in_bytes", "created_dt"] as const;
 const ADMIN_COLUMNS = ["id", "telegram_user_id", "added_dt"] as const;
+const OWNER_COLUMNS = ["short_code", "created_by_id"] as const;
 
 type TgImageSummaryRow = Pick<ITB_TG_IMAGE, (typeof SUMMARY_COLUMNS)[number]>;
 type TgAdminRow = Pick<ITB_TG_STATS_WHITELIST, (typeof ADMIN_COLUMNS)[number]>;
@@ -167,6 +168,7 @@ export class TgImageService {
         mime_type: uploadMimetype,
         file_name: file.originalName,
         size_in_bytes: uploadBuffer.length,
+        created_by_id: uploader.id,
         created_dt: Date.now(),
         record_status: RecordStatus.ACTIVE,
       },
@@ -228,6 +230,30 @@ export class TgImageService {
       LoggingUtilities.service.error("TgImageService.loadImage", `Cannot re-encode ${shortCode}: ${toMessage(error)}`);
       if (event) event.detail = "undecodable stored file";
       throw new Exceptions.Unknown();
+    }
+  }
+
+  /**
+   * Itinerary attachments (`_filesToInsert`): every short code must be an active image (else 400
+   * `tgShortCode`) uploaded by `userId` (else 403). Rows uploaded before `created_by_id` existed
+   * (migration 20261126000200) have no known uploader and are accepted for anyone.
+   */
+  async assertAttachableBy(userId: number, shortCodes: string[], logContext?: IRequestLogContext): Promise<void> {
+    const unique = [...new Set(shortCodes)];
+    if (!unique.length) return;
+    const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Check image uploaders");
+    const rows = await this.db.find<ITB_TG_IMAGE>(
+      TG_IMAGE_TABLE,
+      { record_status: RecordStatus.ACTIVE },
+      { columns: OWNER_COLUMNS, extraWhere: (qb) => qb.whereIn("short_code", unique) },
+      event,
+    );
+    const uploaderOf = new Map(rows.map((r) => [r.short_code, r.created_by_id ?? null]));
+    if (unique.some((code) => !uploaderOf.has(code))) throw new Exceptions.InvalidRequest("tgShortCode", "format");
+    const legacy = [...uploaderOf.values()].filter((id) => id === null).length;
+    if (event) event.detail = `${unique.length} image(s), ${legacy} without uploader`;
+    if ([...uploaderOf.values()].some((id) => id !== null && Number(id) !== userId)) {
+      throw new Exceptions.ForbiddenAccess("Image uploaded by another user");
     }
   }
 

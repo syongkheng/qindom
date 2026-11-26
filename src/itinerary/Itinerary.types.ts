@@ -112,7 +112,7 @@ export interface ItineraryNoteItemDto {
   done: boolean;
 }
 
-/** A full trip: `GET /:sessionId` (owner), `GET /v/:shortCode` and `POST /challenge` (public, with `viewCount`). */
+/** A full trip for its owner: `GET /:sessionId`. The public views get `PublicItineraryDto`. */
 export interface ItineraryDto {
   id: number;
   sessionId: string;
@@ -132,12 +132,34 @@ export interface ItineraryDto {
   /** The 6-char access code; null when the trip is public. */
   challenge: string | null;
   paxNames: string[];
-  /** Public views only. */
-  viewCount?: number;
   bookings: ItineraryBookingDto[];
   packingItems: ItineraryPackingItemDto[];
   noteItems: ItineraryNoteItemDto[];
   agendaItems: ItineraryAgendaItemDto[];
+}
+
+// Public views (`GET /v/:shortCode`, `POST /challenge`): no internal ids, no owner `sessionId`, no access code.
+// Agenda item `id` is kept: fndom's ICS export (useTravelExport) uses it as the stable event UID.
+
+export type PublicAgendaFileDto = Omit<ItineraryAgendaFileDto, "id">;
+
+export interface PublicAgendaItemDto extends Omit<ItineraryAgendaItemDto, "itinerary_id" | "files"> {
+  files: PublicAgendaFileDto[];
+}
+
+export type PublicBookingDto = Omit<ItineraryBookingDto, "id" | "itineraryId">;
+export type PublicPackingItemDto = Omit<ItineraryPackingItemDto, "id">;
+export type PublicNoteItemDto = Omit<ItineraryNoteItemDto, "id">;
+
+export interface PublicItineraryDto extends Omit<
+  ItineraryDto,
+  "id" | "sessionId" | "challenge" | "agendaItems" | "bookings" | "packingItems" | "noteItems"
+> {
+  viewCount: number;
+  agendaItems: PublicAgendaItemDto[];
+  bookings: PublicBookingDto[];
+  packingItems: PublicPackingItemDto[];
+  noteItems: PublicNoteItemDto[];
 }
 
 /** `GET /v/:shortCode` on a protected trip: unlock it with `POST /challenge`. */
@@ -164,8 +186,11 @@ export interface ItineraryDeletedDto {
 }
 
 // ── Request bodies ──
-// Text fields are trimmed; `null` means "absent or blank". Each column keeps the old
-// "blank means unchanged" update semantics (see ItinerarySave.service.ts).
+// Text fields are trimmed. Update semantics (see README "Request bodies"): a field that is absent
+// (undefined) leaves the stored value alone; a field sent blank ("" / null) is stored as NULL.
+
+/** undefined = absent (unchanged on update, column default on create); null = sent blank (stored as NULL). */
+export type OptionalField<T> = T | null | undefined;
 
 /** One entry of an agenda item's `_filesToInsert`: an image already uploaded through `POST /img/upload`. */
 export interface AgendaFileBody {
@@ -179,70 +204,72 @@ export interface AgendaFileBody {
 export interface AgendaItemBody {
   /** Existing item id (update) or null (insert). */
   id: number | null;
-  category: string | null;
-  listType: AgendaListType | null;
-  title: string;
-  desc: string | null;
-  city: string | null;
-  cityRaw: string[] | null;
-  coordinates: CoordinatesDto | null;
+  category: OptionalField<string>;
+  listType: OptionalField<AgendaListType>;
+  /** NOT NULL column: blank is stored as "". */
+  title: string | undefined;
+  desc: OptionalField<string>;
+  city: OptionalField<string>;
+  cityRaw: OptionalField<string[]>;
+  coordinates: OptionalField<CoordinatesDto>;
   /** "HH:MM" */
-  startTime: string | null;
-  endTime: string | null;
-  durationInHours: number | null;
-  unknownTime: boolean;
-  budget: number | null;
-  day: number | null;
-  date: string | null;
+  startTime: OptionalField<string>;
+  endTime: OptionalField<string>;
+  durationInHours: OptionalField<number>;
+  unknownTime: boolean | undefined;
+  budget: OptionalField<number>;
+  day: OptionalField<number>;
+  date: OptionalField<string>;
   filesToInsert: AgendaFileBody[];
 }
 
 export interface BookingBody {
   id: number | null;
-  category: string | null;
-  item: string;
-  remarks: string | null;
-  link: string | null;
-  payment: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  nights: number | null;
-  price: number | null;
-  booked: boolean;
-  freeCancellation: string | null;
-  breakfast: boolean;
-  deposit: string | null;
-  paxBreakdown: Record<string, unknown> | null;
-  sortOrder: number | null;
+  category: OptionalField<string>;
+  /** NOT NULL column: blank is stored as "". */
+  item: string | undefined;
+  remarks: OptionalField<string>;
+  link: OptionalField<string>;
+  payment: OptionalField<string>;
+  startDate: OptionalField<string>;
+  endDate: OptionalField<string>;
+  nights: OptionalField<number>;
+  price: OptionalField<number>;
+  booked: boolean | undefined;
+  freeCancellation: OptionalField<string>;
+  breakfast: boolean | undefined;
+  deposit: OptionalField<string>;
+  paxBreakdown: OptionalField<Record<string, unknown>>;
+  sortOrder: OptionalField<number>;
 }
 
 export interface PackingItemBody {
   id: number | null;
-  label: string;
-  category: string | null;
-  packed: boolean;
-  quantity: number | null;
+  label: string | undefined;
+  category: OptionalField<string>;
+  packed: boolean | undefined;
+  quantity: OptionalField<number>;
 }
 
 export interface NoteItemBody {
   id: number | null;
-  label: string;
-  category: string | null;
-  url: string | null;
-  done: boolean;
+  label: string | undefined;
+  category: OptionalField<string>;
+  url: OptionalField<string>;
+  done: boolean | undefined;
 }
 
 /** Trip-level fields shared by create and update. */
 export interface ItineraryFieldsBody {
-  destination: string | null;
-  destinationRaw: string[] | null;
-  country: string | null;
-  numberOfPax: number | null;
-  itineraryDateRaw: string[] | null;
-  startDate: number | null;
-  endDate: number | null;
-  unknownDate: boolean;
-  durationInDays: number | null;
+  destination: OptionalField<string>;
+  destinationRaw: OptionalField<string[]>;
+  country: OptionalField<string>;
+  numberOfPax: OptionalField<number>;
+  itineraryDateRaw: OptionalField<string[]>;
+  startDate: OptionalField<number>;
+  endDate: OptionalField<number>;
+  unknownDate: boolean | undefined;
+  durationInDays: OptionalField<number>;
   agendaItems: AgendaItemBody[];
   bookings: BookingBody[];
   packingItems: PackingItemBody[];

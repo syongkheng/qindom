@@ -26,17 +26,33 @@ function fakeDb(rows: Row[] = []) {
     async find(
       _t: string,
       where: Row,
-      opts: { limit?: number; orderBy?: string; orderDirection?: string; extraWhere?: (qb: unknown) => void } = {},
+      opts: {
+        limit?: number;
+        orderBy?: string;
+        orderDirection?: string;
+        columns?: readonly string[];
+        extraWhere?: (qb: unknown) => void;
+      } = {},
     ) {
       const notNull: string[] = [];
-      opts.extraWhere?.({ whereNotNull: (col: string) => notNull.push(col) });
-      let found = rows.filter((r) => matches(r, where) && notNull.every((c) => r[c] != null));
+      const inLists: [string, unknown[]][] = [];
+      opts.extraWhere?.({
+        whereNotNull: (col: string) => notNull.push(col),
+        whereIn: (col: string, values: unknown[]) => inLists.push([col, values]),
+      });
+      let found = rows.filter(
+        (r) =>
+          matches(r, where) &&
+          notNull.every((c) => r[c] != null) &&
+          inLists.every(([c, values]) => values.includes(r[c])),
+      );
       if (opts.orderBy) {
         const key = opts.orderBy;
         found = [...found].sort((a, b) => a[key] - b[key]);
         if (opts.orderDirection === "desc") found.reverse();
       }
-      return opts.limit ? found.slice(0, opts.limit) : found;
+      if (opts.limit) found = found.slice(0, opts.limit);
+      return opts.columns ? found.map((r) => Object.fromEntries(opts.columns!.map((c) => [c, r[c] ?? null]))) : found;
     },
     async findOne(_t: string, where: Row) {
       return rows.find((r) => matches(r, where));
@@ -205,13 +221,61 @@ test("upload: no admin chat yet (nobody sent /start) is a 500 before Telegram is
     const svc = new TgImageService(db);
     const file = validateUploadFile(multerFile());
     await assert.rejects(
-      svc.upload(file, { sessionId: null, uuid: null }, { username: "u", ip: "ip" }),
+      svc.upload(file, { sessionId: null, uuid: null }, { id: 7, username: "u", ip: "ip" }),
       codeOf("unknown"),
     );
   } finally {
     if (previous === undefined) delete process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
     else process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN = previous;
   }
+});
+
+test("upload stores the uploader's user id in created_by_id (Telegram stubbed)", async () => {
+  const previous = process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
+  process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN = "test-token";
+  const sendDocument = mock.method(globalThis, "fetch", async () => ({
+    json: async () => ({ ok: true, result: { document: { file_id: "TG-FILE" } } }),
+  }));
+  try {
+    const { db, rows } = fakeDb([admin(1, { telegram_chat_id: 500 })]);
+    const file = validateUploadFile(multerFile());
+    const dto = await new TgImageService(db).upload(
+      file,
+      { sessionId: null, uuid: "u-1" },
+      { id: 7, username: "u", ip: "ip" },
+    );
+    const stored = rows.find((r) => r.short_code === dto.shortCode)!;
+    assert.equal(stored.created_by_id, 7);
+    assert.equal(stored.telegram_file_id, "TG-FILE");
+    assert.equal(stored.uuid, "u-1");
+    assert.equal(sendDocument.mock.callCount(), 1);
+  } finally {
+    sendDocument.mock.restore();
+    if (previous === undefined) delete process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN;
+    else process.env.AWENSE_CDN_TELEGRAM_BOT_TOKEN = previous;
+  }
+});
+
+test("assertAttachableBy: own and legacy (NULL uploader) pass, someone else's is 403, unknown/deleted 400", async () => {
+  const image = (code: string, createdById: number | null, status = "A") => ({
+    short_code: code,
+    telegram_file_id: code,
+    created_by_id: createdById,
+    record_status: status,
+  });
+  const { db } = fakeDb([
+    image("own00001", 7),
+    image("legacy01", null),
+    image("other001", 8),
+    image("gone0001", 7, "D"),
+  ]);
+  const svc = new TgImageService(db);
+  await svc.assertAttachableBy(7, []);
+  await svc.assertAttachableBy(7, ["own00001", "legacy01", "own00001"]);
+  await svc.assertAttachableBy(8, ["legacy01", "other001"]);
+  await assert.rejects(svc.assertAttachableBy(7, ["own00001", "other001"]), codeOf("forbidden_access"));
+  await assert.rejects(svc.assertAttachableBy(7, ["nope0001"]), codeOf("invalid_request_tgShortCode"));
+  await assert.rejects(svc.assertAttachableBy(7, ["gone0001"]), codeOf("invalid_request_tgShortCode"));
 });
 
 // ── HTTP (controllers on a throwaway server; nothing reaches Telegram) ──
@@ -226,7 +290,7 @@ async function startApp(roles: string[], rows: Row[] = []) {
     next();
   };
   const fakeAuth: RequestHandler = (req, _res, next) => {
-    (req as unknown as { user: unknown }).user = { username: "u", roles };
+    (req as unknown as { user: unknown }).user = { id: 7, username: "u", roles };
     next();
   };
   app.use(fakeLogContext);

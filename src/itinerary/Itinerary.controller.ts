@@ -13,6 +13,7 @@ import {
   ItineraryDto,
   ItineraryListDto,
   ItinerarySavedDto,
+  PublicItineraryDto,
 } from "./Itinerary.types.js";
 
 const UNKNOWN = "Unknown";
@@ -54,7 +55,7 @@ export default function createItineraryController(db: KnexSqlUtilities): Router 
       const { shortCode, challenge } = validateChallengeBody(req.body, validationEvent(req));
       const itinerary = await svc.verifyChallenge(shortCode, challenge, req.logContext);
       void svc.recordView(shortCode, clientIp(req), userAgent(req));
-      return cr.ok<ItineraryDto>(itinerary);
+      return cr.ok<PublicItineraryDto>(itinerary);
     }),
   );
 
@@ -64,7 +65,7 @@ export default function createItineraryController(db: KnexSqlUtilities): Router 
     route("ItineraryController.GET /v/:shortCode", "Failed to load itinerary", async (req, cr) => {
       const result = await svc.getByShortCode(req.params.shortCode, req.logContext);
       if (!("hasChallenge" in result)) void svc.recordView(req.params.shortCode, clientIp(req), userAgent(req));
-      return cr.ok<ItineraryDto | ItineraryChallengeRequiredDto>(result);
+      return cr.ok<PublicItineraryDto | ItineraryChallengeRequiredDto>(result);
     }),
   );
 

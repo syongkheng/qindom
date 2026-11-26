@@ -22,6 +22,7 @@ import {
   ItineraryNoteItemDto,
   ItineraryPackingItemDto,
   ItinerarySummaryDto,
+  PublicItineraryDto,
 } from "./Itinerary.types.js";
 
 export const ITINERARY_TABLE = "tb_travel_itinerary";
@@ -187,7 +188,6 @@ export function toNoteItemDto(row: ITB_TRAVEL_NOTE_ITEM): ItineraryNoteItemDto {
 export function toItineraryDto(
   row: ITB_TRAVEL_ITINERARY,
   children: Pick<ItineraryDto, "agendaItems" | "bookings" | "packingItems" | "noteItems">,
-  viewCount?: number,
 ): ItineraryDto {
   return {
     id: Number(row.id),
@@ -205,8 +205,23 @@ export function toItineraryDto(
     durationInDays: row.duration_in_days ?? null,
     challenge: row.challenge ?? null,
     paxNames: parseJson<string[]>(row.pax_names, []),
-    ...(viewCount !== undefined ? { viewCount } : {}),
     ...children,
+  };
+}
+
+/** The owner's view minus the internal ids, the owner's `sessionId` and the access code (agenda item ids stay, see the type). */
+export function toPublicItineraryDto(trip: ItineraryDto, viewCount: number): PublicItineraryDto {
+  const { id, sessionId, challenge, agendaItems, bookings, packingItems, noteItems, ...fields } = trip;
+  return {
+    ...fields,
+    viewCount,
+    agendaItems: agendaItems.map(({ itinerary_id, files, ...item }) => ({
+      ...item,
+      files: files.map(({ id: fileId, ...file }) => file),
+    })),
+    bookings: bookings.map(({ id: bookingId, itineraryId, ...booking }) => booking),
+    packingItems: packingItems.map(({ id: packingId, ...item }) => item),
+    noteItems: noteItems.map(({ id: noteId, ...item }) => item),
   };
 }
 
@@ -271,7 +286,7 @@ export class ItineraryService {
   async getByShortCode(
     shortCode: string,
     logContext?: IRequestLogContext,
-  ): Promise<ItineraryDto | ItineraryChallengeRequiredDto> {
+  ): Promise<PublicItineraryDto | ItineraryChallengeRequiredDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Load shared itinerary");
     const itinerary = await this.findByShortCode(shortCode, event);
     if (itinerary.challenge) {
@@ -282,7 +297,11 @@ export class ItineraryService {
   }
 
   /** Unlocks a protected trip. A wrong code is a 400 so it counts towards `itineraryChallengeLimiter`. */
-  async verifyChallenge(shortCode: string, challenge: string, logContext?: IRequestLogContext): Promise<ItineraryDto> {
+  async verifyChallenge(
+    shortCode: string,
+    challenge: string,
+    logContext?: IRequestLogContext,
+  ): Promise<PublicItineraryDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "Verify access code");
     const itinerary = await this.findByShortCode(shortCode, event);
     if (itinerary.challenge !== challenge) throw new Exceptions.InvalidRequest("challenge");
@@ -319,12 +338,12 @@ export class ItineraryService {
     return itinerary;
   }
 
-  private async loadPublic(itinerary: ITB_TRAVEL_ITINERARY, event?: IRequestLogEvent): Promise<ItineraryDto> {
+  private async loadPublic(itinerary: ITB_TRAVEL_ITINERARY, event?: IRequestLogEvent): Promise<PublicItineraryDto> {
     const [children, viewCount] = await Promise.all([
       this.loadChildren(itinerary, event),
       this.db.count<ITB_TRAVEL_ITINERARY_VIEW>(ITINERARY_VIEW_TABLE, { short_code: itinerary.short_code }, event),
     ]);
-    return toItineraryDto(itinerary, children, viewCount);
+    return toPublicItineraryDto(toItineraryDto(itinerary, children), viewCount);
   }
 
   /** Active agenda items (with file metadata), bookings, packing and notes, each in its stored order. */

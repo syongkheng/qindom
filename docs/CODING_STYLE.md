@@ -50,6 +50,10 @@ Each feature folder `src/<module>/` holds:
 - Controllers hold no business logic and no SQL. Request-body checks go in the module's validator, not inline `V.required(...)` calls in the handler.
 - When removing an ingestion source, keep its enum value and read-side defaults (with a dated comment) as long as stored rows carry it; remove only the write path.
 - When a module is removed: endpoints another feature still uses move to the module that owns their tables; its drop migration also clears its `tb_telegram_log_subscription` rows, and its `TelegramLogModules` entry goes.
+- Round-trip update bodies: a field **absent** = unchanged, **sent blank** (`""`/`null`) = NULL. Validators return `undefined` for absent (`OptionalField<T>`); inserts fill defaults explicitly; an update with no columns is skipped. When both spellings are sent, camelCase wins whenever present (never `??` for this).
+- Frontend: clearing a field sends `null` or `""`, never `undefined` (JSON drops it). Text inputs get `maxlength` from a constants file mirroring the backend column widths, with "keep in sync" comments in both repos.
+- Public (unauthenticated) DTOs are separate types that omit internal ids, owner identifiers and secrets.
+- Backend stores and returns time as ms epoch; formatting for display is the frontend's job (user, A6).
 - Dead routes (no fndom/jessikheng/Shortcut caller) are deleted, not refactored. Confirm by grepping the frontends first, and ask before deleting.
 
 ## 4. Services
@@ -205,6 +209,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | itinerary decisions: image ownership via `tb_tg_image.created_by_id` (legacy NULL allowed); blank → NULL on update (absent = unchanged); public views drop internal ids, owner sessionId and challenge; fndom maxlengths. M1: no key migration. G3: unchanged (deploy.sh + health check). |
 | 2026-11-26 | User: HDB PPHS module removed (not working, unused); nearby bus-stop/MRT lookups moved to `/lta`; tables dropped by migration 20261126000100. Wedding: no PIN in email (W1), dead jessikheng constant removed (W2), non-atomic submit accepted (W3). Unused files deleted (A11/M5/Y4). |
 | 2026-11-26 | User: Apple Pay V1 Shortcut removed (nobody uses it; V2 SMS only). `/v1/ss/todo` widget kept; `TransactionSource.V1` kept for stored rows. S1–S3 resolved by removal. |
 | 2026-11-26 | User: soft-deleted rows are treated as hard-deleted in code (applied to budget collaborators, API-key owners, role updates, session writes). Budget invite: unknown/unverified/deleted email → one identical error; invitees must be verified; collaborators may leave (`POST /budget/:id/leave`); collaborators keep seeing each other's emails. |

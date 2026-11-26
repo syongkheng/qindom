@@ -51,10 +51,8 @@ export function createTgImageController(db: KnexSqlUtilities): Router {
       const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Upload form");
       const file = validateUploadFile(req.file, event);
       const body = validateUploadBody(req.body, event);
-      const uploader = {
-        username: getUser(req).username,
-        ip: clientIp(req),
-      };
+      const user = getUser(req);
+      const uploader = { id: user.id, username: user.username, ip: clientIp(req) };
       return cr.ok<TgImageUploadDto>(await svc.upload(file, body, uploader, req.logContext));
     }),
   );

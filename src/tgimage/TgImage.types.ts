@@ -23,8 +23,9 @@ export interface TgImageUploadBody {
   uuid: string | null;
 }
 
-/** Who uploaded, for the Telegram caption. */
+/** Who uploaded: `id` is stored in `tb_tg_image.created_by_id`, the rest only goes in the Telegram caption. */
 export interface TgImageUploader {
+  id: number;
   username: string;
   ip: string;
 }

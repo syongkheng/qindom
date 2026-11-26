@@ -11,6 +11,7 @@ import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogConte
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
+import { TgImageService } from "../tgimage/TgImage.service.js";
 import {
   AGENDA_FILE_TABLE,
   AGENDA_ITEM_TABLE,
@@ -40,6 +41,8 @@ const DEFAULT_BOOKING_SORT_ORDER = 0;
 /** 4 random bytes = 8 hex chars (`short_code` VARCHAR(16), unique). */
 const SHORT_CODE_BYTES = 4;
 
+const shortCodesOf = (items: AgendaItemBody[]) => items.flatMap((i) => i.filesToInsert.map((f) => f.tgShortCode));
+
 /** Id sources, injectable so tests get stable values. */
 export interface ItineraryIdGenerator {
   sessionId: () => string;
@@ -52,90 +55,139 @@ const randomIds: ItineraryIdGenerator = {
 };
 
 // ── Body → columns ────────────────────────────────────────────────────────────
-// `undefined` = "leave the column alone" (knex drops undefined keys), so on update a blank
-// optional field keeps its stored value and on insert it gets the column default. This is the
-// long-standing behaviour fndom relies on; see README "Known gaps".
+// The mappers produce update semantics: `undefined` = "leave the column alone" (knex drops undefined
+// keys), `null` = "store NULL". A field absent from the body is undefined, a field sent blank is
+// null, so clearing a field in fndom clears it in the DB. Inserts add `*_INSERT_DEFAULTS` for absent
+// NOT NULL / defaulted columns (`withInsertDefaults`).
 
-const jsonList = (values: string[] | null | undefined) => (values?.length ? JSON.stringify(values) : undefined);
+type Columns<T> = { [K in keyof T]?: T[K] | null };
 
-/** Columns shared by create and update. */
-function itineraryColumns(body: ItineraryFieldsBody): Partial<ITB_TRAVEL_ITINERARY> {
+/** Absent → undefined; an empty list → NULL; otherwise the JSON. */
+const jsonList = (values: string[] | null | undefined) =>
+  values === undefined ? undefined : values?.length ? JSON.stringify(values) : null;
+
+/** For columns where 0 has always meant "not set" (budget, duration, day, trip dates): 0 → NULL. */
+const zeroAsBlank = (n: number | null | undefined) => (n === undefined ? undefined : n || null);
+
+const asFlag = (b: boolean | undefined) => (b === undefined ? undefined : b ? 1 : 0);
+
+/** knex rejects an UPDATE with no columns (a child sent with only its `id`). */
+const hasColumns = (columns: object) => Object.values(columns).some((v) => v !== undefined);
+
+/** The column default for every key the mapper left undefined (absent from the body). */
+function withInsertDefaults<T extends object>(columns: Columns<T>, defaults: Columns<T>): Columns<T> {
+  const sent = Object.fromEntries(Object.entries(columns).filter(([, v]) => v !== undefined));
+  return { ...defaults, ...sent } as Columns<T>;
+}
+
+// Same values as the schema defaults, written explicitly on insert.
+const ITINERARY_INSERT_DEFAULTS: Columns<ITB_TRAVEL_ITINERARY> = {
+  number_of_pax: DEFAULT_NUMBER_OF_PAX,
+  duration_in_days: DEFAULT_DURATION_IN_DAYS,
+  unknown_date: 0,
+};
+const AGENDA_INSERT_DEFAULTS: Columns<ITB_TRAVEL_AGENDA_ITEM> = { title: "", unknown_time: 0 };
+const BOOKING_INSERT_DEFAULTS: Columns<ITB_TRAVEL_ITINERARY_BOOKING> = {
+  item: "",
+  booked: 0,
+  breakfast: 0,
+  sort_order: DEFAULT_BOOKING_SORT_ORDER,
+};
+const PACKING_INSERT_DEFAULTS: Columns<ITB_TRAVEL_PACKING_ITEM> = {
+  label: "",
+  category: DEFAULT_PACKING_CATEGORY,
+  packed: 0,
+};
+const NOTE_INSERT_DEFAULTS: Columns<ITB_TRAVEL_NOTE_ITEM> = { label: "", done: 0 };
+
+/** Columns shared by create and update. Pax count and duration can't be blank: blank/0 → 1. */
+function itineraryColumns(body: ItineraryFieldsBody): Columns<ITB_TRAVEL_ITINERARY> {
   return {
-    destination: body.destination ?? undefined,
+    destination: body.destination,
     destination_raw: jsonList(body.destinationRaw),
-    country: body.country ?? undefined,
-    number_of_pax: body.numberOfPax || DEFAULT_NUMBER_OF_PAX,
+    country: body.country,
+    number_of_pax: body.numberOfPax === undefined ? undefined : body.numberOfPax || DEFAULT_NUMBER_OF_PAX,
     itinerary_date_raw: jsonList(body.itineraryDateRaw),
-    start_date: body.startDate || undefined,
-    end_date: body.endDate || undefined,
-    unknown_date: body.unknownDate ? 1 : 0,
-    duration_in_days: body.durationInDays || DEFAULT_DURATION_IN_DAYS,
+    start_date: zeroAsBlank(body.startDate),
+    end_date: zeroAsBlank(body.endDate),
+    unknown_date: asFlag(body.unknownDate),
+    duration_in_days: body.durationInDays === undefined ? undefined : body.durationInDays || DEFAULT_DURATION_IN_DAYS,
   };
 }
 
-export function agendaColumns(item: AgendaItemBody): Partial<ITB_TRAVEL_AGENDA_ITEM> {
+/**
+ * A `date` sent blank with no `day` also clears `day`: that is how fndom moves an item back to
+ * "unscheduled" (`date: ""`, `day` undefined so it's dropped from the JSON), and `day` wins over
+ * `date` when fndom groups items. A `day` that was sent (undated trips: `day: 3, date: ""`) is kept.
+ */
+export function agendaColumns(item: AgendaItemBody): Columns<ITB_TRAVEL_AGENDA_ITEM> {
+  const day = item.day === undefined && item.date === null ? null : zeroAsBlank(item.day);
   return {
-    category: item.category ?? undefined,
-    list_type: item.listType ?? undefined,
+    category: item.category,
+    list_type: item.listType,
     title: item.title,
-    desc: item.desc ?? undefined,
-    city: item.city ?? undefined,
+    desc: item.desc,
+    city: item.city,
     city_raw: jsonList(item.cityRaw),
-    coordinates_lat: item.coordinates?.lat,
-    coordinates_lng: item.coordinates?.lng,
-    start_time: timeToMinutes(item.startTime),
-    end_time: timeToMinutes(item.endTime),
-    duration_in_hours: item.durationInHours || undefined,
-    unknown_time: item.unknownTime ? 1 : 0,
-    budget: item.budget || undefined,
-    day: item.day || undefined,
-    date: item.date ?? undefined,
+    coordinates_lat: item.coordinates === undefined ? undefined : (item.coordinates?.lat ?? null),
+    coordinates_lng: item.coordinates === undefined ? undefined : (item.coordinates?.lng ?? null),
+    start_time: item.startTime === undefined ? undefined : (timeToMinutes(item.startTime) ?? null),
+    end_time: item.endTime === undefined ? undefined : (timeToMinutes(item.endTime) ?? null),
+    duration_in_hours: zeroAsBlank(item.durationInHours),
+    unknown_time: asFlag(item.unknownTime),
+    budget: zeroAsBlank(item.budget),
+    day,
+    date: item.date,
   };
 }
 
-export function bookingColumns(b: BookingBody): Partial<ITB_TRAVEL_ITINERARY_BOOKING> {
+export function bookingColumns(b: BookingBody): Columns<ITB_TRAVEL_ITINERARY_BOOKING> {
+  const paxBreakdown = b.paxBreakdown && Object.keys(b.paxBreakdown).length ? JSON.stringify(b.paxBreakdown) : null;
   return {
-    category: b.category ?? undefined,
+    category: b.category,
     item: b.item,
-    location: b.remarks ?? undefined,
-    link: b.link ?? undefined,
-    payment: b.payment ?? undefined,
-    start_date: b.startDate ?? undefined,
-    end_date: b.endDate ?? undefined,
-    nights: b.nights ?? undefined,
-    price: b.price ?? undefined,
-    booked: b.booked ? 1 : 0,
-    free_cancellation: b.freeCancellation ?? undefined,
-    breakfast: b.breakfast ? 1 : 0,
-    deposit: b.deposit ?? undefined,
-    pax_breakdown: b.paxBreakdown ? JSON.stringify(b.paxBreakdown) : undefined,
-    sort_order: b.sortOrder ?? DEFAULT_BOOKING_SORT_ORDER,
+    location: b.remarks,
+    link: b.link,
+    payment: b.payment,
+    start_date: b.startDate,
+    end_date: b.endDate,
+    nights: b.nights,
+    price: b.price,
+    booked: asFlag(b.booked),
+    free_cancellation: b.freeCancellation,
+    breakfast: asFlag(b.breakfast),
+    deposit: b.deposit,
+    pax_breakdown: b.paxBreakdown === undefined ? undefined : paxBreakdown,
+    sort_order: b.sortOrder === undefined ? undefined : (b.sortOrder ?? DEFAULT_BOOKING_SORT_ORDER),
   };
 }
 
-/** `sortOrder` = position in the request list. */
-export function packingColumns(p: PackingItemBody, sortOrder: number): Partial<ITB_TRAVEL_PACKING_ITEM> {
+/** `sortOrder` = position in the request list. A category sent blank is stored as the default (`misc`). */
+export function packingColumns(p: PackingItemBody, sortOrder: number): Columns<ITB_TRAVEL_PACKING_ITEM> {
   return {
     label: p.label,
-    category: p.category ?? DEFAULT_PACKING_CATEGORY,
-    packed: p.packed ? 1 : 0,
+    category: p.category === undefined ? undefined : (p.category ?? DEFAULT_PACKING_CATEGORY),
+    packed: asFlag(p.packed),
     quantity: p.quantity,
     sort_order: sortOrder,
   };
 }
 
-export function noteColumns(n: NoteItemBody, sortOrder: number): Partial<ITB_TRAVEL_NOTE_ITEM> {
+export function noteColumns(n: NoteItemBody, sortOrder: number): Columns<ITB_TRAVEL_NOTE_ITEM> {
   return {
     label: n.label,
-    category: n.category ?? undefined,
-    url: n.url ?? undefined,
-    done: n.done ? 1 : 0,
+    category: n.category,
+    url: n.url,
+    done: asFlag(n.done),
     sort_order: sortOrder,
   };
 }
 
 /**
  * Creates and updates trips from fndom's planner payload (the whole trip in one request).
+ *
+ * Attached images (`_filesToInsert[].tgShortCode`) must exist and, when their uploader is known, be
+ * the editor's own uploads (`TgImageService.assertAttachableBy`; 400 / 403 before the transaction).
  *
  * Child rows on update are addressed by client-supplied ids. Any child id (agenda, booking,
  * packing, note; updated or listed for deletion) that isn't this trip's is a 403 before anything
@@ -148,6 +200,7 @@ export class ItinerarySaveService {
   constructor(
     private db: KnexSqlUtilities,
     private ids: ItineraryIdGenerator = randomIds,
+    private images: TgImageService = new TgImageService(db),
   ) {}
 
   async create(userId: number, body: ItineraryCreateBody, logContext?: IRequestLogContext): Promise<ItinerarySavedDto> {
@@ -158,19 +211,22 @@ export class ItinerarySaveService {
       if (replay) return replay;
     }
 
+    // Checked before the transaction, so a foreign or unknown image is rejected before anything is written.
+    await this.images.assertAttachableBy(userId, shortCodesOf(body.agendaItems), logContext);
+
     const sessionId = this.ids.sessionId();
     const shortCode = this.ids.shortCode();
     const now = Date.now();
 
     const agendaToFileMap = await this.db.transaction(async (trx) => {
       const [itineraryId] = await trx(ITINERARY_TABLE).insert({
-        ...itineraryColumns(body),
+        ...withInsertDefaults(itineraryColumns(body), ITINERARY_INSERT_DEFAULTS),
         session_id: sessionId,
         short_code: shortCode,
         idempotency_key: body.idempotencyKey ?? undefined,
         session_title: body.sessionTitle,
         challenge: body.challenge ?? undefined,
-        pax_names: jsonList(body.paxNames),
+        pax_names: jsonList(body.paxNames) ?? undefined,
         created_dt: now,
         created_by_id: userId,
         record_status: RecordStatus.ACTIVE,
@@ -196,8 +252,9 @@ export class ItinerarySaveService {
     const itinerary = await findOwnedItinerary(this.db, userId, sessionId, event);
     const itineraryId = Number(itinerary.id);
 
-    // Checked before the transaction, so a foreign id is a 403 before anything is written.
+    // Checked before the transaction, so a foreign id or image is rejected before anything is written.
     await this.assertChildrenOwned(itineraryId, body, event);
+    await this.images.assertAttachableBy(userId, shortCodesOf(body.agendaItems), logContext);
 
     const now = Date.now();
     const agendaToFileMap = await this.db.transaction(async (trx) => {
@@ -207,7 +264,7 @@ export class ItinerarySaveService {
           ...itineraryColumns(body),
           session_title: body.sessionTitle || itinerary.session_title,
           challenge: body.challenge === undefined ? itinerary.challenge : body.challenge || null,
-          pax_names: body.paxNames === undefined ? undefined : (jsonList(body.paxNames) ?? null),
+          pax_names: jsonList(body.paxNames),
         });
 
       await this.softDelete(trx, AGENDA_ITEM_TABLE, itineraryId, body.agendaIdsToDelete);
@@ -319,10 +376,13 @@ export class ItinerarySaveService {
       let agendaId: number;
       if (item.id !== null) {
         agendaId = item.id;
-        await trx(AGENDA_ITEM_TABLE).where({ id: agendaId, itinerary_id: itineraryId }).update(agendaColumns(item));
+        const columns = agendaColumns(item);
+        if (hasColumns(columns)) {
+          await trx(AGENDA_ITEM_TABLE).where({ id: agendaId, itinerary_id: itineraryId }).update(columns);
+        }
       } else {
         [agendaId] = await trx(AGENDA_ITEM_TABLE).insert({
-          ...agendaColumns(item),
+          ...withInsertDefaults(agendaColumns(item), AGENDA_INSERT_DEFAULTS),
           itinerary_id: itineraryId,
           created_dt: now,
           record_status: RecordStatus.ACTIVE,
@@ -352,13 +412,16 @@ export class ItinerarySaveService {
   }
 
   private async saveBookings(trx: Knex.Transaction, itineraryId: number, bookings: BookingBody[], now: number) {
-    const inserts: Partial<ITB_TRAVEL_ITINERARY_BOOKING>[] = [];
+    const inserts: Columns<ITB_TRAVEL_ITINERARY_BOOKING>[] = [];
     for (const b of bookings) {
       if (b.id !== null) {
-        await trx(BOOKING_TABLE).where({ id: b.id, itinerary_id: itineraryId }).update(bookingColumns(b));
+        const columns = bookingColumns(b);
+        if (hasColumns(columns)) {
+          await trx(BOOKING_TABLE).where({ id: b.id, itinerary_id: itineraryId }).update(columns);
+        }
       } else {
         inserts.push({
-          ...bookingColumns(b),
+          ...withInsertDefaults(bookingColumns(b), BOOKING_INSERT_DEFAULTS),
           itinerary_id: itineraryId,
           created_dt: now,
           record_status: RecordStatus.ACTIVE,
@@ -369,13 +432,13 @@ export class ItinerarySaveService {
   }
 
   private async savePacking(trx: Knex.Transaction, itineraryId: number, items: PackingItemBody[], now: number) {
-    const inserts: Partial<ITB_TRAVEL_PACKING_ITEM>[] = [];
+    const inserts: Columns<ITB_TRAVEL_PACKING_ITEM>[] = [];
     for (const [index, p] of items.entries()) {
       if (p.id !== null) {
         await trx(PACKING_ITEM_TABLE).where({ id: p.id, itinerary_id: itineraryId }).update(packingColumns(p, index));
       } else {
         inserts.push({
-          ...packingColumns(p, index),
+          ...withInsertDefaults(packingColumns(p, index), PACKING_INSERT_DEFAULTS),
           itinerary_id: itineraryId,
           created_dt: now,
           record_status: RecordStatus.ACTIVE,
@@ -386,13 +449,13 @@ export class ItinerarySaveService {
   }
 
   private async saveNotes(trx: Knex.Transaction, itineraryId: number, items: NoteItemBody[], now: number) {
-    const inserts: Partial<ITB_TRAVEL_NOTE_ITEM>[] = [];
+    const inserts: Columns<ITB_TRAVEL_NOTE_ITEM>[] = [];
     for (const [index, n] of items.entries()) {
       if (n.id !== null) {
         await trx(NOTE_ITEM_TABLE).where({ id: n.id, itinerary_id: itineraryId }).update(noteColumns(n, index));
       } else {
         inserts.push({
-          ...noteColumns(n, index),
+          ...withInsertDefaults(noteColumns(n, index), NOTE_INSERT_DEFAULTS),
           itinerary_id: itineraryId,
           created_dt: now,
           record_status: RecordStatus.ACTIVE,

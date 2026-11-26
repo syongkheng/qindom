@@ -18,6 +18,7 @@ import {
 type Body = Record<string, unknown>;
 
 // ── Column widths ──
+// fndom caps its planner inputs at the same widths (fndom src/constants/TravelLimits.ts): keep in sync.
 // tb_travel_itinerary
 const IDEMPOTENCY_KEY_MAX_LENGTH = 64; // idempotency_key VARCHAR(64)
 const SESSION_TITLE_MAX_LENGTH = 512; // session_title VARCHAR(512)
@@ -73,6 +74,21 @@ const invalid = (field: string, event?: IRequestLogEvent): never => {
 
 const isBlank = (value: unknown) => value === undefined || value === null || value === "";
 
+/**
+ * Update semantics: an absent field (undefined) stays undefined, so the column is left alone; a field
+ * that was sent is parsed, and a blank one comes back as null (stored as NULL).
+ */
+function ifPresent<T>(value: unknown, parse: (v: unknown) => T): T | undefined {
+  return value === undefined ? undefined : parse(value);
+}
+
+/**
+ * Agenda fields fndom may send in both spellings: the camelCase one it edits wins whenever it was sent
+ * (even blank, so clearing a field clears it), else the snake_case one the GET returned.
+ */
+const either = (body: Body, camel: string, snake: string): unknown =>
+  body[camel] !== undefined ? body[camel] : body[snake];
+
 /** undefined/null → []; anything but an array → 400. */
 function list(value: unknown, field: string, event?: IRequestLogEvent): unknown[] {
   if (value === undefined || value === null) return [];
@@ -90,9 +106,13 @@ function stringList(value: unknown, field: string, event?: IRequestLogEvent): st
   return items.every((v) => typeof v === "string") ? (items as string[]) : invalid(field, event);
 }
 
-/** Text that may be blank but must fit the column (stored as "" when blank). */
-const text = (value: unknown, field: string, max: number, event?: IRequestLogEvent): string =>
-  V.optionalText(value, field, max, event) ?? "";
+/** Text for a NOT NULL column: may be blank (stored as ""), must fit the column; absent → undefined. */
+const text = (value: unknown, field: string, max: number, event?: IRequestLogEvent): string | undefined =>
+  ifPresent(value, (v) => V.optionalText(v, field, max, event) ?? "");
+
+/** Nullable text column: absent → undefined, blank → null. */
+const optionalText = (value: unknown, field: string, max: number, event?: IRequestLogEvent) =>
+  ifPresent(value, (v) => V.optionalText(v, field, max, event));
 
 /**
  * A number (or a numeric string: DECIMAL columns come back from the GET as strings and fndom
@@ -120,9 +140,13 @@ function idList(value: unknown, field: string, event?: IRequestLogEvent): number
   return list(value, field, event).map((v) => optionalId(v, field, event) ?? invalid(field, event));
 }
 
-/** Booleans; also 0/1 because the GET returns TINYINT columns (`unknown_time`) and fndom echoes them. */
-function flag(value: unknown, field: string, event?: IRequestLogEvent): boolean {
-  if (value === undefined || value === null) return false;
+/**
+ * Booleans; also 0/1 because the GET returns TINYINT columns (`unknown_time`) and fndom echoes them.
+ * Absent → undefined (unchanged / column default), null → false.
+ */
+function flag(value: unknown, field: string, event?: IRequestLogEvent): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return false;
   if (typeof value === "boolean") return value;
   if (value === 0 || value === 1) return value === 1;
   return invalid(field, event);
@@ -133,8 +157,10 @@ function optionalTime(value: unknown, field: string, event?: IRequestLogEvent): 
   return typeof value === "string" && TIME_PATTERN.test(value) ? value : invalid(field, event);
 }
 
-function coordinates(value: unknown, event?: IRequestLogEvent): CoordinatesDto | null {
-  if (value === undefined || value === null) return null;
+/** Absent → undefined; null → null (clears both columns). */
+function coordinates(value: unknown, event?: IRequestLogEvent): CoordinatesDto | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
   const c = record(value, "coordinates", event);
   const lat = optionalNumber(c.lat, "coordinates", { min: -LATITUDE_MAX, max: LATITUDE_MAX }, event);
   const lng = optionalNumber(c.lng, "coordinates", { min: -LONGITUDE_MAX, max: LONGITUDE_MAX }, event);
@@ -179,57 +205,54 @@ export function validateAgendaFileBody(value: unknown, event?: IRequestLogEvent)
 /** Accepts both the camelCase fields fndom edits and the snake_case ones the GET returns. */
 export function validateAgendaItemBody(value: unknown, event?: IRequestLogEvent): AgendaItemBody {
   const a = record(value, "agendaItems", event);
-  const listType = a.listType ?? a.list_type;
+  const listType = either(a, "listType", "list_type");
   if (!isBlank(listType)) V.oneOf(listType, AGENDA_LIST_TYPES, "listType", event, "(O)");
+  const number = (v: unknown, field: string, range: { min: number; max: number; integer?: boolean }) =>
+    ifPresent(v, (x) => optionalNumber(x, field, range, event));
   return {
     id: optionalId(a.id, "agendaItems.id", event),
-    category: V.optionalText(a.category, "category", AGENDA_CATEGORY_MAX_LENGTH, event),
-    listType: isBlank(listType) ? null : (listType as AgendaListType),
+    category: optionalText(a.category, "category", AGENDA_CATEGORY_MAX_LENGTH, event),
+    listType: ifPresent(listType, (v) => (isBlank(v) ? null : (v as AgendaListType))),
     title: text(a.title, "title", AGENDA_TITLE_MAX_LENGTH, event),
-    desc: isBlank(a.desc) ? null : typeof a.desc === "string" ? a.desc : invalid("desc", event),
-    city: V.optionalText(a.city, "city", AGENDA_CITY_MAX_LENGTH, event),
-    cityRaw: normaliseCityRaw(a.cityRaw ?? a.city_raw),
+    desc: ifPresent(a.desc, (v) => (isBlank(v) ? null : typeof v === "string" ? v : invalid("desc", event))),
+    city: optionalText(a.city, "city", AGENDA_CITY_MAX_LENGTH, event),
+    cityRaw: ifPresent(either(a, "cityRaw", "city_raw"), normaliseCityRaw),
     coordinates: coordinates(a.coordinates, event),
-    startTime: optionalTime(a.startTime ?? a.start_time, "startTime", event),
-    endTime: optionalTime(a.endTime ?? a.end_time, "endTime", event),
-    durationInHours: optionalNumber(
-      a.durationInHours ?? a.duration_in_hours,
-      "durationInHours",
-      { min: 0, max: DURATION_HOURS_MAX },
-      event,
-    ),
-    unknownTime: flag(a.unknownTime ?? a.unknown_time, "unknownTime", event),
-    budget: optionalNumber(a.budget, "budget", { min: -MONEY_MAX_ABS, max: MONEY_MAX_ABS }, event),
-    day: optionalNumber(a.day, "day", { min: 0, max: Number.MAX_SAFE_INTEGER, integer: true }, event),
-    date: V.optionalText(a.date, "date", AGENDA_DATE_MAX_LENGTH, event),
+    startTime: ifPresent(either(a, "startTime", "start_time"), (v) => optionalTime(v, "startTime", event)),
+    endTime: ifPresent(either(a, "endTime", "end_time"), (v) => optionalTime(v, "endTime", event)),
+    durationInHours: number(either(a, "durationInHours", "duration_in_hours"), "durationInHours", {
+      min: 0,
+      max: DURATION_HOURS_MAX,
+    }),
+    unknownTime: flag(either(a, "unknownTime", "unknown_time"), "unknownTime", event),
+    budget: number(a.budget, "budget", { min: -MONEY_MAX_ABS, max: MONEY_MAX_ABS }),
+    day: number(a.day, "day", { min: 0, max: Number.MAX_SAFE_INTEGER, integer: true }),
+    date: optionalText(a.date, "date", AGENDA_DATE_MAX_LENGTH, event),
     filesToInsert: list(a._filesToInsert, "_filesToInsert", event).map((f) => validateAgendaFileBody(f, event)),
   };
 }
 
 export function validateBookingBody(value: unknown, event?: IRequestLogEvent): BookingBody {
   const b = record(value, "bookings", event);
+  const number = (v: unknown, field: string, range: { min: number; max: number; integer?: boolean }) =>
+    ifPresent(v, (x) => optionalNumber(x, field, range, event));
   return {
     id: optionalId(b.id, "bookings.id", event),
-    category: V.optionalText(b.category, "category", BOOKING_CATEGORY_MAX_LENGTH, event),
+    category: optionalText(b.category, "category", BOOKING_CATEGORY_MAX_LENGTH, event),
     item: text(b.item, "item", BOOKING_ITEM_MAX_LENGTH, event),
-    remarks: V.optionalText(b.remarks, "remarks", BOOKING_REMARKS_MAX_LENGTH, event),
-    link: V.optionalText(b.link, "link", BOOKING_LINK_MAX_LENGTH, event),
-    payment: V.optionalText(b.payment, "payment", BOOKING_PAYMENT_MAX_LENGTH, event),
-    startDate: V.optionalText(b.startDate, "startDate", BOOKING_DATE_MAX_LENGTH, event),
-    endDate: V.optionalText(b.endDate, "endDate", BOOKING_DATE_MAX_LENGTH, event),
-    nights: optionalNumber(b.nights, "nights", { min: 0, max: INT_MAX, integer: true }, event),
-    price: optionalNumber(b.price, "price", { min: -MONEY_MAX_ABS, max: MONEY_MAX_ABS }, event),
+    remarks: optionalText(b.remarks, "remarks", BOOKING_REMARKS_MAX_LENGTH, event),
+    link: optionalText(b.link, "link", BOOKING_LINK_MAX_LENGTH, event),
+    payment: optionalText(b.payment, "payment", BOOKING_PAYMENT_MAX_LENGTH, event),
+    startDate: optionalText(b.startDate, "startDate", BOOKING_DATE_MAX_LENGTH, event),
+    endDate: optionalText(b.endDate, "endDate", BOOKING_DATE_MAX_LENGTH, event),
+    nights: number(b.nights, "nights", { min: 0, max: INT_MAX, integer: true }),
+    price: number(b.price, "price", { min: -MONEY_MAX_ABS, max: MONEY_MAX_ABS }),
     booked: flag(b.booked, "booked", event),
-    freeCancellation: V.optionalText(
-      b.freeCancellation,
-      "freeCancellation",
-      BOOKING_FREE_CANCELLATION_MAX_LENGTH,
-      event,
-    ),
+    freeCancellation: optionalText(b.freeCancellation, "freeCancellation", BOOKING_FREE_CANCELLATION_MAX_LENGTH, event),
     breakfast: flag(b.breakfast, "breakfast", event),
-    deposit: V.optionalText(b.deposit, "deposit", BOOKING_DEPOSIT_MAX_LENGTH, event),
-    paxBreakdown: isBlank(b.paxBreakdown) ? null : record(b.paxBreakdown, "paxBreakdown", event),
-    sortOrder: optionalNumber(b.sortOrder, "sortOrder", { min: -INT_MAX, max: INT_MAX, integer: true }, event),
+    deposit: optionalText(b.deposit, "deposit", BOOKING_DEPOSIT_MAX_LENGTH, event),
+    paxBreakdown: ifPresent(b.paxBreakdown, (v) => (isBlank(v) ? null : record(v, "paxBreakdown", event))),
+    sortOrder: number(b.sortOrder, "sortOrder", { min: -INT_MAX, max: INT_MAX, integer: true }),
   };
 }
 
@@ -238,9 +261,11 @@ export function validatePackingItemBody(value: unknown, event?: IRequestLogEvent
   return {
     id: optionalId(p.id, "packingItems.id", event),
     label: text(p.label, "label", PACKING_LABEL_MAX_LENGTH, event),
-    category: V.optionalText(p.category, "category", PACKING_CATEGORY_MAX_LENGTH, event),
+    category: optionalText(p.category, "category", PACKING_CATEGORY_MAX_LENGTH, event),
     packed: flag(p.packed, "packed", event),
-    quantity: optionalNumber(p.quantity, "quantity", { min: 0, max: INT_MAX, integer: true }, event),
+    quantity: ifPresent(p.quantity, (v) =>
+      optionalNumber(v, "quantity", { min: 0, max: INT_MAX, integer: true }, event),
+    ),
   };
 }
 
@@ -249,31 +274,28 @@ export function validateNoteItemBody(value: unknown, event?: IRequestLogEvent): 
   return {
     id: optionalId(n.id, "noteItems.id", event),
     label: text(n.label, "label", NOTE_LABEL_MAX_LENGTH, event),
-    category: V.optionalText(n.category, "category", NOTE_CATEGORY_MAX_LENGTH, event),
-    url: V.optionalText(n.url, "url", NOTE_URL_MAX_LENGTH, event),
+    category: optionalText(n.category, "category", NOTE_CATEGORY_MAX_LENGTH, event),
+    url: optionalText(n.url, "url", NOTE_URL_MAX_LENGTH, event),
     done: flag(n.done, "done", event),
   };
 }
 
 /** Trip fields + child lists shared by create and update. Unknown fields (fndom sends its whole store) are ignored. */
 function validateFields(body: Body, event?: IRequestLogEvent): ItineraryFieldsBody {
+  const count = (v: unknown, field: string) =>
+    ifPresent(v, (x) => optionalNumber(x, field, { min: 0, max: INT_MAX, integer: true }, event));
   const timestamp = (v: unknown, field: string) =>
-    optionalNumber(v, field, { min: 0, max: Number.MAX_SAFE_INTEGER, integer: true }, event);
+    ifPresent(v, (x) => optionalNumber(x, field, { min: 0, max: Number.MAX_SAFE_INTEGER, integer: true }, event));
   return {
-    destination: V.optionalText(body.destination, "destination", DESTINATION_MAX_LENGTH, event),
-    destinationRaw: stringList(body.destinationRaw, "destinationRaw", event),
-    country: V.optionalText(body.country, "country", COUNTRY_MAX_LENGTH, event),
-    numberOfPax: optionalNumber(body.numberOfPax, "numberOfPax", { min: 0, max: INT_MAX, integer: true }, event),
-    itineraryDateRaw: stringList(body.itineraryDateRaw, "itineraryDateRaw", event),
+    destination: optionalText(body.destination, "destination", DESTINATION_MAX_LENGTH, event),
+    destinationRaw: ifPresent(body.destinationRaw, (v) => stringList(v, "destinationRaw", event)),
+    country: optionalText(body.country, "country", COUNTRY_MAX_LENGTH, event),
+    numberOfPax: count(body.numberOfPax, "numberOfPax"),
+    itineraryDateRaw: ifPresent(body.itineraryDateRaw, (v) => stringList(v, "itineraryDateRaw", event)),
     startDate: timestamp(body.startDate, "startDate"),
     endDate: timestamp(body.endDate, "endDate"),
     unknownDate: flag(body.unknownDate, "unknownDate", event),
-    durationInDays: optionalNumber(
-      body.durationInDays,
-      "durationInDays",
-      { min: 0, max: INT_MAX, integer: true },
-      event,
-    ),
+    durationInDays: count(body.durationInDays, "durationInDays"),
     agendaItems: list(body.agendaItems, "agendaItems", event).map((a) => validateAgendaItemBody(a, event)),
     bookings: list(body.bookings, "bookings", event).map((b) => validateBookingBody(b, event)),
     packingItems: list(body.packingItems, "packingItems", event).map((p) => validatePackingItemBody(p, event)),
