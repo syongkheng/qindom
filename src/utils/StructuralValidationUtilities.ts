@@ -4,6 +4,14 @@ import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 
 type ValidationContext = "(M)" | "(O)";
 
+/**
+ * Length in characters (Unicode code points), the unit MySQL uses for utf8mb4 VARCHAR(n):
+ * an emoji is 1, not the 2 UTF-16 units `String.length` reports.
+ */
+export function charLength(value: string): number {
+  return [...value].length;
+}
+
 export class StructuralValidationUtilities {
   // ── Primitives ───────────────────────────────────────────────────────────────
 
@@ -152,7 +160,7 @@ export class StructuralValidationUtilities {
     this.oneOf(fieldToValidate, allowedValues, fieldName, event);
   }
 
-  /** Required string, trimmed, 1..maxLength chars (match maxLength to the column). Returns the trimmed value. */
+  /** Required string, trimmed, 1..maxLength characters (match maxLength to the column). Returns the trimmed value. */
   static requiredText(
     fieldToValidate: unknown,
     fieldName: string,
@@ -161,14 +169,14 @@ export class StructuralValidationUtilities {
   ): string {
     this.requiredString(fieldToValidate, fieldName, event);
     const trimmed = (fieldToValidate as string).trim();
-    if (!trimmed || trimmed.length > maxLength) {
+    if (!trimmed || charLength(trimmed) > maxLength) {
       if (event) event.children?.push(`(M) '${fieldName}' 1–${maxLength} chars ${LogEmoji.error} `);
       throw new Exceptions.InvalidRequest(fieldName, "format");
     }
     return trimmed;
   }
 
-  /** Optional string: undefined/null/blank → null, otherwise trimmed and at most maxLength chars. */
+  /** Optional string: undefined/null/blank → null, otherwise trimmed and at most maxLength characters. */
   static optionalText(
     fieldToValidate: unknown,
     fieldName: string,
@@ -178,7 +186,7 @@ export class StructuralValidationUtilities {
     if (fieldToValidate === undefined || fieldToValidate === null || fieldToValidate === "") return null;
     this.string(fieldToValidate, fieldName, event, "(O)");
     const trimmed = (fieldToValidate as string).trim();
-    if (trimmed.length > maxLength) {
+    if (charLength(trimmed) > maxLength) {
       if (event) event.children?.push(`(O) '${fieldName}' ≤${maxLength} chars ${LogEmoji.error} `);
       throw new Exceptions.InvalidRequest(fieldName, "format");
     }

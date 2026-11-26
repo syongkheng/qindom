@@ -1,7 +1,7 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { route } from "../utils/requestUtils.js";
+import { route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { pdcaEnquiryLimiter } from "../middlewares/RateLimiter.js";
 import { AnalyticsSystemService } from "../analytics/AnalyticsSystem.service.js";

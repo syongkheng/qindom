@@ -777,7 +777,10 @@ describe("/auth/admin (OWNER only)", () => {
     const ok = await post("/admin/telegram-log-subscriptions/5/auth", { enabled: false }, ownerToken);
     assert.equal(ok.status, 200);
     assert.deepEqual(ok.json.data, matrix);
-    assert.deepEqual(toggles, [[5, "auth", false]]);
+    assert.deepEqual(
+      toggles.map((args) => args.slice(0, 3)),
+      [[5, "auth", false]],
+    );
   });
 });
 

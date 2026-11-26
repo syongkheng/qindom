@@ -2,7 +2,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 import { ITB_AA_RESOURCE_ACCESS } from "../models/databases/tb_aa_resource_access.js";
-import { hasRole } from "../utils/requestUtils.js";
+import { hasRole } from "../utils/RequestUtilities.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 
 const RESOURCE_ACCESS_TABLE = "tb_aa_resource_access";

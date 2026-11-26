@@ -1,5 +1,5 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { PdcaEnquiryBody } from "./PdcaEnquiry.types.js";
 

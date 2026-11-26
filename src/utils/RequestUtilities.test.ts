@@ -2,7 +2,8 @@ import { test } from "node:test";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import assert from "node:assert/strict";
 import type { Request, Response } from "express";
-import { requireRole, route } from "./requestUtils.js";
+import { requireRole, route } from "./RequestUtilities.js";
+import { IS_PRD } from "../config/env.js";
 
 interface Captured {
   status?: number;
@@ -66,7 +67,7 @@ test("route() turns an unexpected error into a 500 with the fallback message", a
   })(fakeReq(), fakeRes(captured), next);
   assert.equal(captured.status, 500);
   assert.equal(captured.body?.status, "Ko");
-  if (process.env.NODE_ENV !== "prd") assert.equal(captured.body?.data, "Failed to do thing");
+  if (!IS_PRD) assert.equal(captured.body?.data, "Failed to do thing");
 });
 
 test("requireRole() passes with a matching role and throws Exceptions.ForbiddenAccess otherwise", () => {

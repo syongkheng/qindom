@@ -1,5 +1,5 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { TodoCreateBody, TodoReorderBody, TodoUpdateBody } from "./Todo.types.js";

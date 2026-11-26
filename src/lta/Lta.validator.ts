@@ -1,5 +1,5 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import { BusStopCodeQuery } from "./Lta.types.js";
 
 // LTA bus stop codes are always 5 digits (e.g. "53231").

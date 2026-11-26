@@ -1,7 +1,7 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import { TELEGRAM_LOG_MODULE_KEYS } from "../utils/logging/TelegramLogModules.js";
 import { isValidRole } from "./Permission.js";
 import {

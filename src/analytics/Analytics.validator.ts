@@ -1,6 +1,6 @@
 import { Request } from "express";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { clientIp } from "../utils/requestUtils.js";
+import { clientIp } from "../utils/RequestUtilities.js";
 import {
   AnalyticsBreakpoint,
   AnalyticsCollectBody,

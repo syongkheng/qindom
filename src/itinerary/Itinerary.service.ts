@@ -10,7 +10,7 @@ import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogConte
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import {
   ItineraryAgendaFileDto,
   ItineraryAgendaItemDto,

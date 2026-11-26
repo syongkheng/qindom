@@ -3,7 +3,7 @@ import { Time } from "../constants/Time.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 
 /** The only algorithm we sign with and accept (pinned so `alg: none` / RS↔HS confusion can't happen). */
 export const JWT_ALGORITHM = "HS256";

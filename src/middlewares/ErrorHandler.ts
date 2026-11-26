@@ -3,7 +3,7 @@ import { BaseException } from "../exceptions/AppExceptions.js";
 import { ErrorRequestHandler } from "express";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 
 const GENERIC_500 = "An internal error occurred. Please try again later.";
 const KO = "Ko";

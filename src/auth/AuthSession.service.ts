@@ -6,7 +6,7 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { MailerUtilities } from "../utils/MailerUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { signToken, verifyToken } from "../token/Token.service.js";
 import { parseRoles } from "./Permission.js";
 import { passwordChangedMail } from "./Auth.emailTemplate.js";

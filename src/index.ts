@@ -36,7 +36,7 @@ import { createTgImageGetController, createTgImageController } from "./tgimage/T
 import createSsApplePayControllerV1 from "./siri-shortcut/ApplePay.v1.controller.js";
 import createSsApplePayControllerV2 from "./siri-shortcut/ApplePay.v2.controller.js";
 import createSsApiKeyController from "./ss-api-key/SsApiKey.controller.js";
-import { setupTelegramLogSender } from "./tgimage/TgLog.logSender.js";
+import { setupTelegramLogSender } from "./utils/logging/TelegramLogSender.js";
 import { initTgImageBot } from "./tgimage/TgImage.bot.js";
 
 // Wedding

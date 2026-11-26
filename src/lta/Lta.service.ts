@@ -3,7 +3,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";
 import { ITB_LTA_BUS_INFO } from "../models/databases/tb_lta_bus_info.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import {
   BusArrivalServiceDto,
   BusArrivalsDto,

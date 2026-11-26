@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getUser, route } from "../utils/requestUtils.js";
+import { getUser, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { cameraClaimIpLimiter, cameraClaimUserLimiter, cameraRegisterLimiter } from "../middlewares/RateLimiter.js";

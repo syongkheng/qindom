@@ -5,10 +5,10 @@ import { ITb_wedding_rsvp } from "../models/databases/tb_wedding_rsvp.js";
 import { ITb_wedding_rsvp_guest } from "../models/databases/tb_wedding_rsvp_guest.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { MaskingUtilities } from "../utils/MaskingUtilities.js";
+import { maskName } from "../utils/MaskingUtilities.js";
 import { MailerUtilities, MailOptions } from "../utils/MailerUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { rsvpConfirmationMail, rsvpGuestMail } from "./Wedding.emailTemplate.js";
 import {
   ReplacedRsvp,
@@ -70,10 +70,10 @@ export function toStatusMatchDto(
 ): WeddingRsvpStatusMatchDto {
   return {
     pin: rsvp.pin,
-    name: MaskingUtilities.maskName(rsvp.name),
+    name: maskName(rsvp.name),
     attending: rsvp.attending === 1,
-    additionalGuestNames: guestNames.map((name) => MaskingUtilities.maskName(name)),
-    ...(matchedGuestName !== undefined && { matchedGuestName: MaskingUtilities.maskName(matchedGuestName) }),
+    additionalGuestNames: guestNames.map((name) => maskName(name)),
+    ...(matchedGuestName !== undefined && { matchedGuestName: maskName(matchedGuestName) }),
     createdAt: rsvp.created_dt,
     updatedAt: rsvp.updated_dt,
   };

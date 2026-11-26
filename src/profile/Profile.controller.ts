@@ -1,6 +1,6 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { getUser, route } from "../utils/requestUtils.js";
+import { getUser, route } from "../utils/RequestUtilities.js";
 import { setAuthCookies } from "../utils/AuthCookieUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ProfileService } from "./Profile.service.js";

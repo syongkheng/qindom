@@ -1,6 +1,6 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { route } from "../utils/requestUtils.js";
+import { route } from "../utils/RequestUtilities.js";
 import { ConnectivityService } from "./Connectivity.service.js";
 import { ConnectivityDto } from "./Connectivity.types.js";
 

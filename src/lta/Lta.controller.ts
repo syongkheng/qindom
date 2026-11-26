@@ -1,6 +1,6 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { route } from "../utils/requestUtils.js";
+import { route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { LtaService } from "./Lta.service.js";
 import { validateBusStopCodeQuery } from "./Lta.validator.js";

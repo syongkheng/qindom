@@ -13,7 +13,7 @@ import {
   validateUploadBody,
   validateUploadFile,
 } from "./TgImage.validator.js";
-import { escapeTelegramHtml } from "./TgImage.bot.js";
+import { escapeTelegramHtml } from "../utils/TelegramUtilities.js";
 import { BaseException } from "../exceptions/AppExceptions.js";
 import { Roles } from "../auth/Permission.js";
 

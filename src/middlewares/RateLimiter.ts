@@ -7,7 +7,7 @@ import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
  * Key limiters by the real client IP. nginx sets X-Real-IP to $remote_addr, so
  * req.ip would otherwise be nginx's address and every client would share one bucket.
  * ipKeyGenerator collapses IPv6 to its /56 so rotating addresses can't dodge limits.
- * (Display IPs use `clientIp()` in utils/requestUtils.ts; this is a bucket key, not a display value.)
+ * (Display IPs use `clientIp()` in utils/RequestUtilities.ts; this is a bucket key, not a display value.)
  */
 const clientIpKey = (req: Request) =>
   ipKeyGenerator(String(req.headers["x-real-ip"] || req.socket.remoteAddress || ""));

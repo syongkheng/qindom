@@ -4,7 +4,7 @@ import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { adminLimiter } from "../middlewares/RateLimiter.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { RecentRequestLogDto, RequestLogMatchDto } from "../models/dtos/RequestLogDto.js";
-import { requireRole, route } from "../utils/requestUtils.js";
+import { requireRole, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { TelegramLogMatrix, TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { Roles } from "./Permission.js";
@@ -95,7 +95,7 @@ export default function createAuthAdminController(db: KnexSqlUtilities): Router 
       "Failed to load Telegram log subscriptions",
       async (req, cr) => {
         requireRole(req, Roles.OWNER);
-        return cr.ok<TelegramLogMatrix>(await telegramLogSubscriptions.listMatrix());
+        return cr.ok<TelegramLogMatrix>(await telegramLogSubscriptions.listMatrix(req.logContext));
       },
     ),
   );
@@ -113,8 +113,8 @@ export default function createAuthAdminController(db: KnexSqlUtilities): Router 
         const chatId = validateTelegramChatIdParam(req.params.chatId);
         const event = LoggingUtilities.request.branch(req.logContext, "VALIDATION", "Request body");
         const { enabled } = validateTelegramLogToggleBody(req.body, event);
-        await telegramLogSubscriptions.setEnabled(chatId, moduleKey, enabled);
-        return cr.ok<TelegramLogMatrix>(await telegramLogSubscriptions.listMatrix());
+        await telegramLogSubscriptions.setEnabled(chatId, moduleKey, enabled, req.logContext);
+        return cr.ok<TelegramLogMatrix>(await telegramLogSubscriptions.listMatrix(req.logContext));
       },
     ),
   );

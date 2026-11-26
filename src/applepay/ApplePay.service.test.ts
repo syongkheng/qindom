@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Request } from "express";
 import { ApplePayService } from "./ApplePay.service.js";
 import { validateCardLabelBody, validateCategoryBody } from "./ApplePay.validator.js";
-import { getApiKeyUserId } from "../utils/requestUtils.js";
+import { getApiKeyUserId } from "../utils/RequestUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 
 type Row = Record<string, any>;

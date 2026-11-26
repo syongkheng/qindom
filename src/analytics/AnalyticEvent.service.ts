@@ -2,7 +2,7 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { ITB_ANALYTIC_EVENT } from "../models/databases/tb_analytic_event.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 
 export class AnalyticEventService {
   constructor(private db: KnexSqlUtilities) {}

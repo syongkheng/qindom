@@ -1,6 +1,6 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import {
   BudgetCollaboratorBody,
   BudgetItemBody,

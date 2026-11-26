@@ -1,6 +1,6 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { route } from "../utils/requestUtils.js";
+import { route } from "../utils/RequestUtilities.js";
 import { OptionalTokenFilter } from "../middlewares/TokenFilter.js";
 import { AnalyticsLegacyService } from "./AnalyticsLegacy.service.js";
 import { readRequestMeta, validateHeartbeatBody, validateLegacyEventBody } from "./Analytics.validator.js";

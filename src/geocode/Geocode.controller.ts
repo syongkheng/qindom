@@ -1,7 +1,7 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { route } from "../utils/requestUtils.js";
+import { route } from "../utils/RequestUtilities.js";
 import { GeocodeService } from "./Geocode.service.js";
 import { NominatimPlaceDto } from "./Geocode.types.js";
 

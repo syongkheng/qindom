@@ -1,7 +1,7 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import { validateUsername } from "../auth/Auth.validator.js";
 import { ProfileCountryBody, ProfilePhotoBody, ProfileUsernameBody } from "./Profile.types.js";
 

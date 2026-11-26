@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
-import { clientIp, getUser, requireRole, route } from "../utils/requestUtils.js";
+import { clientIp, getUser, requireRole, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Roles } from "../auth/Permission.js";
 import { TgImageService } from "./TgImage.service.js";

@@ -4,8 +4,9 @@ import sharp from "sharp";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { RecordStatus } from "../constants/RecordStatus.js";
+import { getTelegramBotToken, TELEGRAM_API_URL, TELEGRAM_BOT_TOKEN_ENV } from "../utils/TelegramUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { ITbTgImage } from "../models/databases/tb_tg_image.js";
 import { ITbTgStatsWhitelist } from "../models/databases/tb_tg_stats_whitelist.js";
@@ -30,8 +31,6 @@ const TG_STATS_WHITELIST_TABLE = "tb_tg_stats_whitelist";
 const WHITELIST_REMOVED_STATUS = "I";
 
 const TELEGRAM_SERVICE_NAME = "Telegram";
-const TELEGRAM_API_URL = "https://api.telegram.org";
-const BOT_TOKEN_ENV = "AWENSE_CDN_TELEGRAM_BOT_TOKEN";
 
 const MB = 1024 * 1024;
 /**
@@ -70,11 +69,11 @@ const ADMIN_COLUMNS = ["id", "telegram_user_id", "added_dt"] as const;
 type TgImageSummaryRow = Pick<ITbTgImage, (typeof SUMMARY_COLUMNS)[number]>;
 type TgAdminRow = Pick<ITbTgStatsWhitelist, (typeof ADMIN_COLUMNS)[number]>;
 
-/** Read lazily: dotenv runs in index.ts after ESM imports are evaluated. Missing token = our misconfiguration (500). */
+/** Missing token = our misconfiguration (500). */
 function getBotToken(): string {
-  const token = process.env[BOT_TOKEN_ENV];
+  const token = getTelegramBotToken();
   if (!token) {
-    LoggingUtilities.service.error("TgImageService.getBotToken", `${BOT_TOKEN_ENV} is not set`);
+    LoggingUtilities.service.error("TgImageService.getBotToken", `${TELEGRAM_BOT_TOKEN_ENV} is not set`);
     throw new Exceptions.Unknown();
   }
   return token;

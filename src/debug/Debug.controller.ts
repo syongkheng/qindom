@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ResponseStatus } from "../models/responses/ControllerResponse.js";
-import { requireRole, route } from "../utils/requestUtils.js";
+import { requireRole, route } from "../utils/RequestUtilities.js";
 import { Roles } from "../auth/Permission.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";

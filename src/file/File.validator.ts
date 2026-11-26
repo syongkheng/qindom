@@ -1,7 +1,7 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import { FileDeleteBody } from "./File.types.js";
 
 const FILE_IDS_FIELD = "_fileIdsToDelete";

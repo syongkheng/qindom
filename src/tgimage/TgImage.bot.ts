@@ -1,10 +1,10 @@
 import TelegramBot, { type Message } from "node-telegram-bot-api";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { TgImageService } from "./TgImage.service.js";
+import { escapeTelegramHtml, getTelegramBotToken, TELEGRAM_BOT_TOKEN_ENV } from "../utils/TelegramUtilities.js";
 
-const BOT_TOKEN_ENV = "AWENSE_CDN_TELEGRAM_BOT_TOKEN";
 const CONTACT_EMAIL = "yongkhengs@gmail.com";
 const RECENT_FILES_LIMIT = 10;
 const KB = 1024;
@@ -12,11 +12,6 @@ const MB = 1024 * 1024;
 
 const ADMIN_MENU = "Commands:\n  /stats — hosting statistics\n  /list — recent files\n  /help — show this message";
 const ACCESS_DENIED = "⛔ Access denied.";
-
-/** Telegram `parse_mode: "HTML"` only needs these three escaped in text. */
-export function escapeTelegramHtml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 type CommandHandler = (msg: Message) => Promise<void>;
 
@@ -26,9 +21,9 @@ type CommandHandler = (msg: Message) => Promise<void>;
  * Not started when the bot token isn't configured.
  */
 export async function initTgImageBot(db: KnexSqlUtilities): Promise<void> {
-  const token = process.env[BOT_TOKEN_ENV];
+  const token = getTelegramBotToken();
   if (!token) {
-    LoggingUtilities.service.info("TgImageBot", `${BOT_TOKEN_ENV} not set — bot not started`);
+    LoggingUtilities.service.info("TgImageBot", `${TELEGRAM_BOT_TOKEN_ENV} not set — bot not started`);
     return;
   }
 

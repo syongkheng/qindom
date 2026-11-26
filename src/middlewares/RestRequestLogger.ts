@@ -4,8 +4,8 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import db from "../config/db/mysql.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { resolveModuleKey } from "../utils/logging/TelegramLogModules.js";
-import { clientIp } from "../utils/requestUtils.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { clientIp } from "../utils/RequestUtilities.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 
 const LOG_TAG = "RestRequestLogger";
 const REQUEST_ID_PREFIX = "req_";

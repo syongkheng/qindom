@@ -1,6 +1,6 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { getUser, route } from "../utils/requestUtils.js";
+import { getUser, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ApplePayService } from "./ApplePay.service.js";
 import { validateCardLabelBody, validateCategoryBody, validateManualTransactionBody } from "./ApplePay.validator.js";

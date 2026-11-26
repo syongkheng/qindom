@@ -1,6 +1,6 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { getUser, requireRole, route } from "../utils/requestUtils.js";
+import { getUser, requireRole, route } from "../utils/RequestUtilities.js";
 import { MandatoryTokenFilter, OptionalTokenFilter } from "../middlewares/TokenFilter.js";
 import { adminLimiter, analyticsLimiter, analyticsReportLimiter } from "../middlewares/RateLimiter.js";
 import { Roles } from "../auth/Permission.js";

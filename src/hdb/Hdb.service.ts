@@ -3,7 +3,7 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { ITB_HDB_PPHS } from "../models/databases/tb_hdb_pphs.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { APP_TIMEZONE } from "../constants/Locale.js";
 import { LtaService } from "../lta/Lta.service.js";
 import { NearbyBusStopRow, NearestMrtStationRow } from "../lta/Lta.types.js";

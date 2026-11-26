@@ -6,7 +6,7 @@ import { Exceptions } from "../exceptions/AppExceptions.js";
 
 type Row = Record<string, any>;
 
-/** In-memory stand-in for the KnexSqlUtilities calls TodoService makes (not reorder's raw transaction). */
+/** In-memory stand-in for the KnexSqlUtilities calls TodoService makes (`transaction` hands the same fake out as `tx`). */
 function fakeDb(rows: Row[] = []) {
   const matches = (row: Row, where: Row) => Object.entries(where).every(([k, v]) => row[k] === v);
   const db = {
@@ -29,6 +29,12 @@ function fakeDb(rows: Row[] = []) {
       const hit = rows.filter((r) => matches(r, where));
       hit.forEach((r) => Object.assign(r, data));
       return hit;
+    },
+    async updateCount(_t: string, where: Row, data: Row) {
+      return (await db.update(_t, where, data)).length;
+    },
+    async transaction<T>(cb: (trx: unknown, tx: unknown) => Promise<T>): Promise<T> {
+      return cb(null, db);
     },
   };
   return { db: db as never, rows };
@@ -95,6 +101,20 @@ test("widget lists open tasks pinned-first, max 3 titles, with the open count", 
     task("e", { sort_order: 5 }),
   ]);
   assert.deepEqual(await new TodoService(db).widget(7), { tasks: ["c", "a", "d"], openCount: 4 });
+});
+
+test("reorder writes sort_order in the given order, ignores unknown and foreign ids", async () => {
+  const { db, rows } = fakeDb([
+    task("a", { sort_order: 1 }),
+    task("b", { sort_order: 2 }),
+    task("z", { created_by_id: 8 }),
+  ]);
+  const result = await new TodoService(db).reorder(7, ["b", "a", "nope", "z"]);
+  assert.deepEqual(
+    result.tasks.map((t) => t.id),
+    ["b", "a"],
+  );
+  assert.equal(rows.find((r) => r.uuid === "z")!.sort_order, 1);
 });
 
 test("validators: update needs a field; reorder needs uuid strings", () => {

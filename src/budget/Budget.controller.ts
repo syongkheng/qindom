@@ -1,6 +1,6 @@
 import { Request, Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { getUser, route } from "../utils/requestUtils.js";
+import { getUser, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { BudgetService } from "./Budget.service.js";
 import {

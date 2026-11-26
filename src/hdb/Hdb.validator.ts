@@ -1,7 +1,7 @@
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
-import { CoordinateUtilities } from "../utils/CoordinateUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
+import { formatCoord } from "../utils/CoordinateUtilities.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
 import {
   AddressBody,
@@ -83,8 +83,8 @@ export function validateCoordinatesUpdateBody(
   const lng = requiredCoordinate(body.lng, "lng", LONGITUDE_LIMIT, event);
   return {
     address,
-    lat: CoordinateUtilities.formatCoord(lat, COORDINATE_MAX_LENGTH)!,
-    lng: CoordinateUtilities.formatCoord(lng, COORDINATE_MAX_LENGTH)!,
+    lat: formatCoord(lat, COORDINATE_MAX_LENGTH)!,
+    lng: formatCoord(lng, COORDINATE_MAX_LENGTH)!,
   };
 }
 

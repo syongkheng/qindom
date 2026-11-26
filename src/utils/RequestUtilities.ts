@@ -5,7 +5,7 @@ import { IDecodedTokenUser } from "../models/IDecodedTokenUser.js";
 import { RequestWithUserInfo } from "../models/requests/RequestWithUserInfo.js";
 import { ControllerResponse } from "../models/responses/ControllerResponse.js";
 import { LoggingUtilities } from "./logging/LoggingUtilities.js";
-import { toMessage } from "./errorUtils.js";
+import { toMessage } from "./ErrorUtilities.js";
 
 /** Shown when neither X-Real-IP nor the socket address is known. */
 export const UNKNOWN_IP = "Unknown";

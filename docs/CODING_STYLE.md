@@ -29,7 +29,7 @@ Each feature folder `src/<module>/` holds:
 
 ## 3. Controllers
 - Factory: `export default function createXyzController(db: KnexSqlUtilities): Router`. Take **only what the controller uses**: no unused `db` / `_db` (e.g. `createDebugController()`).
-- Every handler is wrapped in `route(label, fallback, handler)` from `utils/requestUtils.ts`. Never write `new ControllerResponse` + try/catch + `handleException` by hand.
+- Every handler is wrapped in `route(label, fallback, handler)` from `utils/RequestUtilities.ts`. Never write `new ControllerResponse` + try/catch + `handleException` by hand.
   ```ts
   router.get("/", route("XyzController.GET /", "Failed to load xyz", async (req, cr) => cr.ok<XyzDto[]>(await svc.list(req.logContext))));
   ```
@@ -78,6 +78,9 @@ Each feature folder `src/<module>/` holds:
 - Numeric columns are range-checked against their DECIMAL width, like text against VARCHAR.
 - Child aggregates for N parents: one `whereIn` query grouped in JS, not one query per parent.
 - Fixed sets of stored string values get an enum-like constant + type (`TransactionSource.V2`), not bare `"v2"`. It lives in the module's `<Module>.types.ts`; the `ITB_*` row type imports it (`import type`) instead of repeating the union.
+- Text length limits count code points (`charLength` / `V.*`); never compare `.length` against a VARCHAR width.
+- All Telegram Bot API sends go through `sendTelegramHtml` / `getTelegramBotToken` (`utils/TelegramUtilities.ts`). A new Express mount needs a `TelegramLogModules` entry (test-enforced).
+- Wrapped errors keep the original on `cause` (`Object.assign(new Error(msg), { cause })`).
 - Use `V.requiredText(value, field, max)` / `V.optionalText(value, field, max)` for strings (trim + length cap + blank→null); don't hand-roll trim/length checks.
 - API JSON is **camelCase** everywhere; snake_case column names never reach the client.
 - Free-text fields are length-checked against their column in the validator (and the column width noted in a comment), so an oversized value is a 400, never a DB error/truncation.
@@ -142,7 +145,7 @@ Each feature folder `src/<module>/` holds:
 - Soft delete via `record_status` `'A'`/`'D'`; timestamps are ms epoch (`Date.now()`).
 - Module SQL never lives in `KnexSqlUtilities`; it goes in the service that owns the table, and other modules call that service (e.g. hdb → `LtaService`).
 - Raw SQL goes through `this.db.raw(sql, bindings, event)` so it's timed in the request tree.
-- Never throw a typed exception inside `db.transaction(...)` (the wrapper turns it into a 500 until utils #28 fixes it). Validate and check ownership **before** opening the transaction.
+- Typed exceptions thrown inside `db.transaction` keep their status. Still check ownership before opening it when you can (so nothing is written). Inside the callback use `tx.*(…, event)` (the `KnexSqlUtilities` bound to the trx) rather than the raw `trx`, and pass `event` as `transaction`'s second argument.
 - Client-addressed child rows: check every id (updates and delete lists) belongs to the parent before writing (→ 403), and still scope each child UPDATE/DELETE by the parent id.
 - Validators for round-trip payloads (client posts back what the GET returned) accept the GET's own shapes (DECIMAL strings, 0/1 flags, digit-string ids).
 - All raw SQL uses bindings, including status values (`SET record_status = ?` with `RecordStatus.DELETED`, never `'D'` inline).
@@ -195,6 +198,7 @@ Each feature folder `src/<module>/` holds:
 | 2026-11-25 | Shared `V.requiredText` / `V.optionalText`. |
 | 2026-11-25 | API JSON is camelCase; suggestion GETs converted (fndom updated). Admin suggestion writes kept, DELETE → POST. |
 | 2026-11-25 | Multi-feature folders: `<Folder><Feature>.*` files + one shared `<Folder>.types.ts`/`.validator.ts`. |
+| 2026-11-26 | utils: `requestUtils`/`errorUtils`/`Structual…` renamed to `*Utilities`; transactions keep typed exceptions and expose a logged `tx`; dotenv removed from utils; lazy mail transporter; Telegram transport moved to utils/logging with one shared sender; mute matrix covers every mount; code-point length caps. |
 | 2026-11-26 | middlewares: 79 pinning tests before refactor (88 total); request-log flush in `finish` could crash the process (fixed); shared `clientIp`; raw API key no longer in log metadata; new registry `UnsupportedMediaType` (415); `mw.authUpload` / `mw.pdcaPublic` presets. Questions M1–M5. |
 | 2026-11-26 | analytics: zod replaced by hand-written validators (176 characterisation cases + 180k-input differential, 0 diffs) and uninstalled; public contracts frozen; services own the SQL. Questions Y1–Y4. |
 | 2026-11-26 | camera: unauthenticated `GET //` upgrade crashed the process (fixed + test); every WS callback guarded; sha256Hex; protocol/security unchanged. Questions C1–C4. |

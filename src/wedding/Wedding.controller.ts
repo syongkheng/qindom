@@ -1,7 +1,7 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { weddingRsvpLimiter } from "../middlewares/RateLimiter.js";
-import { clientIp, route } from "../utils/requestUtils.js";
+import { clientIp, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { WeddingService } from "./Wedding.service.js";
 import { WeddingVisitNotifier } from "./Wedding.visitNotifier.js";

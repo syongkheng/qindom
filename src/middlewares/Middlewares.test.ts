@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken";
 import mysqlDb from "../config/db/mysql.js";
 import { signToken } from "../token/Token.service.js";
 import { sha256Hex } from "../utils/HashUtilities.js";
-import { clientIp, getApiKeyUserId } from "../utils/requestUtils.js";
+import { clientIp, getApiKeyUserId } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
 import { IRequestLogContext } from "../models/IRequestLogContext.js";

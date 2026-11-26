@@ -2,7 +2,7 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ITB_HDB_PPHS_COORDINATE } from "../models/databases/tb_hdb_pphs_coordinate.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { searchNominatim } from "../geocode/Geocode.service.js";
 import {
   CoordinateOptionDto,

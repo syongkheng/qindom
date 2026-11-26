@@ -19,18 +19,7 @@ export interface IRequestLogContext {
 }
 
 export type LogEventType =
-  | "HTTP"
-  | "AUTH"
-  | "SQL"
-  | "SERVICE"
-  | "CACHE"
-  | "QUEUE"
-  | "DISCORD"
-  | "TELEGRAM"
-  | "SYSTEM"
-  | "ERROR"
-  | "WARN"
-  | "VALIDATION";
+  "HTTP" | "AUTH" | "SQL" | "SERVICE" | "CACHE" | "QUEUE" | "TELEGRAM" | "SYSTEM" | "ERROR" | "WARN" | "VALIDATION";
 
 export interface IRequestLogEvent {
   /**

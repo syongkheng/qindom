@@ -1,7 +1,7 @@
 import { LogEmoji } from "../constants/LogEmoji.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import { TgAdminBody, TgImageFile, TgImageUploadBody } from "./TgImage.types.js";
 
 /** tb_tg_image.file_name VARCHAR(512) */

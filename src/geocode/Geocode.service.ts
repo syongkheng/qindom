@@ -2,7 +2,7 @@ import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ITB_GEOCODE_CACHE } from "../models/databases/tb_geocode_cache.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { NominatimPlaceDto } from "./Geocode.types.js";
 

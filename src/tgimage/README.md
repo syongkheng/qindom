@@ -6,7 +6,7 @@ Images are stored as documents in a Telegram chat and served back through the AP
 - **Storage chat** = the first active admin with a `telegram_chat_id` (set when that admin DMs the bot `/start`). With none, uploads fail with 500 and a server log.
 - Env: `AWENSE_CDN_TELEGRAM_BOT_TOKEN` (read lazily; missing = 500 + server log; without it the bot doesn't start).
 - `TgImage.bot.ts`: the polling bot. Admin commands `/start` (stores the private chat id), `/help`, `/stats` (file count + total size), `/list` (last 10 files). Non-admins get an access-denied reply with their Telegram user id.
-- `TgLog.logSender.ts`: registers the Telegram transport for request-log alerts (`LoggingUtilities.setLogSender`). It only shares the bot token with this module.
+- The bot token getter, `TELEGRAM_API_URL` and `escapeTelegramHtml` come from `utils/TelegramUtilities.ts` (shared with the request-log alerts in `utils/logging/TelegramLogSender.ts` and the wedding visit notifier).
 
 ### Security (keep as is)
 

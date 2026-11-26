@@ -1,7 +1,7 @@
 import { Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
-import { requireRole, route } from "../utils/requestUtils.js";
+import { requireRole, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { Roles } from "../auth/Permission.js";
 import { SuggestionService } from "./Suggestion.service.js";

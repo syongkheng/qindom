@@ -1,0 +1,48 @@
+## Shared helpers (`src/utils`)
+
+No routes. Helpers used by several modules; files are named `XyzUtilities.ts`. Nothing here loads dotenv:
+values from the env file are read lazily inside functions (dotenv runs in `index.ts` after ESM imports are
+evaluated); environment flags come from `src/config/env.ts` (`IS_PRD`).
+
+| File | Exports | Notes |
+| --- | --- | --- |
+| `RequestUtilities.ts` | `route`, `handleException`, `getUser`, `getApiKeyUserId`, `hasRole`, `requireRole`, `clientIp`, `UNKNOWN_IP` | `route(label, fallback, handler)` wraps every controller handler: typed `BaseException` → its status, anything else → 500 with `fallback` (cause logged to the request tree). |
+| `ErrorUtilities.ts` | `toMessage(err)` | `Error.message`, else `String(err)`. |
+| `StructuralValidationUtilities.ts` | `StructuralValidationUtilities` (imported as `V`), `charLength` | Primitive checks throwing `Exceptions.InvalidRequest(field, …)`. `V.requiredText` / `V.optionalText` trim and cap at the column width **in characters (code points)**, the unit utf8mb4 `VARCHAR(n)` uses (an emoji counts 1). |
+| `KnexSqlUtilities.ts` | default class, `FindOptions` | The only DB access layer. Every method takes an optional request-log event last and adds a timed line to it. Driver errors → plain `Error` (500) with the original kept as `cause` (the request tree shows `(cause: Error ER_…)`). See "Transactions". |
+| `TelegramUtilities.ts` | `getTelegramBotToken`, `sendTelegramHtml`, `escapeTelegramHtml`, `escapeTelegramHtmlAttribute`, `TELEGRAM_API_URL`, `TELEGRAM_BOT_TOKEN_ENV` | The one CDN bot (`AWENSE_CDN_TELEGRAM_BOT_TOKEN`, blank = unset), used by log alerts, the wedding visit notifier and `tgimage`. `sendTelegramHtml` throws on a missing token / network error / non-OK answer; fire-and-forget callers catch. |
+| `MailerUtilities.ts` | `MailerUtilities.sendMail`, `.escapeHtml`, `MailOptions`, `formatFromHeader` | Gmail SMTP (`SMTP_USER`, `SMTP_PASS`); the transporter is built on the first send. Static class so tests can replace `sendMail`. |
+| `AuthCookieUtilities.ts` | `setAuthCookies`, `clearAuthCookies`, `JWT_COOKIE`, `CSRF_COOKIE` | httpOnly `jwt_token` + readable `csrf_token` (double-submit), lax, JWT lifetime; in prd `secure` and `Domain=.awense.com` (and the old host-only pair is also cleared on logout). |
+| `HashUtilities.ts` | `sha256Hex` | Hash for API keys, OTPs, device tokens, report keys. |
+| `MaskingUtilities.ts` | `maskName` | Masks the last 1–3 characters for public responses (wedding status lookup). |
+| `CoordinateUtilities.ts` | `formatCoord` | Coordinate → short decimal string for VARCHAR(16) columns (hdb). |
+
+### Transactions
+
+```ts
+await this.db.transaction(async (trx, tx) => {
+  await tx.updateCount(TABLE, { id, owner_id: userId }, { sort_order: 1 }, event); // timed in the request tree
+  await trx(OTHER_TABLE).whereIn("id", ids).update({ … }); // raw knex still available (not timed)
+}, event); // adds "transaction() committed - Nms" / "rolled back"
+```
+
+- `tx` is a `KnexSqlUtilities` bound to the transaction; prefer it so each statement is logged.
+- A `BaseException` thrown inside rolls back and reaches the client unchanged (e.g. 403). Other errors roll back and become a 500. Still check ownership before opening the transaction when you can, so nothing is written.
+- `updateCount` updates without re-reading the rows (returns the affected count); `update` re-reads and returns the rows.
+
+## `utils/logging`
+
+| File | Role |
+| --- | --- |
+| `LoggingUtilities.ts` | Request tree (`request.branch/append/error/exception/response/flush/render`) and PM2 lines (`service.info/warn/debug/error`). `render()` writes the verbose text read back by `RequestLogParser`. |
+| `LogRedaction.ts` | Field-name redaction for everything logged (passwords, tokens, OTP/PIN, `challenge`, smsBody, emails masked, …). |
+| `RequestLogFileWriter.ts` | Appends each rendered tree to `qindom-request-tree.log` (prd `/home/ubuntu/.pm2/logs`, else `./logs`), rotates at 50 MB, never throws. |
+| `RequestLogParser.ts` | Parses one rendered entry into `RequestLogEntryDto` for the Log Searcher. Must keep matching `render()`; `Logging.test.ts` round-trips render → parse. |
+| `RequestLogSearch.ts` | Finds entries by request id / newest N across the log files (`GET /auth/admin/request-logs…`). |
+| `TelegramLogModules.ts` | Path prefix → module key for per-chat muting. Must cover every Express prefix in `index.ts` (test-enforced). fndom's admin matrix shows whatever the server lists. |
+| `TelegramLogSubscriptionService.ts` | Owns `tb_telegram_log_subscription`; reads subscribed chats from `tb_tg_stats_whitelist`. 30 s caches (a toggle refreshes its entry at once). Modules without an override are on. |
+| `TelegramLogSender.ts` | Registered at boot (`setupTelegramLogSender`, only with a bot token): compact access line + Log Searcher link → `sendTelegramHtml`. A failed send is a console warning, never a throw. |
+
+Alerts: 4xx/5xx always go to every subscribed chat; a chat's per-module toggle only hides that module's successes (see `middlewares/RestRequestLogger.ts`).
+
+Tests: `RequestUtilities.test.ts`, `KnexSqlUtilities.test.ts`, `StructuralValidationUtilities.test.ts`, `Utilities.test.ts`, `logging/Logging.test.ts`, `logging/LogRedaction.test.ts`.

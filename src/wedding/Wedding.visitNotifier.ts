@@ -2,11 +2,10 @@ import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MailerUtilities } from "../utils/MailerUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { TelegramLogSubscriptionService } from "../utils/logging/TelegramLogSubscriptionService.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
+import { getTelegramBotToken, sendTelegramHtml } from "../utils/TelegramUtilities.js";
 import { WeddingVisit } from "./Wedding.types.js";
 
-const BOT_TOKEN_ENV = "AWENSE_CDN_TELEGRAM_BOT_TOKEN";
-const TELEGRAM_API_URL = "https://api.telegram.org";
 const LOG_LABEL = "WeddingVisitNotifier";
 
 const esc = MailerUtilities.escapeHtml;
@@ -79,25 +78,11 @@ export class WeddingVisitNotifier {
   /** Fire-and-forget: never throws (failures are logged), so it can't affect the visitor's page or the process. */
   async notify(visit: WeddingVisit): Promise<void> {
     try {
-      const token = process.env[BOT_TOKEN_ENV];
-      if (!token) return;
+      if (!getTelegramBotToken()) return;
 
       const text = renderVisitMessage(visit);
       const chatIds = await this.subscriptions.listSubscribedChatIdsCached();
-      await Promise.all(
-        chatIds.map((chatId) =>
-          fetch(`${TELEGRAM_API_URL}/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: chatId,
-              parse_mode: "HTML",
-              text,
-              link_preview_options: { is_disabled: true },
-            }),
-          }),
-        ),
-      );
+      await Promise.all(chatIds.map((chatId) => sendTelegramHtml(chatId, text)));
     } catch (err) {
       LoggingUtilities.service.warn(LOG_LABEL, `Visit alert not sent: ${toMessage(err)}`);
     }

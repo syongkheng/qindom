@@ -1,33 +1,28 @@
 import fs from "fs";
 import path from "path";
 import { REQUEST_LOG_DIR, REQUEST_LOG_FILE_PREFIX } from "./RequestLogFileWriter.js";
-import { RequestLogMatchDto } from "../../models/dtos/RequestLogDto.js";
+import { RequestLogEntryDto, RequestLogMatchDto } from "../../models/dtos/RequestLogDto.js";
 import { parseRequestLogEntry } from "./RequestLogParser.js";
 
 // Reads qindom's own request-log file (see RequestLogFileWriter.ts), not PM2's
 // stdout capture — works identically in dev (tsx watch) and prod (PM2).
-const LOG_DIR = REQUEST_LOG_DIR;
-const LOG_FILE_PREFIX = REQUEST_LOG_FILE_PREFIX;
-
 const HEADER_RE = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] (\S+) (\S+) (.+)$/;
 const REQUEST_ID_LINE_RE = /^│ RequestId : (.+)$/;
 const RESPONSE_LINE_RE = /^└─ RESPONSE (\d+)/;
 
 const MAX_MATCHES = 20;
 
-export type IRequestLogMatch = RequestLogMatchDto;
-
 function listLogFiles(): string[] {
-  if (!fs.existsSync(LOG_DIR)) return [];
+  if (!fs.existsSync(REQUEST_LOG_DIR)) return [];
 
   return fs
-    .readdirSync(LOG_DIR)
-    .filter((name) => name.startsWith(LOG_FILE_PREFIX))
-    .map((name) => path.join(LOG_DIR, name))
+    .readdirSync(REQUEST_LOG_DIR)
+    .filter((name) => name.startsWith(REQUEST_LOG_FILE_PREFIX))
+    .map((name) => path.join(REQUEST_LOG_DIR, name))
     .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
 }
 
-function parseMatch(lines: string[], headerIndex: number, endIndex: number): IRequestLogMatch {
+function parseMatch(lines: string[], headerIndex: number, endIndex: number): RequestLogMatchDto {
   const headerLine = lines[headerIndex];
   const headerMatch = headerLine.match(HEADER_RE);
 
@@ -44,7 +39,7 @@ function parseMatch(lines: string[], headerIndex: number, endIndex: number): IRe
   }
 
   const raw = lines.slice(headerIndex, endIndex).join("\n").trimEnd();
-  let entry = null;
+  let entry: RequestLogEntryDto | null = null;
   try {
     entry = parseRequestLogEntry(raw);
   } catch {
@@ -62,7 +57,7 @@ function parseMatch(lines: string[], headerIndex: number, endIndex: number): IRe
   };
 }
 
-function findInFile(filePath: string, requestId: string, remaining: number): IRequestLogMatch[] {
+function findInFile(filePath: string, requestId: string, remaining: number): RequestLogMatchDto[] {
   const content = fs.readFileSync(filePath, "utf-8");
   const lines = content.split("\n");
 
@@ -72,7 +67,7 @@ function findInFile(filePath: string, requestId: string, remaining: number): IRe
     if (m && m[1] === requestId) requestIdLines.push(i);
   }
 
-  const matches: IRequestLogMatch[] = [];
+  const matches: RequestLogMatchDto[] = [];
 
   // Newest occurrence first within the file.
   for (const reqIdLine of requestIdLines.reverse()) {
@@ -95,7 +90,7 @@ function findInFile(filePath: string, requestId: string, remaining: number): IRe
   return matches;
 }
 
-function collectRecentInFile(filePath: string, remaining: number): IRequestLogMatch[] {
+function collectRecentInFile(filePath: string, remaining: number): RequestLogMatchDto[] {
   const content = fs.readFileSync(filePath, "utf-8");
   const lines = content.split("\n");
 
@@ -104,7 +99,7 @@ function collectRecentInFile(filePath: string, remaining: number): IRequestLogMa
     if (HEADER_RE.test(lines[i])) headerIndices.push(i);
   }
 
-  const matches: IRequestLogMatch[] = [];
+  const matches: RequestLogMatchDto[] = [];
 
   // Newest header first within the file.
   for (const headerIndex of headerIndices.reverse()) {
@@ -125,8 +120,8 @@ function collectRecentInFile(filePath: string, remaining: number): IRequestLogMa
 }
 
 export class RequestLogSearch {
-  static find(requestId: string): IRequestLogMatch[] {
-    const matches: IRequestLogMatch[] = [];
+  static find(requestId: string): RequestLogMatchDto[] {
+    const matches: RequestLogMatchDto[] = [];
 
     for (const file of listLogFiles()) {
       if (matches.length >= MAX_MATCHES) break;
@@ -138,9 +133,9 @@ export class RequestLogSearch {
 
   // Newest requests overall, regardless of Request ID — used by the dashboard's
   // compact "last N logs" widget.
-  static recent(limit: number): IRequestLogMatch[] {
+  static recent(limit: number): RequestLogMatchDto[] {
     const capped = Math.min(limit, MAX_MATCHES);
-    const matches: IRequestLogMatch[] = [];
+    const matches: RequestLogMatchDto[] = [];
 
     for (const file of listLogFiles()) {
       if (matches.length >= capped) break;

@@ -141,8 +141,8 @@ export function noteColumns(n: NoteItemBody, sortOrder: number): Partial<ITB_TRA
  * packing, note; updated or listed for deletion) that isn't this trip's is a 403 before anything
  * is written, and every child update/delete is still scoped by `itinerary_id` inside the trx.
  *
- * Writes run in one transaction (`db.transaction` hands out a raw knex trx, so the individual
- * statements are not timed in the request tree).
+ * Writes run in one transaction on the raw knex trx (batch inserts, `whereIn`, `pluck`), so the
+ * individual statements are not timed; the transaction as a whole is (`db.transaction(cb, event)`).
  */
 export class ItinerarySaveService {
   constructor(
@@ -180,7 +180,7 @@ export class ItinerarySaveService {
       await this.savePacking(trx, itineraryId, body.packingItems, now);
       await this.saveNotes(trx, itineraryId, body.noteItems, now);
       return map;
-    });
+    }, event);
 
     if (event) event.detail = `${body.agendaItems.length} agenda item(s)`;
     return { shortCode, sessionId, agendaToFileMap };
@@ -196,7 +196,7 @@ export class ItinerarySaveService {
     const itinerary = await findOwnedItinerary(this.db, userId, sessionId, event);
     const itineraryId = Number(itinerary.id);
 
-    // Checked before the transaction: an error thrown inside it reaches the client as a 500.
+    // Checked before the transaction, so a foreign id is a 403 before anything is written.
     await this.assertChildrenOwned(itineraryId, body, event);
 
     const now = Date.now();
@@ -219,7 +219,7 @@ export class ItinerarySaveService {
       await this.softDelete(trx, NOTE_ITEM_TABLE, itineraryId, body.noteIdsToDelete);
       await this.saveNotes(trx, itineraryId, body.noteItems, now);
       return map;
-    });
+    }, event);
 
     if (event) event.detail = `${body.agendaItems.length} agenda item(s)`;
     return { shortCode: itinerary.short_code, sessionId, agendaToFileMap };

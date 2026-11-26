@@ -1,7 +1,7 @@
 import { Exceptions } from "../exceptions/AppExceptions.js";
 import { IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { LogEmoji } from "../constants/LogEmoji.js";
-import { StructuralValidationUtilities as V } from "../utils/StructualValidationUtilities.js";
+import { StructuralValidationUtilities as V } from "../utils/StructuralValidationUtilities.js";
 import {
   WeddingRsvpBody,
   WeddingRsvpGuestBody,

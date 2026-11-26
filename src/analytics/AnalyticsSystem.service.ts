@@ -1,6 +1,6 @@
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
-import { toMessage } from "../utils/errorUtils.js";
+import { toMessage } from "../utils/ErrorUtilities.js";
 import { IRequestLogContext, IRequestLogEvent } from "../models/IRequestLogContext.js";
 import { ITB_ANALYTIC_SYSTEM } from "../models/databases/tb_analytic_system.js";
 import { RecordStatus } from "../constants/RecordStatus.js";

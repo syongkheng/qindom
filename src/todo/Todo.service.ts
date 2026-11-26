@@ -135,13 +135,16 @@ export class TodoService {
   async reorder(userId: number, ids: string[], logContext?: IRequestLogContext): Promise<TodoListDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", `Reorder ${ids.length} task(s)`);
     const now = Date.now();
-    await this.db.transaction(async (trx) => {
+    await this.db.transaction(async (_trx, tx) => {
       for (const [index, uuid] of ids.entries()) {
-        await trx(TODO_TASK_TABLE)
-          .where({ uuid, created_by_id: userId, record_status: RecordStatus.ACTIVE })
-          .update({ sort_order: index + 1, updated_dt: now, updated_by_id: userId });
+        await tx.updateCount<ITB_TODO_TASK>(
+          TODO_TASK_TABLE,
+          { uuid, created_by_id: userId, record_status: RecordStatus.ACTIVE },
+          { sort_order: index + 1, updated_dt: now, updated_by_id: userId },
+          event,
+        );
       }
-    });
+    }, event);
     return { tasks: (await this.activeTasks(userId, event)).map(toTaskDto) };
   }
 

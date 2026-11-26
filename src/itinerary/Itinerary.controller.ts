@@ -2,7 +2,7 @@ import { Request, Router } from "express";
 import KnexSqlUtilities from "../utils/KnexSqlUtilities.js";
 import { MandatoryTokenFilter } from "../middlewares/TokenFilter.js";
 import { itineraryChallengeLimiter } from "../middlewares/RateLimiter.js";
-import { clientIp, getUser, route } from "../utils/requestUtils.js";
+import { clientIp, getUser, route } from "../utils/RequestUtilities.js";
 import { LoggingUtilities } from "../utils/logging/LoggingUtilities.js";
 import { ItineraryService } from "./Itinerary.service.js";
 import { ItinerarySaveService } from "./ItinerarySave.service.js";
