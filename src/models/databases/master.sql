@@ -3,7 +3,7 @@
 -- Schema is now managed via Knex migrations in src/migrations/.
 -- Do NOT run this file manually. To apply schema changes, add a migration file
 -- and run: npm run migrate
--- Sections: Auth | FND | HDB | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding | Budget | Apple Pay
+-- Sections: Auth | FND | LTA | Analytics | Travel | Geocode | Meal | Expense | Wedding | Budget | Apple Pay
 -- ══════════════════════════════════════════════════════════════════════════════
 
 USE wuxi;
@@ -103,30 +103,6 @@ CREATE TABLE IF NOT EXISTS tb_fnd_event_view (
   event_id   BIGINT,
   username   VARCHAR(64),
   created_dt BIGINT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ── HDB (Housing) ────────────────────────────────────────────────────────────
-
--- PPHS batch data stored as raw JSON blobs; one row per batch upload.
-DROP TABLE IF EXISTS tb_hdb_pphs;
-CREATE TABLE IF NOT EXISTS tb_hdb_pphs (
-  id          BIGINT       PRIMARY KEY AUTO_INCREMENT,
-  batch       VARCHAR(6)   UNIQUE NOT NULL,
-  json_string LONGTEXT     NOT NULL,
-  created_dt  BIGINT       NOT NULL,
-  created_by  VARCHAR(64)  NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Geocoded coordinates for PPHS building names.
-DROP TABLE IF EXISTS tb_hdb_pphs_coordinate;
-CREATE TABLE IF NOT EXISTS tb_hdb_pphs_coordinate (
-  id          BIGINT        PRIMARY KEY AUTO_INCREMENT,
-  building    VARCHAR(1024),
-  formed_url  VARCHAR(1024),
-  lat         VARCHAR(16),
-  lng         VARCHAR(16),
-  created_dt  BIGINT        NOT NULL,
-  created_by  VARCHAR(64)   NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── LTA (Transport) ──────────────────────────────────────────────────────────

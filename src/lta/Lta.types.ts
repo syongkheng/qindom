@@ -59,25 +59,54 @@ export interface BusStopCodeQuery {
   busStopCode: string;
 }
 
-// ── Proximity lookups used by GET /hdb/pphs/busstops and GET /hdb/pphs/mrt ──
-// Raw rows (snake_case, internal): hdb maps them to its camelCase DTOs (`Hdb.types.ts`).
+// ── GET /lta/bus-stops/nearby and GET /lta/mrt-stations/nearest (tb_lta_busstop, tb_lrt_mrt_station) ──
 
+/** Text fields come from nullable `tb_lta_busstop` VARCHARs. */
+export interface NearbyBusStopDto {
+  busStopCode: string | null;
+  roadName: string | null;
+  description: string | null;
+  /** Whole metres from the requested point. */
+  distanceM: number;
+}
+
+export interface NearbyBusStopsDto {
+  /** The nearest stops inside the radius, nearest first (at most `NEARBY_BUS_STOPS_MAX_ROWS`). */
+  busStops: NearbyBusStopDto[];
+  /** Every stop inside the radius, before the cap. */
+  count: number;
+}
+
+export interface NearestMrtStationDto {
+  station: string | null;
+  /** "MRT" | "LRT" (nullable column) */
+  type: string | null;
+  /** Whole metres from the requested point to the station's closest exit. */
+  distanceM: number;
+}
+
+export interface NearestMrtStationsDto {
+  stations: NearestMrtStationDto[];
+  count: number;
+}
+
+export interface NearbyBusStopsQuery {
+  lat: number;
+  lng: number;
+  radiusM: number;
+}
+
+export interface NearestMrtStationsQuery {
+  lat: number;
+  lng: number;
+  limit: number;
+}
+
+/** Raw proximity rows (snake_case, internal), mapped by `toNearbyBusStopDto` / `toNearestMrtStationDto`. */
 export type NearbyBusStopRow = Pick<ITB_LTA_BUSSTOP, "busstop_code" | "road_name" | "desc"> & {
   distance_m: number;
 };
 
-export interface NearbyBusStopsResult {
-  /** The nearest stops, capped (see `NEARBY_BUS_STOPS_MAX_ROWS`). */
-  rows: NearbyBusStopRow[];
-  /** All stops inside the radius, before the cap. */
-  count: number;
-}
-
 export type NearestMrtStationRow = Pick<ITB_LRT_MRT_STATION, "station" | "type"> & {
   distance_m: number;
 };
-
-export interface NearestMrtStationsResult {
-  rows: NearestMrtStationRow[];
-  count: number;
-}

@@ -91,7 +91,7 @@ export class GeocodeService {
   }
 }
 
-// ── Nominatim (shared: hdb's coordinate lookups go through the same queue) ──
+// ── Nominatim (1 req/s queue) ──
 
 async function throttled<T>(fn: () => Promise<T>): Promise<T> {
   if (nominatimQueued >= NOMINATIM_MAX_QUEUED) {
@@ -132,6 +132,6 @@ async function fetchNominatim(params: Record<string, string>): Promise<Nominatim
  * User-Agent the usage policy requires. `format=json` is always set. Returns null when the
  * call fails; throws `ExternalRequest` when too many calls are already waiting.
  */
-export function searchNominatim(params: Record<string, string>): Promise<NominatimPlaceDto[] | null> {
+function searchNominatim(params: Record<string, string>): Promise<NominatimPlaceDto[] | null> {
   return throttled(() => fetchNominatim(params));
 }

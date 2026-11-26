@@ -2,7 +2,6 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import type { Response } from "express";
 import { maskName } from "./MaskingUtilities.js";
-import { formatCoord } from "./CoordinateUtilities.js";
 import { sha256Hex } from "./HashUtilities.js";
 import { toMessage } from "./ErrorUtilities.js";
 import { MailerUtilities, formatFromHeader } from "./MailerUtilities.js";
@@ -33,18 +32,6 @@ describe("maskName", () => {
   test("counts characters, so astral names never get a half emoji", () => {
     assert.equal(maskName("Al😀😀"), "A***");
     assert.equal(maskName("陈小明"), "陈**");
-  });
-});
-
-describe("formatCoord", () => {
-  test("8 decimals max, trailing zeros dropped, capped at maxChars, null for non-numbers", () => {
-    assert.equal(formatCoord(1.437556123456), "1.43755612");
-    assert.equal(formatCoord("103.8000"), "103.8");
-    assert.equal(formatCoord(2), "2");
-    assert.equal(formatCoord(-1.5), "-1.5");
-    assert.equal(formatCoord(103.12345678, 6), "103.12");
-    assert.equal(formatCoord("abc"), null);
-    assert.equal(formatCoord(Number.POSITIVE_INFINITY), null);
   });
 });
 

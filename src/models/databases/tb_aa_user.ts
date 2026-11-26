@@ -12,7 +12,7 @@ export interface ITB_AA_USER {
   password: string;
   system: string;
   country?: string | null; // VARCHAR(256) DEFAULT NULL
-  roles: string; // JSON-encoded string[] e.g. '["PPHS_R5","KS_R3"]'
+  roles: string; // JSON-encoded string[] e.g. '["SYSTEM_R5","TRAVEL_R3"]'
   username_system?: string;
   state: UserState;
   last_logged_in_dt: number | null; // null until the first login

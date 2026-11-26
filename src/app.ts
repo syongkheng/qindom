@@ -13,7 +13,6 @@ import { CameraService } from "./camera/Camera.service.js";
 import createConnectivityController from "./connectivity/Connectivity.controller.js";
 import createAnalyticsLegacyController from "./analytics/AnalyticsLegacy.controller.js";
 import createAnalyticsController from "./analytics/Analytics.controller.js";
-import createHdbController from "./hdb/Hdb.controller.js";
 import createLtaController from "./lta/Lta.controller.js";
 import createAuthController from "./auth/Auth.controller.js";
 import createProfileController from "./profile/Profile.controller.js";
@@ -61,7 +60,6 @@ export function createRoutes(db: KnexSqlUtilities, cameraService: CameraService,
     ["/connectivity", mw.std, createConnectivityController(db)],
     ["/analytics", mw.std, createAnalyticsLegacyController(db)], // legacy POST / and /heartbeat
     ["/analytics", mw.std, createAnalyticsController(db)], // v1: /collect, /systems, /admin/*
-    ["/hdb", mw.std, createHdbController(db)],
     ["/lta", mw.std, createLtaController(db)],
     ["/auth", mw.std, createAuthController(db)],
     ["/pfp", mw.auth, createProfileController(db)],

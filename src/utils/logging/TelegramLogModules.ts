@@ -19,7 +19,6 @@ export interface TelegramLogModuleKey {
 export const TELEGRAM_LOG_MODULES: TelegramLogModule[] = [
   { key: "connectivity", label: "Connectivity / Health Check", prefix: "/connectivity" },
   { key: "analytics", label: "Analytics", prefix: "/analytics" },
-  { key: "hdb", label: "HDB / PPHS", prefix: "/hdb" },
   { key: "lta", label: "LTA Bus Timing", prefix: "/lta" },
   { key: "auth", label: "Auth", prefix: "/auth" },
   { key: "profile", label: "Profile", prefix: "/pfp" },

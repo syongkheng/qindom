@@ -53,6 +53,8 @@ describe("models/databases row types", () => {
     assert.ok(live.has("tb_todo_task"));
     assert.ok(!live.has("tb_mcp_api_key"));
     assert.ok(!live.has("tb_suggestion_activity"));
+    assert.ok(!live.has("tb_hdb_pphs"));
+    assert.ok(!live.has("tb_hdb_pphs_coordinate"));
     for (const file of rowTypeFiles) {
       const table = file.replace(/\.ts$/, "");
       assert.ok(live.has(table), `${file}: no live ${table} table in src/migrations`);

@@ -9,10 +9,14 @@ import {
   BusArrivalsDto,
   BusServiceDto,
   BusServicesDto,
+  NearbyBusStopDto,
   NearbyBusStopRow,
-  NearbyBusStopsResult,
+  NearbyBusStopsDto,
+  NearbyBusStopsQuery,
+  NearestMrtStationDto,
   NearestMrtStationRow,
-  NearestMrtStationsResult,
+  NearestMrtStationsDto,
+  NearestMrtStationsQuery,
 } from "./Lta.types.js";
 
 const LTA_BUS_STOP_TABLE = "tb_lta_busstop";
@@ -22,7 +26,7 @@ const LRT_MRT_STATION_TABLE = "tb_lrt_mrt_station";
 const DATAMALL_SERVICE_NAME = "LTA DataMall";
 const DATAMALL_BUS_ARRIVAL_URL = "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival";
 
-/** /hdb/pphs/busstops returns at most this many stops (nearest first); `count` is still the full total. */
+/** GET /lta/bus-stops/nearby returns at most this many stops (nearest first); `count` is still the full total. */
 export const NEARBY_BUS_STOPS_MAX_ROWS = 10;
 
 type BusInfoRow = Omit<ITB_LTA_BUS_INFO, "id" | "busstop_code" | "created_dt" | "created_by">;
@@ -51,6 +55,19 @@ export function toBusServiceDto(row: BusInfoRow): BusServiceDto {
     sundayFirstBus: row.sun_first_bus,
     sundayLastBus: row.sun_last_bus,
   };
+}
+
+export function toNearbyBusStopDto(row: NearbyBusStopRow): NearbyBusStopDto {
+  return {
+    busStopCode: row.busstop_code,
+    roadName: row.road_name,
+    description: row.desc,
+    distanceM: Math.round(Number(row.distance_m)),
+  };
+}
+
+export function toNearestMrtStationDto(row: NearestMrtStationRow): NearestMrtStationDto {
+  return { station: row.station, type: row.type, distanceM: Math.round(Number(row.distance_m)) };
 }
 
 /** Owns the LTA tables (`tb_lta_busstop`, `tb_lta_bus_info`, `tb_lrt_mrt_station`) and the DataMall call. */
@@ -102,11 +119,9 @@ export class LtaService {
 
   /** Bus stops within `radiusM` metres of a point, nearest first (capped at `NEARBY_BUS_STOPS_MAX_ROWS`). */
   async findBusStopsNear(
-    lat: number,
-    lng: number,
-    radiusM: number,
+    { lat, lng, radiusM }: NearbyBusStopsQuery,
     logContext?: IRequestLogContext,
-  ): Promise<NearbyBusStopsResult> {
+  ): Promise<NearbyBusStopsDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "LTA bus stops near point");
     const rows = await this.db.raw<NearbyBusStopRow[]>(
       `SELECT b.busstop_code, b.road_name, b.desc,
@@ -118,16 +133,14 @@ export class LtaService {
       event,
     );
     if (event) event.detail = `${rows.length} stop(s) within ${radiusM} m`;
-    return { rows: rows.slice(0, NEARBY_BUS_STOPS_MAX_ROWS), count: rows.length };
+    return { busStops: rows.slice(0, NEARBY_BUS_STOPS_MAX_ROWS).map(toNearbyBusStopDto), count: rows.length };
   }
 
   /** The `limit` nearest MRT/LRT stations to a point (one row per station, using its closest exit). */
   async findNearestMrtStations(
-    lat: number,
-    lng: number,
-    limit: number,
+    { lat, lng, limit }: NearestMrtStationsQuery,
     logContext?: IRequestLogContext,
-  ): Promise<NearestMrtStationsResult> {
+  ): Promise<NearestMrtStationsDto> {
     const event = LoggingUtilities.request.branch(logContext, "SERVICE", "LTA nearest MRT stations");
     // NOT a typo: tb_lrt_mrt_station stores latitude in `lng` and longitude in `lat`
     // (swapped at import). POINT(e.lat, e.lng) is therefore POINT(longitude, latitude),
@@ -143,6 +156,6 @@ export class LtaService {
       event,
     );
     if (event) event.detail = `${rows.length} station(s)`;
-    return { rows, count: rows.length };
+    return { stations: rows.map(toNearestMrtStationDto), count: rows.length };
   }
 }

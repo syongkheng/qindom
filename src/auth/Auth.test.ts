@@ -367,7 +367,7 @@ describe("POST /auth/verify-email", () => {
       verify_code: sha256Hex(code),
       verify_code_expires_at: Date.now() + 10 * Time.MINUTE_MS,
       state: "REGISTER",
-      roles: JSON.stringify(["PPHS_R1"]),
+      roles: JSON.stringify(["TRAVEL_R1"]),
       ...over,
     });
     return { user, code };
@@ -379,7 +379,7 @@ describe("POST /auth/verify-email", () => {
     const { user, code } = await pendingUser("verifyok");
     const res = await verify(user, code);
     assert.equal(res.status, 200);
-    assert.deepEqual(res.json.data, { username: "verifyok", roles: ["PPHS_R1"] });
+    assert.deepEqual(res.json.data, { username: "verifyok", roles: ["TRAVEL_R1"] });
     const jwt = cookieValue(res.cookies, "jwt_token")!;
     assert.ok(jwt);
     assert.ok(res.cookies.find((c) => c.startsWith("jwt_token="))!.includes("HttpOnly"));
@@ -548,7 +548,7 @@ describe("POST /auth/login", () => {
 
 describe("POST /auth/verification and /auth/logout", () => {
   test("verification needs the cookie and CSRF; roles come from the DB row", async () => {
-    const user = await seedUser({ username: "sess", roles: JSON.stringify(["PPHS_R5"]) });
+    const user = await seedUser({ username: "sess", roles: JSON.stringify(["TRAVEL_R5"]) });
     const token = sessionFor(user);
     const anonymous = await post("/verification");
     assert.equal(anonymous.status, 401);
@@ -558,7 +558,7 @@ describe("POST /auth/verification and /auth/logout", () => {
     assert.equal(noCsrf.json.status, "csrf_invalid");
     const ok = await post("/verification", {}, token);
     assert.equal(ok.status, 200);
-    assert.deepEqual(ok.json.data, { username: "sess", roles: ["PPHS_R5"], exist: true });
+    assert.deepEqual(ok.json.data, { username: "sess", roles: ["TRAVEL_R5"], exist: true });
   });
 
   test("logout clears both cookies and revokes the stored token", async () => {
@@ -645,7 +645,7 @@ describe("/auth/admin (OWNER only)", () => {
 
   before(async () => {
     ownerToken = sessionFor(await seedUser({ username: "boss", roles: JSON.stringify([OWNER_ROLE]) }));
-    plainToken = sessionFor(await seedUser({ username: "pleb", roles: JSON.stringify(["PPHS_R5"]) }));
+    plainToken = sessionFor(await seedUser({ username: "pleb", roles: JSON.stringify(["TRAVEL_R5"]) }));
     // JWT claims OWNER but the DB row has no roles: the DB wins.
     const demoted = await seedUser({ username: "demoted", roles: "[]" });
     jwtOnlyOwnerToken = signToken({
@@ -708,16 +708,16 @@ describe("/auth/admin (OWNER only)", () => {
     assert.equal(badRole.status, 400);
     assert.equal(badRole.json.data.code, "invalid_request_roles");
     assert.equal((await post(`/admin/users/${target.id}/roles`, { roles: "admin" }, ownerToken)).status, 400);
-    const ok = await post(`/admin/users/${target.id}/roles`, { roles: ["PPHS_R4", "admin"] }, ownerToken);
+    const ok = await post(`/admin/users/${target.id}/roles`, { roles: ["TRAVEL_R4", "admin"] }, ownerToken);
     assert.equal(ok.status, 200);
     assert.deepEqual(ok.json.data, { updated: true });
-    assert.equal(target.roles, JSON.stringify(["PPHS_R4", "admin"]));
+    assert.equal(target.roles, JSON.stringify(["TRAVEL_R4", "admin"]));
   });
 
   test("POST /admin/users/:id/roles on a soft-deleted or unknown user → 404, nothing written (A3)", async () => {
     const deleted = await seedUser({ username: "deletedrole", record_status: "D" });
     for (const id of [deleted.id, 999_999]) {
-      const res = await post(`/admin/users/${id}/roles`, { roles: ["PPHS_R4"] }, ownerToken);
+      const res = await post(`/admin/users/${id}/roles`, { roles: ["TRAVEL_R4"] }, ownerToken);
       assert.equal(res.status, 404, String(id));
       assert.equal(res.json.data.code, "entity_not_found");
       assert.equal(res.json.data.message, "User not found");
@@ -952,7 +952,7 @@ describe("Auth helpers and mappers", () => {
   test("Permission: parseRoles and isValidRole", () => {
     assert.deepEqual(parseRoles('["SYSTEM_R5"]'), ["SYSTEM_R5"]);
     for (const raw of [null, undefined, "", "nope", '{"a":1}']) assert.deepEqual(parseRoles(raw), []);
-    assert.equal(isValidRole("PPHS_R4"), true);
+    assert.equal(isValidRole("TRAVEL_R4"), true);
     assert.equal(isValidRole("admin"), true);
     for (const bad of ["SYSTEM_r5", "SYSTEM_R0", "_R1", "ADMIN", 5]) assert.equal(isValidRole(bad), false);
   });

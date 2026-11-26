@@ -123,12 +123,12 @@ test("orderBuckets keeps registry order, zero-fills, and puts 'unknown' last", (
 });
 
 test("role allowlist accepts MODULE_R1-5 and legacy 'admin' only", () => {
-  for (const r of ["SYSTEM_R5", "PPHS_R4", "TRAVEL_R1", "KS_R3", "admin"]) assert.equal(isValidRole(r), true, r);
+  for (const r of ["SYSTEM_R5", "TRAVEL_R4", "TRAVEL_R1", "KS_R3", "admin"]) assert.equal(isValidRole(r), true, r);
   for (const r of ["SYSTEM_r5", "SYSTEM_R6", "", "root", 5]) assert.equal(isValidRole(r), false, String(r));
 });
 
 test("only SYSTEM_R5 is owner", () => {
   assert.equal(userIsOwner({ roles: ["SYSTEM_R5"] }), true);
-  assert.equal(userIsOwner({ roles: ["PPHS_R5", "admin"] }), false);
+  assert.equal(userIsOwner({ roles: ["TRAVEL_R5", "admin"] }), false);
   assert.equal(userIsOwner(undefined), false);
 });

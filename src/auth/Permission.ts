@@ -19,13 +19,12 @@ const RESOURCE_ACCESS_TABLE = "tb_aa_resource_access";
 
 export const Roles = {
   OWNER: "SYSTEM_R5",
-  PPHS_ADMIN: "PPHS_R5",
   /** Legacy literal still used by the suggestion routes. */
   LEGACY_ADMIN: "admin",
 } as const;
 
 /**
- * Accepted role format: MODULE_R<1-5> (e.g. SYSTEM_R5, PPHS_R4) or the legacy 'admin'.
+ * Accepted role format: MODULE_R<1-5> (e.g. SYSTEM_R5, TRAVEL_R4) or the legacy 'admin'.
  * Guards role writes so a typo such as 'SYSTEM_r5' can't be saved silently.
  */
 const ROLE_PATTERN = /^(?:[A-Z][A-Z0-9]*_R[1-5]|admin)$/;
